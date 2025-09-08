@@ -1,0 +1,71 @@
+{
+  "name": "lighter-ts",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for Lighter",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "format": "prettier --write src/**/*.ts",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "setup": "node setup-env.js",
+    "example:api-only": "ts-node examples/api-only-example.ts",
+    "example:get-info": "ts-node examples/get-info.ts",
+    "example:create-cancel-order": "ts-node examples/create-cancel-order.ts",
+    "example:create-cancel-order-with-server": "ts-node examples/create-cancel-order-with-server.ts",
+    "example:create-cancel-order-wasm": "ts-node examples/create-cancel-order-wasm.ts",
+    "example:test-wasm-signer": "ts-node examples/test-wasm-signer.ts",
+    "example:create-cancel-order-demo": "ts-node examples/create-cancel-order-demo.ts",
+    "example:create-market-order": "ts-node examples/create-market-order.ts",
+    "example:system-setup": "ts-node examples/system-setup.ts",
+    "example:send-tx-batch": "ts-node examples/send-tx-batch.ts",
+    "example:websocket": "ts-node examples/websocket.ts",
+    "example:websocket-sync": "ts-node examples/websocket-sync.ts"
+  },
+  "keywords": [
+    "lighter",
+    "typescript",
+    "sdk",
+    "api",
+    "trading",
+    "defi"
+  ],
+  "author": "elliot",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elliottech/lighter-ts.git"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.4",
+    "axios": "^1.6.0",
+    "dotenv": "^17.2.0",
+    "ethers": "^6.8.0",
+    "poseidon-goldilocks-lite": "^0.2.3",
+    "ws": "^8.14.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.8.0",
+    "@types/ws": "^8.5.0",
+    "@typescript-eslint/eslint-plugin": "^6.9.0",
+    "@typescript-eslint/parser": "^6.9.0",
+    "eslint": "^8.52.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.0.0",
+    "rimraf": "^5.0.0",
+    "ts-jest": "^29.1.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.2.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
