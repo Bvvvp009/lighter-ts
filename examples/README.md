@@ -1,404 +1,171 @@
 # Lighter TypeScript SDK Examples
 
-This directory contains comprehensive examples demonstrating how to use the Lighter TypeScript SDK with **full Python SDK functionality** and **Windows WASM signer support**.
+This directory contains comprehensive examples demonstrating how to use the Lighter TypeScript SDK.
 
-## Quick Start
+## Setup Instructions
 
-### Prerequisites
-- Node.js 16.0+
-- TypeScript 5.0+
-- Go 1.23+ (for WASM signer examples)
+### Testnet Setup
+1. Go to https://testnet.app.lighter.xyz/ and connect a wallet to receive $500
+2. Run `system_setup.ts` with the correct ETH Private key configured
+   - Set an API key index which is not 0, so you won't override the one used by [app.lighter.xyz](https://app.lighter.xyz/)
+   - This will require you to enter your Ethereum private key
+   - The ETH private key will only be used in the TypeScript SDK to sign a message
+   - The ETH private key is not required in order to trade on the platform
+   - The ETH private key is not passed to the WASM binary
+   - Copy the output of the script and post it into `create_cancel_order.ts`
+   - The output should look like:
+```
+BASE_URL = 'https://testnet.zklighter.elliot.ai'
+API_KEY_PRIVATE_KEY = '0xea5d2eca5be67eca056752eaf27b173518b8a5550117c09d2b58c7ea7d306cc4426f913ccf27ab19'
+ACCOUNT_INDEX = 595
+API_KEY_INDEX = 1
+```
+3. Start trading using:
+   - `create_cancel_order.ts` has an example which creates an order on testnet & cancels it
+   - You'll need to set up both your account index, API key index & API Key private key
 
-### Setup
+### Mainnet Setup
+1. Deposit money on Lighter to create an account first
+2. Change the URL to `mainnet.zklighter.elliot.ai`
+3. Repeat setup steps
+
+## Examples Overview
+
+### Basic Trading Examples
+
+#### [Create Market Order](create_market_order.ts)
+Demonstrates how to create a market order using the WASM signer.
+
 ```bash
-# Install dependencies
-npm install
-
-# Build the SDK
-npm run build
-
-# Set up environment variables
-npm run setup
-# Edit .env file with your values
-
-# Run a basic example
-npm run example:api-only
+npx ts-node examples/create_market_order.ts
 ```
 
-## Example Categories
+#### [Create & Cancel Orders](create_cancel_order.ts)
+Shows how to create limit orders and cancel them.
 
-### 📡 API-Only Examples
-Examples that demonstrate API functionality without requiring transaction signing.
-
-#### `api-only-example.ts` - Basic API Usage
-**Purpose**: Demonstrates basic API usage without signing functionality. Works on all platforms.
-
-**Features:**
-- Get root system information
-- Fetch order book data
-- Retrieve recent trades
-- No authentication required
-
-**Usage:**
 ```bash
-npm run example:api-only
+npx ts-node examples/create_cancel_order.ts
 ```
 
-**Best for**: Learning API structure, testing connectivity, understanding data formats
+#### [Create Market Order with Max Slippage](create_market_order_max_slippage.ts)
+Example of creating market orders with price protection.
 
-#### `get-info.ts` - Comprehensive API Coverage
-**Purpose**: Shows all available API endpoints and their usage patterns.
-
-**Features:**
-- Account API operations
-- Order API operations  
-- Transaction API operations
-- Block API operations
-- Candlestick API operations
-- Complete API coverage demonstration
-
-**Usage:**
 ```bash
-npm run example:get-info
+npx ts-node examples/create_market_order_max_slippage.ts
 ```
 
-**Best for**: Understanding full API capabilities, API reference implementation
+#### [Create Stop Loss & Take Profit Orders](create_sl_tp.ts)
+Demonstrates advanced order types with trigger prices.
 
-### 🔐 Authentication & Setup Examples
-Examples for account setup, API key management, and authentication.
-
-#### `system-setup.ts` - Account Setup
-**Purpose**: Demonstrates account setup and API key management using SignerClient.
-
-**Features:**
-- Account verification
-- API key generation
-- API key management
-- Configuration output
-
-**Usage:**
 ```bash
-npm run example:system-setup
+npx ts-node examples/create_sl_tp.ts
 ```
 
-**Best for**: Initial account setup, API key generation, configuration management
+### Account Management Examples
 
-#### `system-setup-wasm.ts` - Windows Account Setup
-**Purpose**: Windows-compatible account setup using WASM signer.
+#### [System Setup](system_setup.ts)
+Complete setup process for creating API keys and configuring accounts.
 
-**Features:**
-- Account verification with WASM
-- API key generation
-- Windows compatibility
-- Same functionality as Python SDK
-
-**Usage:**
 ```bash
-npm run example:system-setup-wasm
+npx ts-node examples/system_setup.ts
 ```
 
-**Best for**: Windows users, WASM signer validation, cross-platform compatibility
+#### [Transfer & Update Leverage](transfer_update_leverage.ts)
+Shows how to transfer USDC between accounts and update leverage settings.
 
-### 📈 Trading Examples
-Examples demonstrating order creation, management, and trading operations.
-
-#### `create-cancel-order.ts` - Basic Order Management
-**Purpose**: Demonstrates order creation and cancellation using SignerClient.
-
-**Features:**
-- Create limit orders
-- Cancel existing orders
-- Authentication token generation
-- Order lifecycle management
-
-**Usage:**
 ```bash
-npm run example:create-cancel-order
+npx ts-node examples/transfer_update_leverage.ts
 ```
 
-**Best for**: Learning order management, understanding order parameters
+#### [Create Orders with Multiple Keys](create_with_multiple_keys.ts)
+Demonstrates using multiple API keys for trading.
 
-#### `create-cancel-order-demo.ts` - Order Structure Demo
-**Purpose**: Shows transaction structure without requiring actual signing.
-
-**Features:**
-- Transaction structure demonstration
-- API call format examples
-- No authentication required
-- Educational purpose
-
-**Usage:**
 ```bash
-npm run example:create-cancel-order-demo
+npx ts-node examples/create_with_multiple_keys.ts
 ```
 
-**Best for**: Understanding transaction structure, learning without API keys
+### API Information Examples
 
-#### `create-cancel-order-wasm-comprehensive.ts` - Windows Order Management
-**Purpose**: Complete order management using WASM signer, matching Python SDK functionality.
+#### [Get Information](get_info.ts)
+Comprehensive example showing all available API endpoints.
 
-**Features:**
-- Create limit orders with WASM
-- Cancel orders
-- Auth token generation
-- Complete error handling
-- Windows compatibility
-
-**Usage:**
 ```bash
-npm run example:create-cancel-order-wasm-comprehensive
+npx ts-node examples/get_info.ts
 ```
 
-**Best for**: Windows users, production order management, WASM signer validation
+### WebSocket Examples
 
-#### `create-market-order.ts` - Market Orders
-**Purpose**: Demonstrates market order creation using SignerClient.
+#### [WebSocket Sync](ws.ts)
+Real-time order book and account synchronization.
 
-**Features:**
-- Create market orders
-- Automatic price execution
-- Market order parameters
-- Execution handling
-
-**Usage:**
 ```bash
-npm run example:create-market-order
+npx ts-node examples/ws.ts
 ```
 
-**Best for**: Market order implementation, immediate execution strategies
+#### [WebSocket Async](ws_async.ts)
+Asynchronous WebSocket connection handling.
 
-### 🔄 Batch & Advanced Examples
-Examples for advanced trading patterns and batch operations.
-
-#### `send-tx-batch.ts` - Batch Transactions
-**Purpose**: Demonstrates batch transaction functionality using SignerClient.
-
-**Features:**
-- Create multiple orders
-- Send batch transactions
-- Cancel and replace orders
-- Batch operation management
-
-**Usage:**
 ```bash
-npm run example:send-tx-batch
+npx ts-node examples/ws_async.ts
 ```
 
-**Best for**: High-frequency trading, batch operations, order management systems
+#### [WebSocket Send Transaction](ws_send_tx.ts)
+Sending transactions through WebSocket connection.
 
-#### `send-tx-batch-wasm.ts` - Windows Batch Transactions
-**Purpose**: Batch transaction functionality using WASM signer for Windows compatibility.
-
-**Features:**
-- Batch transaction creation
-- Multiple order management
-- Order cancellation and replacement
-- Nonce management
-- Windows compatibility
-
-**Usage:**
 ```bash
-npm run example:send-tx-batch-wasm
+npx ts-node examples/ws_send_tx.ts
 ```
 
-**Best for**: Windows batch operations, high-frequency trading on Windows
+#### [WebSocket Send Batch Transaction](ws_send_batch_tx.ts)
+Sending multiple transactions in a batch via WebSocket.
 
-### 🌐 WebSocket Examples
-Examples for real-time data streaming and WebSocket connections.
-
-#### `websocket.ts` - Basic WebSocket Usage
-**Purpose**: Demonstrates WebSocket client usage for real-time data.
-
-**Features:**
-- Connect to WebSocket
-- Subscribe to order book updates
-- Subscribe to account updates
-- Handle connection events
-- Real-time data streaming
-
-**Usage:**
 ```bash
-npm run example:websocket
+npx ts-node examples/ws_send_batch_tx.ts
 ```
 
-**Best for**: Real-time applications, live data monitoring, WebSocket integration
+### Advanced Examples
 
-#### `websocket-sync.ts` - Advanced WebSocket Usage
-**Purpose**: Demonstrates synchronous WebSocket usage with multiple subscriptions.
+#### [Send Transaction Batch](send_tx_batch.ts)
+Batch transaction processing for improved efficiency.
 
-**Features:**
-- Subscribe to multiple order books
-- Subscribe to multiple accounts
-- Handle connection lifecycle
-- Multiple subscription management
-
-**Usage:**
 ```bash
-npm run example:websocket-sync
-```
-
-**Best for**: Multi-market monitoring, complex WebSocket applications
-
-### 🪟 Windows WASM Signer Examples
-Specialized examples for Windows compatibility using WASM signer.
-
-#### `comprehensive-wasm-example.ts` - Complete WASM Functionality
-**Purpose**: Comprehensive example demonstrating all Windows WASM signer functionality.
-
-**Features:**
-- Complete WASM signer initialization
-- All order types (limit, market)
-- Order management (create, cancel)
-- API key generation
-- Auth token creation
-- Account and market data
-- Error handling and validation
-- Windows compatibility
-
-**Usage:**
-```bash
-npm run example:comprehensive-wasm
-```
-
-**Best for**: Windows users, complete functionality demonstration, WASM signer validation
-
-#### `test-wasm-signer.ts` - WASM Signer Testing
-**Purpose**: Basic WASM signer test and validation.
-
-**Features:**
-- WASM initialization test
-- Client validation
-- Error handling demonstration
-- Structure verification
-- Basic functionality test
-
-**Usage:**
-```bash
-npm run example:test-wasm-signer
-```
-
-**Best for**: WASM signer validation, debugging, initial testing
-
-### 🔧 Server Integration Examples
-Examples for integrating with external signer servers.
-
-#### `create-cancel-order-with-server.ts` - Server Signer Integration
-**Purpose**: Demonstrates order management using external signer server.
-
-**Features:**
-- External signer server integration
-- Order creation and cancellation
-- Server-based signing
-- Alternative to WASM signer
-
-**Usage:**
-```bash
-npm run example:create-cancel-order-with-server
-```
-
-**Best for**: Server-based architectures, external signing services
-
-## Learning Path
-
-### For Beginners
-1. **Start with**: `api-only-example.ts` - Learn basic API usage
-2. **Then try**: `get-info.ts` - Understand full API capabilities
-3. **Next**: `create-cancel-order-demo.ts` - Learn transaction structure
-4. **Finally**: `system-setup.ts` - Set up authentication
-
-### For Windows Users
-1. **Start with**: `test-wasm-signer.ts` - Validate WASM signer
-2. **Then try**: `comprehensive-wasm-example.ts` - Complete functionality
-3. **Next**: `system-setup-wasm.ts` - Set up account with WASM
-4. **Finally**: `create-cancel-order-wasm-comprehensive.ts` - Full trading
-
-### For Advanced Users
-1. **Start with**: `send-tx-batch.ts` - Batch operations
-2. **Then try**: `websocket-sync.ts` - Real-time data
-3. **Next**: `comprehensive-wasm-example.ts` - Complete functionality
-4. **Finally**: Build your own trading bot using patterns
-
-## Configuration
-
-Most examples use the testnet URL by default:
-```
-https://testnet.zklighter.elliot.ai
-```
-
-For mainnet, change the URL to:
-```
-https://mainnet.zklighter.elliot.ai
+npx ts-node examples/send_tx_batch.ts
 ```
 
 ## Environment Variables
 
-Some examples require environment variables. Create a `.env` file in the `lighter-ts` root directory:
+Create a `.env` file in your project root:
 
-1. Copy the example file:
-```bash
-cp env.example .env
+```env
+BASE_URL=https://mainnet.zklighter.elliot.ai
+PRIVATE_KEY=your-api-key-private-key
+ACCOUNT_INDEX=123
+API_KEY_INDEX=0
+ETH_PRIVATE_KEY=your-ethereum-private-key
 ```
 
-2. Edit the `.env` file and add your values:
-```bash
-# Your API private key (required for examples that need authentication)
-PRIVATE_KEY=your_actual_private_key_here
+## Running Examples
 
-# Optional: Override the base URL for different environments
-# BASE_URL=https://testnet.zklighter.elliot.ai
-# BASE_URL=https://mainnet.zklighter.elliot.ai
+All examples can be run using:
+
+```bash
+npx ts-node examples/[example-name].ts
 ```
 
-**Note**: The `.env` file is automatically loaded by the examples using dotenv. Make sure to never commit your actual private key to version control.
+Make sure you have:
+1. Installed dependencies: `npm install`
+2. Set up your `.env` file with correct credentials
+3. Built the WASM signer (if using signer examples)
 
-## Features
+## Error Handling
 
-The TypeScript SDK now provides **complete feature parity** with the Python SDK:
+All examples include proper error handling and will display helpful error messages if something goes wrong. Common issues include:
 
-1. **Complete API Coverage**: All API endpoints from the Python SDK are available
-2. **SignerClient**: Full order creation and transaction signing functionality
-3. **WebSocket Support**: Real-time data streaming
-4. **Cross-Platform**: Works on all platforms including **Windows with WASM signer**
-5. **Type Safety**: Full TypeScript support with comprehensive type definitions
-6. **Windows Compatibility**: WASM signer provides equivalent functionality to Python SDK
+- Invalid API credentials
+- Insufficient balance
+- Invalid order parameters
+- Network connectivity issues
 
-## 🪟 Windows Support
+## Support
 
-**Windows users** can now use the TypeScript SDK with full functionality:
-
-- ✅ **WASM Signer**: Provides equivalent functionality to Python SDK on macOS/Linux
-- ✅ **All Examples**: All examples work on Windows with WASM signer
-- ✅ **Production Ready**: Fully functional for trading and API operations
-- ✅ **Same Security**: Uses same cryptographic libraries as native signers
-
-### Platform Comparison
-
-| Platform | Python SDK | TypeScript SDK | WASM Signer |
-|----------|------------|----------------|-------------|
-| Windows  | ❌ Not supported | ✅ Supported | ✅ **Full Support** |
-| macOS    | ✅ Native | ✅ Supported | ✅ Supported |
-| Linux    | ✅ Native | ✅ Supported | ✅ Supported |
-| Browser  | ❌ Not supported | ✅ Supported | ✅ Supported |
-
-## API Coverage
-
-The TypeScript SDK includes:
-
-1. **AccountApi**: Account management and information
-2. **OrderApi**: Order book and trading data
-3. **TransactionApi**: Transaction management and history
-4. **BlockApi**: Block information and current height
-5. **CandlestickApi**: Price data and funding rates
-6. **RootApi**: System information
-7. **SignerClient**: Order creation and transaction signing
-8. **WsClient**: Real-time WebSocket connections
-
-## Contributing
-
-When adding new examples:
-
-1. Follow the existing naming convention
-2. Include proper error handling
-3. Add documentation in this README
-4. Test on multiple platforms
-5. Include TypeScript types where possible 
+For questions about the examples or the SDK, please visit our [documentation](https://docs.lighter.xyz) or join our [Discord community](https://discord.gg/lighter).

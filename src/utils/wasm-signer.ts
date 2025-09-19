@@ -43,6 +43,27 @@ export interface CancelOrderParams {
   nonce: number;
 }
 
+export interface CancelAllOrdersParams {
+  timeInForce: number;
+  time: number;
+  nonce: number;
+}
+
+export interface TransferParams {
+  toAccountIndex: number;
+  usdcAmount: number;
+  fee: number;
+  memo: string;
+  nonce: number;
+}
+
+export interface UpdateLeverageParams {
+  marketIndex: number;
+  fraction: number;
+  marginMode: number;
+  nonce: number;
+}
+
 export interface WasmSignerResponse<T = any> {
   success?: boolean;
   error?: string;
@@ -84,6 +105,9 @@ export class WasmSignerClient {
         createClient: (window as any).createClient,
         signCreateOrder: (window as any).signCreateOrder,
         signCancelOrder: (window as any).signCancelOrder,
+        signCancelAllOrders: (window as any).signCancelAllOrders,
+        signTransfer: (window as any).signTransfer,
+        signUpdateLeverage: (window as any).signUpdateLeverage,
         createAuthToken: (window as any).createAuthToken,
       };
 
@@ -173,6 +197,66 @@ export class WasmSignerClient {
     }
     
     return result.txInfo;
+  }
+
+  /**
+   * Sign a cancel all orders transaction
+   */
+  async signCancelAllOrders(params: CancelAllOrdersParams): Promise<{ txInfo: string; error?: string }> {
+    await this.ensureInitialized();
+    
+    const result = this.wasmModule.signCancelAllOrders(
+      params.timeInForce,
+      params.time,
+      params.nonce
+    );
+    
+    if (result.error) {
+      return { txInfo: '', error: result.error };
+    }
+    
+    return { txInfo: result.txInfo };
+  }
+
+  /**
+   * Sign a transfer transaction
+   */
+  async signTransfer(params: TransferParams): Promise<{ txInfo: string; error?: string }> {
+    await this.ensureInitialized();
+    
+    const result = this.wasmModule.signTransfer(
+      params.toAccountIndex,
+      params.usdcAmount,
+      params.fee,
+      params.memo,
+      params.nonce
+    );
+    
+    if (result.error) {
+      return { txInfo: '', error: result.error };
+    }
+    
+    return { txInfo: result.txInfo };
+  }
+
+  /**
+   * Sign an update leverage transaction
+   */
+  async signUpdateLeverage(params: UpdateLeverageParams): Promise<{ txInfo: string; error?: string }> {
+    await this.ensureInitialized();
+    
+    const result = this.wasmModule.signUpdateLeverage(
+      params.marketIndex,
+      params.fraction,
+      params.marginMode,
+      params.nonce
+    );
+    
+    if (result.error) {
+      return { txInfo: '', error: result.error };
+    }
+    
+    return { txInfo: result.txInfo };
   }
 
   /**

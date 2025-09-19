@@ -6,7 +6,7 @@ describe('ApiClient', () => {
 
   beforeEach(() => {
     client = new ApiClient({
-      host: 'https://testnet.zklighter.elliot.ai',
+      host: 'https://mainnet.zklighter.elliot.ai',
       timeout: 5000,
     });
   });

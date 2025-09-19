@@ -3,6 +3,7 @@ import { TransactionApi } from '../api/transaction-api';
 import { createSignerServerClient, SignerServerClient } from '../utils/signer-server';
 import { WasmSignerClient, createWasmSignerClient } from '../utils/wasm-signer';
 import { NodeWasmSignerClient, createNodeWasmSignerClient } from '../utils/node-wasm-signer';
+import { RootApi } from '../api/root-api';
 
 export interface SignerConfig {
   url: string;
@@ -53,6 +54,7 @@ export class SignerClient {
   private transactionApi: TransactionApi;
   private wallet: SignerServerClient | WasmSignerClient | NodeWasmSignerClient;
   private signerType: 'server' | 'wasm' | 'node-wasm';
+  private clientCreated: boolean = false;
 
   // Constants from Python SDK
   static readonly ORDER_TYPE_LIMIT = 0;
@@ -75,6 +77,7 @@ export class SignerClient {
   static readonly TX_TYPE_MODIFY_ORDER = 17
   static readonly TX_TYPE_MINT_SHARES = 18
   static readonly TX_TYPE_BURN_SHARES = 19
+  static readonly TX_TYPE_UPDATE_LEVERAGE = 20
 
   static readonly ORDER_TYPE_STOP_LOSS = 2
   static readonly ORDER_TYPE_STOP_LOSS_LIMIT = 3
@@ -84,11 +87,18 @@ export class SignerClient {
 
   static readonly ORDER_TIME_IN_FORCE_POST_ONLY = 2
 
+  static readonly CANCEL_ALL_TIF_IMMEDIATE = 0
+  static readonly CANCEL_ALL_TIF_SCHEDULED = 1
+  static readonly CANCEL_ALL_TIF_ABORT = 2
+
   static readonly NIL_TRIGGER_PRICE = 0
   static readonly DEFAULT_28_DAY_ORDER_EXPIRY = -1
   static readonly DEFAULT_IOC_EXPIRY = 0
   static readonly DEFAULT_10_MIN_AUTH_EXPIRY = -1
   static readonly MINUTE = 60
+
+  static readonly CROSS_MARGIN_MODE = 0
+  static readonly ISOLATED_MARGIN_MODE = 1
 
   constructor(config: SignerConfig) {
     this.config = config;
@@ -119,7 +129,61 @@ export class SignerClient {
   async initialize(): Promise<void> {
     if (this.signerType === 'wasm' || this.signerType === 'node-wasm') {
       await (this.wallet as WasmSignerClient | NodeWasmSignerClient).initialize();
+      // Leave client creation to ensureWasmClient or server path
     }
+  }
+
+  async ensureWasmClient(): Promise<void> {
+    if (this.signerType !== 'wasm' && this.signerType !== 'node-wasm') return;
+    if (this.clientCreated) return;
+
+    // Initialize WASM client
+    // Determine chainId from API, try layer2BasicInfo first, then /info, fallback to 1
+    const root = new RootApi(this.apiClient);
+    let chainIdNum = 304;
+    try {
+      // Try modern endpoint
+      try {
+        const basic: any = await (this.apiClient as any).get('/api/v1/layer2BasicInfo');
+        const data: any = basic?.data ?? basic; // ApiClient.get wraps in {data}
+        const cid = (data && (data.chain_id ?? data.chainId ?? data.chainID)) ?? undefined;
+        if (cid !== undefined) {
+          if (typeof cid === 'number') {
+            chainIdNum = cid;
+          } else {
+            const s = String(cid).toLowerCase();
+            if (/^\d+$/.test(s)) chainIdNum = parseInt(s, 10);
+            else if (s.includes('mainnet')) chainIdNum = 304;
+            else if (s.includes('testnet')) chainIdNum = 2;
+          }
+        }
+      } catch {}
+
+      if (!Number.isFinite(chainIdNum) || chainIdNum <= 0) {
+        const info: any = await root.getInfo();
+        const cid = (info && (info.chain_id ?? info.chainId ?? info.chainID)) ?? 304;
+        if (typeof cid === 'number') chainIdNum = cid; else {
+          const s = String(cid).toLowerCase();
+          if (/^\d+$/.test(s)) chainIdNum = parseInt(s, 10);
+          else if (s.includes('mainnet')) chainIdNum = 304;
+          else if (s.includes('testnet')) chainIdNum = 2;
+          else chainIdNum = 304;
+        }
+      }
+      if (!Number.isFinite(chainIdNum) || chainIdNum <= 0) chainIdNum = 304;
+    } catch {
+      chainIdNum = 304;
+    }
+
+    await (this.wallet as WasmSignerClient | NodeWasmSignerClient).createClient({
+      url: this.config.url,
+      privateKey: this.config.privateKey?.startsWith('0x') ? this.config.privateKey : `0x${this.config.privateKey}`,
+      chainId: chainIdNum,
+      apiKeyIndex: this.config.apiKeyIndex,
+      accountIndex: this.config.accountIndex,
+    } as any);
+
+    this.clientCreated = true;
   }
 
   checkClient(): string | null {
@@ -175,6 +239,10 @@ export class SignerClient {
         return [orderTx, txHash.hash, null];
       } else {
         // Use WASM signer
+        // For IOC orders, use NilOrderExpiry (0)
+        const wasmOrderExpiry = params.timeInForce === SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL ? 
+          0 : orderExpiry;
+        
         const wasmParams = {
           marketIndex: params.marketIndex,
           clientOrderIndex: params.clientOrderIndex,
@@ -185,14 +253,20 @@ export class SignerClient {
           timeInForce: params.timeInForce,
           reduceOnly: params.reduceOnly ? 1 : 0,
           triggerPrice: params.triggerPrice,
-          orderExpiry: orderExpiry,
+          orderExpiry: wasmOrderExpiry,
           nonce: nextNonce.nonce
         };
 
         const txInfoStr = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signCreateOrder(wasmParams);
-        const txInfo = JSON.parse(txInfoStr);
-        const txHash = await this.transactionApi.sendTx(SignerClient.TX_TYPE_CREATE_ORDER, txInfoStr);
-        return [txInfo, txHash.hash, null];
+        // Send exactly what WASM produced, using urlencoded form like Python/Go
+        console.log('WASM signCreateOrder result:', txInfoStr);
+        const txHash = await this.transactionApi.sendTxWithIndices(
+          SignerClient.TX_TYPE_CREATE_ORDER,
+          txInfoStr,
+          this.config.accountIndex,
+          this.config.apiKeyIndex
+        );
+        return [JSON.parse(txInfoStr), txHash.hash, null];
       }
     } catch (error) {
       console.error('Error creating order:', error);
@@ -241,14 +315,22 @@ export class SignerClient {
           timeInForce: SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
           reduceOnly: 0,
           triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
-          orderExpiry: SignerClient.DEFAULT_IOC_EXPIRY,
+          orderExpiry: 0, // NilOrderExpiry for market orders
           nonce: nextNonce.nonce
         };
 
         const txInfoStr = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signCreateOrder(wasmParams);
-        const txInfo = JSON.parse(txInfoStr);
-        const txHash = await this.transactionApi.sendTx(SignerClient.TX_TYPE_CREATE_ORDER, txInfoStr);
-        return [txInfo, txHash.hash, null];
+        
+        // Debug: Log the transaction info string to see what WASM is producing
+        console.log('WASM signCreateOrder result:', txInfoStr);
+        
+        const txHash = await this.transactionApi.sendTxWithIndices(
+          SignerClient.TX_TYPE_CREATE_ORDER,
+          txInfoStr,
+          this.config.accountIndex,
+          this.config.apiKeyIndex
+        );
+        return [JSON.parse(txInfoStr), txHash.hash, null];
       }
     } catch (error) {
       console.error('Error creating market order:', error);
@@ -287,9 +369,11 @@ export class SignerClient {
         };
 
         const txInfoStr = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signCancelOrder(wasmParams);
-        const txInfo = JSON.parse(txInfoStr);
-        const txHash = await this.transactionApi.sendTx(SignerClient.TX_TYPE_CANCEL_ORDER, txInfoStr);
-        return [txInfo, txHash.hash, null];
+        const txHash = await this.transactionApi.sendTx(
+          SignerClient.TX_TYPE_CANCEL_ORDER,
+          txInfoStr
+        );
+        return [JSON.parse(txInfoStr), txHash.hash, null];
       }
     } catch (error) {
       console.error('Error canceling order:', error);
@@ -453,8 +537,24 @@ export class SignerClient {
         const txHash = await this.transactionApi.sendTx(SignerClient.TX_TYPE_CANCEL_ALL_ORDERS, JSON.stringify(txInfo));
         return [txHash.hash, null];
       } else {
-        // WASM signer doesn't support cancelAllOrders yet
-        throw new Error('cancelAllOrders not supported with WASM signer. Use signer server instead.');
+        // Use WASM signer
+        const txInfo = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signCancelAllOrders({
+          timeInForce,
+          time,
+          nonce: nextNonce.nonce
+        });
+
+        if (txInfo.error) {
+          return [null, txInfo.error];
+        }
+
+        const txHash = await this.transactionApi.sendTxWithIndices(
+          SignerClient.TX_TYPE_CANCEL_ALL_ORDERS,
+          txInfo.txInfo,
+          this.config.accountIndex,
+          this.config.apiKeyIndex
+        );
+        return [txHash.hash, null];
       }
     } catch (error) {
       console.error('Error canceling all orders:', error);
@@ -533,11 +633,81 @@ export class SignerClient {
         const txHash = await this.transactionApi.sendTx(SignerClient.TX_TYPE_TRANSFER, JSON.stringify(txInfo));
         return [transferTx, txHash.hash, null];
       } else {
-        // WASM signer doesn't support transfer yet
-        throw new Error('transfer not supported with WASM signer. Use signer server instead.');
+        // Use WASM signer
+        const txInfo = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signTransfer({
+          toAccountIndex,
+          usdcAmount: scaledAmount,
+          fee: 0, // fee - should be calculated separately
+          memo: 'a'.repeat(32), // memo - 32 bytes required
+          nonce: nextNonce.nonce
+        });
+
+        if (txInfo.error) {
+          return [null, '', txInfo.error];
+        }
+
+        const txHash = await this.transactionApi.sendTxWithIndices(
+          SignerClient.TX_TYPE_TRANSFER,
+          txInfo.txInfo,
+          this.config.accountIndex,
+          this.config.apiKeyIndex
+        );
+        return [JSON.parse(txInfo.txInfo), txHash.hash, null];
       }
     } catch (error) {
       console.error('Error transferring:', error);
+      return [null, '', error instanceof Error ? error.message : 'Unknown error'];
+    }
+  }
+
+  /**
+   * Update leverage for a market
+   */
+  async updateLeverage(marketIndex: number, marginMode: number, initialMarginFraction: number, nonce: number = -1): Promise<[any, string, string | null]> {
+    try {
+      // Get next nonce if not provided
+      const nextNonce = nonce === -1 ? 
+        await this.transactionApi.getNextNonce(this.config.accountIndex, this.config.apiKeyIndex) :
+        { nonce };
+
+      if (this.signerType === 'server') {
+        // Use server signer
+        const leverageTx: any = {
+          AccountIndex: this.config.accountIndex,
+          ApiKeyIndex: this.config.apiKeyIndex,
+          MarketIndex: marketIndex,
+          MarginMode: marginMode,
+          InitialMarginFraction: initialMarginFraction,
+          Nonce: nextNonce.nonce
+        };
+
+        const signature = await (this.wallet as SignerServerClient).signTransaction(this.config.privateKey, leverageTx);
+        const txInfo = { ...leverageTx, Sig: signature };
+        const txHash = await this.transactionApi.sendTx(SignerClient.TX_TYPE_UPDATE_LEVERAGE, JSON.stringify(txInfo));
+        return [leverageTx, txHash.hash, null];
+      } else {
+        // Use WASM signer
+        const txInfo = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signUpdateLeverage({
+          marketIndex,
+          fraction: initialMarginFraction,
+          marginMode,
+          nonce: nextNonce.nonce
+        });
+
+        if (txInfo.error) {
+          return [null, '', txInfo.error];
+        }
+
+        const txHash = await this.transactionApi.sendTxWithIndices(
+          SignerClient.TX_TYPE_UPDATE_LEVERAGE,
+          txInfo.txInfo,
+          this.config.accountIndex,
+          this.config.apiKeyIndex
+        );
+        return [JSON.parse(txInfo.txInfo), txHash.hash, null];
+      }
+    } catch (error) {
+      console.error('Error updating leverage:', error);
       return [null, '', error instanceof Error ? error.message : 'Unknown error'];
     }
   }

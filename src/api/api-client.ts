@@ -17,7 +17,7 @@ export class ApiClient {
   private defaultHeaders: Record<string, string> = {};
 
   constructor(config?: Partial<Configuration>) {
-    this.config = config ? Config.setDefault(config) : Config.getDefault();
+    this.config = config ? new Config(config) : Config.getDefault();
     this.axiosInstance = axios.create({
       baseURL: this.config.getHost(),
       timeout: this.config.getTimeout(),
@@ -118,6 +118,7 @@ export class ApiClient {
         data,
         ...config,
       });
+ //     console.log(response);
 
       return {
         data: response.data,
