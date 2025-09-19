@@ -1,6 +1,6 @@
 {
   "name": "lighter-ts-sdk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "TypeScript SDK for Lighter Protocol Unofficial - Trade perpetuals with unmatched efficiency and fairness",
   "type": "commonjs",
   "main": "dist/index.js",
@@ -31,17 +31,17 @@
     "defi",
     "perpetual",
     "exchange",
-    "zksync",
+    "zkwasm",
     "wasm"
   ],
   "author": "Community Contributor",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bvvvp009/lighter-ts-sdk.git"
+    "url": "https://github.com/bvvvp009/lighter-ts.git"
   },
   "bugs": {
-    "url": "https://github.com/bvvvp009/lighter-ts-sdk/issues"
+    "url": "https://github.com/bvvvp009/lighter-ts/issues"
   },
   "homepage": "https://lighter.xyz",
   "dependencies": {

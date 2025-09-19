@@ -2,7 +2,7 @@
 
 > **⚠️ Disclaimer**: This is an **unofficial** TypeScript SDK for Lighter Protocol, built by the community. It is not officially maintained by the Lighter Protocol team.
 
-TypeScript SDK for Lighter Protocol - A decentralized perpetual exchange built on zkSync.
+TypeScript SDK for Lighter Protocol - Trade perpetuals with unmatched efficiency and fairness.
 
 ## Requirements
 
@@ -34,7 +34,7 @@ import { SignerClient, ApiClient } from 'lighter-ts-sdk';
 ### 1. Basic API Usage
 
 ```typescript
-import { ApiClient, AccountApi } from 'lighter-protocol-sdk';
+import { ApiClient, AccountApi } from 'lighter-ts-sdk';
 
 async function getAccountInfo() {
   const client = new ApiClient({ host: 'https://mainnet.zklighter.elliot.ai' });
@@ -50,7 +50,7 @@ getAccountInfo().catch(console.error);
 ### 2. Create Market Order
 
 ```typescript
-import { SignerClient } from 'lighter-protocol-sdk';
+import { SignerClient } from 'lighter-ts-sdk';
 
 async function createMarketOrder() {
   const client = new SignerClient({
@@ -85,7 +85,7 @@ createMarketOrder().catch(console.error);
 ### 3. Create Limit Order
 
 ```typescript
-import { SignerClient } from 'lighter-protocol-sdk';
+import { SignerClient } from 'lighter-ts-sdk';
 
 async function createLimitOrder() {
   const client = new SignerClient({
@@ -121,7 +121,7 @@ createLimitOrder().catch(console.error);
 ### 4. Cancel Order
 
 ```typescript
-import { SignerClient } from 'lighter-protocol-sdk';
+import { SignerClient } from 'lighter-ts-sdk';
 
 async function cancelOrder() {
   const client = new SignerClient({
@@ -153,7 +153,7 @@ cancelOrder().catch(console.error);
 ### 5. Transfer USDC
 
 ```typescript
-import { SignerClient } from 'lighter-protocol-sdk';
+import { SignerClient } from 'lighter-ts-sdk';
 
 async function transferUSDC() {
   const client = new SignerClient({
@@ -187,7 +187,7 @@ transferUSDC().catch(console.error);
 ### 6. Update Leverage
 
 ```typescript
-import { SignerClient } from 'lighter-protocol-sdk';
+import { SignerClient } from 'lighter-ts-sdk';
 
 async function updateLeverage() {
   const client = new SignerClient({
@@ -220,7 +220,7 @@ updateLeverage().catch(console.error);
 ### 7. Cancel All Orders
 
 ```typescript
-import { SignerClient } from 'lighter-protocol-sdk';
+import { SignerClient } from 'lighter-ts-sdk';
 
 async function cancelAllOrders() {
   const client = new SignerClient({
@@ -252,7 +252,7 @@ cancelAllOrders().catch(console.error);
 ### 8. WebSocket Real-time Data
 
 ```typescript
-import { WsClient } from 'lighter-protocol-sdk';
+import { WsClient } from 'lighter-ts-sdk';
 
 async function connectWebSocket() {
   const wsClient = new WsClient({
@@ -433,7 +433,7 @@ Check the `examples/` directory for comprehensive usage examples:
 - Comprehensive documentation and examples
 - TypeScript support with full type definitions
 
-**Installation**: `npm install lighter-protocol-sdk`
+**Installation**: `npm install lighter-ts-sdk`
 
 **Documentation**: Complete API reference and getting started guides included
 
