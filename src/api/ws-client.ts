@@ -30,7 +30,7 @@ export class WsClient {
       try {
         this.ws = new WebSocket(this.config.url);
 
-        this.ws.on('open', () => {
+        this.ws!.on('open', () => {
           this.isConnecting = false;
           this.isConnected = true;
           this.reconnectAttempts = 0;
@@ -41,7 +41,7 @@ export class WsClient {
           resolve();
         });
 
-        this.ws.on('message', (data: WebSocket.Data) => {
+        this.ws!.on('message', (data: WebSocket.Data) => {
           try {
             const message = JSON.parse(data.toString());
             this.config.onMessage?.(message);
@@ -50,13 +50,13 @@ export class WsClient {
           }
         });
 
-        this.ws.on('error', (error: Error) => {
+        this.ws!.on('error', (error: Error) => {
           this.isConnecting = false;
           this.config.onError?.(error);
           reject(error);
         });
 
-        this.ws.on('close', () => {
+        this.ws!.on('close', () => {
           this.isConnected = false;
           this.config.onClose?.();
           this.attemptReconnect();
@@ -142,7 +142,8 @@ export class WsClient {
   }
 
   private resubscribeAll(): void {
-    for (const subscription of this.subscriptions.values()) {
+    const subscriptions = Array.from(this.subscriptions.values());
+    for (const subscription of subscriptions) {
       this.subscribe(subscription);
     }
   }

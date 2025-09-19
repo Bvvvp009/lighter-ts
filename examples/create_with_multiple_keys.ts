@@ -1,0 +1,58 @@
+import { SignerClient } from '../src/signer/wasm-signer-client';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
+
+const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
+
+// Use examples/system_setup.ts or the apikeys page (for mainnet) to generate new api keys
+const KEYS: Record<number, string> = {
+  5: process.env['API_PRIVATE_KEY_5'] || '',
+  6: process.env['API_PRIVATE_KEY_6'] || '',
+  7: process.env['API_PRIVATE_KEY_7'] || '',
+};
+
+async function main(): Promise<void> {
+  const client = new SignerClient({
+    url: BASE_URL,
+    privateKey: KEYS[5],
+    accountIndex: ACCOUNT_INDEX,
+    apiKeyIndex: 5,
+    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+  });
+
+  await client.initialize();
+  await (client as any).ensureWasmClient();
+
+  const err = client.checkClient();
+  if (err) {
+    console.error('CheckClient error:', err);
+    return;
+  }
+
+  for (let i = 0; i < 5; i++) { // Reduced from 20 to 5 for demo
+    const [tx, txHash, createErr] = await client.createOrder({
+      marketIndex: 0,
+      clientOrderIndex: 123 + i,
+      baseAmount: 100000 + i,
+      price: 385000 + i,
+      isAsk: true,
+      orderType: SignerClient.ORDER_TYPE_LIMIT,
+      timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      reduceOnly: false,
+      triggerPrice: 0,
+    });
+    console.log({ tx, txHash, err: createErr });
+  }
+
+  const [cancelTx, cancelTxHash] = await client.cancelAllOrders(
+    SignerClient.CANCEL_ALL_TIF_IMMEDIATE, 
+    Date.now()
+  );
+  console.log('Cancel All Orders:', { tx: cancelTx, txHash: cancelTxHash });
+}
+
+if (require.main === module) {
+  main().catch(console.error);
+}

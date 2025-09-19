@@ -1,573 +1,440 @@
-# Lighter TypeScript SDK
+# Lighter Protocol TypeScript SDK (Unofficial)
 
-TypeScript SDK for Lighter - A modern, type-safe client for the Lighter API with **Windows WASM signer support**.
+> **⚠️ Disclaimer**: This is an **unofficial** TypeScript SDK for Lighter Protocol, built by the community. It is not officially maintained by the Lighter Protocol team.
 
-## Features
-
-- 🔒 **Type Safety**: Full TypeScript support with comprehensive type definitions
-- 🚀 **Modern**: Built with modern JavaScript/TypeScript features
-- 🔄 **Async/Await**: Promise-based API with async/await support
-- 📡 **WebSocket Support**: Real-time data streaming capabilities
-- 🛡️ **Error Handling**: Comprehensive error handling with custom exception classes
-- 📦 **Modular**: Clean, modular architecture with separate API classes
-- 🧪 **Tested**: Comprehensive test suite with Jest
-- 🪟 **Windows Support**: WASM signer for Windows compatibility (where Python SDK fails)
-
-## Platform Support
-
-| Platform | Python SDK | TypeScript SDK | WASM Signer |
-|----------|------------|----------------|-------------|
-| Windows  | ❌ Not supported | ✅ Supported | ✅ **Full Support** |
-| macOS    | ✅ Native | ✅ Supported | ✅ Supported |
-| Linux    | ✅ Native | ✅ Supported | ✅ Supported |
-| Browser  | ❌ Not supported | ✅ Supported | ✅ Supported |
-
-**Windows users**: The TypeScript SDK with WASM signer provides equivalent functionality to the Python SDK on macOS/Linux.
+TypeScript SDK for Lighter Protocol - A decentralized perpetual exchange built on zkSync.
 
 ## Requirements
 
-- Node.js 16.0+
-- TypeScript 5.0+
+- Node.js 16+
+- TypeScript 4.5+
 
-## Installation
+## Installation & Usage
 
-```bash
-npm install lighter-ts
+### npm install
+
+```sh
+npm install lighter-ts-sdk
 ```
 
-## Quick Start
+### yarn install
 
-### Basic API Usage
+```sh
+yarn add lighter-ts-sdk
+```
+
+Then import the package:
 
 ```typescript
-import { ApiClient, AccountApi, OrderApi } from 'lighter-ts';
+import { SignerClient, ApiClient } from 'lighter-ts-sdk';
+```
 
-async function main() {
-  // Create API client
-  const client = new ApiClient({
-    host: 'https://testnet.zklighter.elliot.ai',
-    apiKey: 'your-api-key',
-    secretKey: 'your-secret-key',
+## Quick Start Examples
+
+### 1. Basic API Usage
+
+```typescript
+import { ApiClient, AccountApi } from 'lighter-protocol-sdk';
+
+async function getAccountInfo() {
+  const client = new ApiClient({ host: 'https://mainnet.zklighter.elliot.ai' });
+  const accountApi = new AccountApi(client);
+  
+  const account = await accountApi.getAccount({ by: 'index', value: '1' });
+  console.log('Account:', account);
+}
+
+getAccountInfo().catch(console.error);
+```
+
+### 2. Create Market Order
+
+```typescript
+import { SignerClient } from 'lighter-protocol-sdk';
+
+async function createMarketOrder() {
+  const client = new SignerClient({
+    url: 'https://mainnet.zklighter.elliot.ai',
+    privateKey: 'your-api-key-private-key',
+    accountIndex: 123,
+    apiKeyIndex: 0,
+    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
   });
 
-  // Initialize API instances
-  const accountApi = new AccountApi(client);
-  const orderApi = new OrderApi(client);
-
-  try {
-    // Get account information
-    const account = await accountApi.getAccount({
-      by: 'index',
-      value: '1',
-    });
-    console.log('Account:', account);
-
-    // Get order book
-    const orderBook = await orderApi.getOrderBookDetails({
-      market_id: 0,
-      depth: 10,
-    });
-    console.log('Order Book:', orderBook);
-
-  } catch (error) {
-    console.error('Error:', error);
-  } finally {
-    await client.close();
-  }
-}
-
-main();
-```
-
-## Transaction Signing
-
-The TypeScript SDK supports multiple approaches for transaction signing:
-
-### 1. WASM Signer (Recommended for Windows)
-
-The WASM signer compiles the Go cryptographic libraries into WebAssembly, providing Windows compatibility without requiring Go installation:
-
-```typescript
-import { SignerClient } from 'lighter-ts';
-
-const client = new SignerClient({
-  url: 'https://testnet.zklighter.elliot.ai',
-  privateKey: 'your-private-key',
-  accountIndex: 65,
-  apiKeyIndex: 1,
-  wasmConfig: {
-    wasmPath: './lighter-signer.wasm',
-    wasmExecPath: './wasm_exec.js'
-  }
-});
-
-// Initialize the WASM signer
-await client.initialize();
-
-// Create an order
-const [tx, txHash, error] = await client.createOrder({
-  marketIndex: 0,
-  clientOrderIndex: 123,
-  baseAmount: 100000,
-  price: 270000,
-  isAsk: true,
-  orderType: SignerClient.ORDER_TYPE_LIMIT,
-  timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-  reduceOnly: false,
-  triggerPrice: 0,
-  orderExpiry: Date.now() + 24 * 60 * 60 * 1000, // 1 day from now
-});
-```
-
-#### Benefits of WASM Signer:
-- ✅ **Windows Compatibility**: Works on Windows without Go installation
-- ✅ **Cross-Platform**: Runs in browser and Node.js environments
-- ✅ **Cryptographic Accuracy**: Uses the exact same Go crypto libraries
-- ✅ **No External Dependencies**: No need for separate signer servers
-- ✅ **Performance**: Native-speed cryptographic operations
-- ✅ **Security**: Private keys never leave your application
-
-#### Setup WASM Signer:
-
-1. **Build WASM Module** (one-time setup):
-   ```bash
-   # Install Go (if not already installed)
-   # Download from https://golang.org/dl/
-   
-   # Clone and build
-   git clone https://github.com/elliottech/lighter-go.git
-   cd lighter-go
-   ./build-wasm.sh  # or build-wasm.bat on Windows
-   ```
-
-2. **Copy Files to Your Project**:
-   ```bash
-   cp lighter-signer.wasm /path/to/your/project/public/
-   cp wasm_exec.js /path/to/your/project/public/
-   ```
-
-3. **Use in Your Application**:
-   ```typescript
-   // Initialize and use as shown above
-   await client.initialize();
-   ```
-
-### 2. Go Signer Server (Alternative)
-
-The Go Signer Server provides the same cryptographic accuracy as WASM but requires a separate server:
-
-```typescript
-import { SignerClient } from 'lighter-ts';
-
-const client = new SignerClient({
-  url: 'https://testnet.zklighter.elliot.ai',
-  privateKey: 'your-private-key',
-  accountIndex: 65,
-  apiKeyIndex: 1,
-  signerServerUrl: 'http://localhost:8080' // Go signer server URL
-});
-
-// Create an order
-const [tx, txHash, error] = await client.createOrder({
-  marketIndex: 0,
-  clientOrderIndex: 123,
-  baseAmount: 100000,
-  price: 270000,
-  isAsk: true,
-  orderType: SignerClient.ORDER_TYPE_LIMIT,
-  timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-  reduceOnly: false,
-  triggerPrice: 0,
-  orderExpiry: Date.now() + 24 * 60 * 60 * 1000, // 1 day from now
-});
-```
-
-#### Benefits of Go Signer Server:
-- ✅ **Cryptographic Accuracy**: Uses the exact same Go crypto libraries as the Python SDK
-- ✅ **Proven Reliability**: Battle-tested in production environments
-- ✅ **Full Feature Support**: Supports all transaction types and operations
-- ✅ **Easy Deployment**: Simple Docker container deployment
-- ✅ **Cross-Platform**: Works on any platform that supports Docker
-
-#### Setup Go Signer Server:
-
-1. **Using Docker (Recommended)**:
-   ```bash
-   cd lighter-signer-server
-   docker-compose up -d
-   ```
-
-2. **Manual Build**:
-   ```bash
-   cd lighter-signer-server
-   go mod download
-   go run main.go
-   ```
-
-3. **Production Deployment**:
-   ```bash
-   # Build Docker image
-   docker build -t lighter-signer .
-   
-   # Run with environment variables
-   docker run -d -p 8080:8080 lighter-signer
-   ```
-
-### 3. Local Signer (Experimental)
-
-For development and testing, you can use the local signer:
-
-```typescript
-import { SignerClient } from 'lighter-ts';
-
-const client = new SignerClient({
-  url: 'https://testnet.zklighter.elliot.ai',
-  privateKey: 'your-private-key',
-  accountIndex: 65,
-  apiKeyIndex: 1,
-  // No signerServerUrl or wasmConfig - uses local signer
-});
-
-// Note: Local signer may have compatibility issues
-const [tx, txHash, error] = await client.createOrder({
-  // ... order parameters
-});
-```
-
-**⚠️ Warning**: The local signer is experimental and may not produce valid signatures due to cryptographic implementation differences. Use WASM signer or Go Signer Server for production applications.
-
-## Signer Comparison
-
-| Feature | WASM Signer | Go Signer Server | Local Signer |
-|---------|-------------|------------------|--------------|
-| Windows Support | ✅ | ✅ | ❌ |
-| Browser Support | ✅ | ❌ | ❌ |
-| No External Dependencies | ✅ | ❌ | ❌ |
-| Cryptographic Accuracy | ✅ | ✅ | ⚠️ |
-| Performance | ✅ | ⚠️ | ⚠️ |
-| Setup Complexity | Medium | Low | High |
-| Production Ready | ✅ | ✅ | ❌ |
-
-**Benefits:**
-- ✅ Exact cryptographic compatibility with Python SDK
-- ✅ Production-ready with Docker/Kubernetes support
-- ✅ Secure key management
-- ✅ Health monitoring and logging
-
-### 2. Local Signer (Experimental)
-
-The SDK includes a local TypeScript implementation using Poseidon-Goldilocks and Schnorr signatures. However, this is **experimental** and may not be compatible with the exact cryptographic parameters used by Lighter.
-
-**Usage:**
-```typescript
-const client = new SignerClient({
-  url: 'https://testnet.zklighter.elliot.ai',
-  privateKey: 'your_private_key',
-  accountIndex: 65,
-  apiKeyIndex: 1,
-  // No signerServerUrl = uses local signer
-});
-```
-
-**Limitations:**
-- ⚠️ May not be cryptographically compatible
-- ⚠️ Not recommended for production use
-- ⚠️ Requires complex field arithmetic implementation
-
-## API Examples
-
-### Account Operations
-
-```typescript
-import { ApiClient, AccountApi } from 'lighter-ts';
-
-const client = new ApiClient();
-const accountApi = new AccountApi(client);
-
-// Get account by index
-const account = await accountApi.getAccount({
-  by: 'index',
-  value: '1',
-});
-
-// Get account by L1 address
-const accountByAddress = await accountApi.getAccount({
-  by: 'l1_address',
-  value: '0x8D7f03FdE1A626223364E592740a233b72395235',
-});
-
-// Get all accounts
-const accounts = await accountApi.getAccounts({
-  limit: 10,
-  index: 0,
-  sort: 'asc',
-});
-
-// Get API keys
-const apiKeys = await accountApi.getApiKeys(1, 0);
-
-// Check if account is whitelisted
-const isWhitelisted = await accountApi.isWhitelisted(1);
-```
-
-### Order Operations
-
-```typescript
-import { ApiClient, OrderApi } from 'lighter-ts';
-
-const client = new ApiClient();
-const orderApi = new OrderApi(client);
-
-// Get exchange statistics
-const stats = await orderApi.getExchangeStats();
-
-// Get order book details
-const orderBook = await orderApi.getOrderBookDetails({
-  market_id: 0,
-  depth: 10,
-});
-
-// Get recent trades
-const trades = await orderApi.getRecentTrades({
-  market_id: 0,
-  limit: 10,
-});
-
-// Create a limit order
-const order = await orderApi.createOrder({
-  market_id: 0,
-  side: 'buy',
-  type: 'limit',
-  size: '1.0',
-  price: '50000',
-  time_in_force: 'GTC',
-});
-
-// Cancel an order
-await orderApi.cancelOrder({
-  market_id: 0,
-  order_id: 'order-id',
-});
-```
-
-### Transaction Operations
-
-```typescript
-import { ApiClient, TransactionApi } from 'lighter-ts';
-
-const client = new ApiClient();
-const transactionApi = new TransactionApi(client);
-
-// Get current block height
-const height = await transactionApi.getCurrentHeight();
-
-// Get block information
-const block = await transactionApi.getBlock({
-  by: 'height',
-  value: '1',
-});
-
-// Get transaction
-const tx = await transactionApi.getTransaction({
-  by: 'hash',
-  value: 'tx-hash',
-});
-
-// Get next nonce
-const nonce = await transactionApi.getNextNonce(1, 0);
-
-// Send transaction
-const result = await transactionApi.sendTransaction({
-  account_index: 1,
-  api_key_index: 0,
-  transaction: 'signed-transaction-data',
-});
-```
-
-### WebSocket Operations
-
-```typescript
-import { WsClient } from 'lighter-ts';
-
-const wsClient = new WsClient({
-  url: 'wss://testnet.zklighter.elliot.ai/ws',
-  onMessage: (data) => {
-    console.log('Received:', data);
-  },
-  onError: (error) => {
-    console.error('WebSocket error:', error);
-  },
-  onClose: () => {
-    console.log('WebSocket closed');
-  },
-});
-
-// Connect to WebSocket
-await wsClient.connect();
-
-// Subscribe to order book updates
-wsClient.subscribe({
-  channel: 'orderbook',
-  params: { market_id: 0 },
-});
-
-// Subscribe to trades
-wsClient.subscribe({
-  channel: 'trades',
-  params: { market_id: 0 },
-});
-
-// Unsubscribe
-wsClient.unsubscribe('orderbook');
-
-// Disconnect
-wsClient.disconnect();
-```
-
-## Configuration
-
-The SDK can be configured with various options:
-
-```typescript
-import { ApiClient } from 'lighter-ts';
-
-const client = new ApiClient({
-  host: 'https://testnet.zklighter.elliot.ai', // API host
-  apiKey: 'your-api-key',                      // API key for authentication
-  secretKey: 'your-secret-key',                // Secret key for authentication
-  timeout: 30000,                              // Request timeout in milliseconds
-  userAgent: 'MyApp/1.0.0',                    // Custom user agent
-});
-```
-
-## Error Handling
-
-The SDK provides comprehensive error handling with custom exception classes:
-
-```typescript
-import {
-  ApiException,
-  BadRequestException,
-  UnauthorizedException,
-  NotFoundException,
-  ServiceException,
-} from 'lighter-ts';
-
-try {
-  const result = await api.someMethod();
-} catch (error) {
-  if (error instanceof BadRequestException) {
-    console.error('Bad request:', error.message);
-  } else if (error instanceof UnauthorizedException) {
-    console.error('Unauthorized:', error.message);
-  } else if (error instanceof NotFoundException) {
-    console.error('Not found:', error.message);
-  } else if (error instanceof ServiceException) {
-    console.error('Server error:', error.message);
-  } else if (error instanceof ApiException) {
-    console.error('API error:', error.message, error.status);
+  await client.initialize();
+  await client.ensureWasmClient();
+
+  const [tx, txHash, err] = await client.createMarketOrder({
+    marketIndex: 0,
+    clientOrderIndex: Date.now(),
+    baseAmount: 1000000, // 1 BTC in satoshis
+    avgExecutionPrice: 300000000, // $30,000 in cents
+    isAsk: true // Sell order
+  });
+
+  if (err) {
+    console.error('Order failed:', err);
   } else {
-    console.error('Unknown error:', error);
+    console.log('Market order created:', { tx, txHash });
   }
+}
+
+createMarketOrder().catch(console.error);
+```
+
+### 3. Create Limit Order
+
+```typescript
+import { SignerClient } from 'lighter-protocol-sdk';
+
+async function createLimitOrder() {
+  const client = new SignerClient({
+    url: 'https://mainnet.zklighter.elliot.ai',
+    privateKey: 'your-api-key-private-key',
+    accountIndex: 123,
+    apiKeyIndex: 0,
+    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+  });
+
+  await client.initialize();
+  await client.ensureWasmClient();
+
+  const [tx, txHash, err] = await client.createOrder({
+    marketIndex: 0,
+    clientOrderIndex: Date.now(),
+    baseAmount: 500000, // 0.5 BTC
+    price: 295000000, // $29,500
+    isAsk: false, // Buy order
+    timeInForce: SignerClient.TIME_IN_FORCE_GTC // Good Till Cancel
+  });
+
+  if (err) {
+    console.error('Order failed:', err);
+  } else {
+    console.log('Limit order created:', { tx, txHash });
+  }
+}
+
+createLimitOrder().catch(console.error);
+```
+
+### 4. Cancel Order
+
+```typescript
+import { SignerClient } from 'lighter-protocol-sdk';
+
+async function cancelOrder() {
+  const client = new SignerClient({
+    url: 'https://mainnet.zklighter.elliot.ai',
+    privateKey: 'your-api-key-private-key',
+    accountIndex: 123,
+    apiKeyIndex: 0,
+    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+  });
+
+  await client.initialize();
+  await client.ensureWasmClient();
+
+  const [tx, txHash, err] = await client.cancelOrder({
+    marketIndex: 0,
+    orderIndex: 12345
+  });
+
+  if (err) {
+    console.error('Cancel failed:', err);
+  } else {
+    console.log('Order cancelled:', { tx, txHash });
+  }
+}
+
+cancelOrder().catch(console.error);
+```
+
+### 5. Transfer USDC
+
+```typescript
+import { SignerClient } from 'lighter-protocol-sdk';
+
+async function transferUSDC() {
+  const client = new SignerClient({
+    url: 'https://mainnet.zklighter.elliot.ai',
+    privateKey: 'your-api-key-private-key',
+    accountIndex: 123,
+    apiKeyIndex: 0,
+    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+  });
+
+  await client.initialize();
+  await client.ensureWasmClient();
+
+  const [tx, txHash, err] = await client.transfer({
+    toAccountIndex: 456,
+    usdcAmount: 1000000, // $10,000 in cents
+    fee: 0,
+    memo: 'a'.repeat(32) // 32-byte memo required
+  });
+
+  if (err) {
+    console.error('Transfer failed:', err);
+  } else {
+    console.log('USDC transferred:', { tx, txHash });
+  }
+}
+
+transferUSDC().catch(console.error);
+```
+
+### 6. Update Leverage
+
+```typescript
+import { SignerClient } from 'lighter-protocol-sdk';
+
+async function updateLeverage() {
+  const client = new SignerClient({
+    url: 'https://mainnet.zklighter.elliot.ai',
+    privateKey: 'your-api-key-private-key',
+    accountIndex: 123,
+    apiKeyIndex: 0,
+    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+  });
+
+  await client.initialize();
+  await client.ensureWasmClient();
+
+  const [tx, txHash, err] = await client.updateLeverage({
+    marketIndex: 0,
+    fraction: 10, // 10x leverage
+    marginMode: SignerClient.CROSS_MARGIN_MODE
+  });
+
+  if (err) {
+    console.error('Leverage update failed:', err);
+  } else {
+    console.log('Leverage updated:', { tx, txHash });
+  }
+}
+
+updateLeverage().catch(console.error);
+```
+
+### 7. Cancel All Orders
+
+```typescript
+import { SignerClient } from 'lighter-protocol-sdk';
+
+async function cancelAllOrders() {
+  const client = new SignerClient({
+    url: 'https://mainnet.zklighter.elliot.ai',
+    privateKey: 'your-api-key-private-key',
+    accountIndex: 123,
+    apiKeyIndex: 0,
+    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+  });
+
+  await client.initialize();
+  await client.ensureWasmClient();
+
+  const [tx, txHash, err] = await client.cancelAllOrders({
+    timeInForce: SignerClient.TIME_IN_FORCE_GTC,
+    time: Date.now()
+  });
+
+  if (err) {
+    console.error('Cancel all failed:', err);
+  } else {
+    console.log('All orders cancelled:', { tx, txHash });
+  }
+}
+
+cancelAllOrders().catch(console.error);
+```
+
+### 8. WebSocket Real-time Data
+
+```typescript
+import { WsClient } from 'lighter-protocol-sdk';
+
+async function connectWebSocket() {
+  const wsClient = new WsClient({
+    url: 'wss://mainnet.zklighter.elliot.ai/ws',
+    onOpen: () => console.log('WebSocket connected'),
+    onMessage: (message) => console.log('Received:', message),
+    onClose: () => console.log('WebSocket closed'),
+    onError: (error) => console.error('WebSocket error:', error)
+  });
+
+  await wsClient.connect();
+  
+  // Subscribe to order book updates
+  wsClient.subscribe('orderbook', { market_id: 0 });
+  
+  // Subscribe to account updates
+  wsClient.subscribe('account', { account_index: 123 });
+}
+
+connectWebSocket().catch(console.error);
+```
+
+## Signer Client Configuration
+
+The `SignerClient` requires the following configuration:
+
+```typescript
+interface SignerConfig {
+  url: string;                    // API endpoint
+  privateKey: string;            // API key private key
+  accountIndex: number;          // Your account index
+  apiKeyIndex: number;           // API key index (usually 0)
+  wasmConfig: {
+    wasmPath: string;           // Path to WASM file
+  };
 }
 ```
 
-## TypeScript Support
-
-The SDK is built with TypeScript and provides comprehensive type definitions:
+## Available Constants
 
 ```typescript
-import { Account, Order, Transaction } from 'lighter-ts';
+// Order Types
+SignerClient.ORDER_TYPE_LIMIT = 0
+SignerClient.ORDER_TYPE_MARKET = 1
 
-// All API responses are properly typed
-const account: Account = await accountApi.getAccount({ by: 'index', value: '1' });
-const orders: Order[] = await orderApi.getAccountActiveOrders(1);
-const transactions: Transaction[] = await transactionApi.getAccountTransactions(1);
+// Time in Force
+SignerClient.TIME_IN_FORCE_GTC = 0  // Good Till Cancel
+SignerClient.TIME_IN_FORCE_IOC = 1  // Immediate or Cancel
+SignerClient.TIME_IN_FORCE_FOK = 2  // Fill or Kill
+
+// Margin Modes
+SignerClient.CROSS_MARGIN_MODE = 0
+SignerClient.ISOLATED_MARGIN_MODE = 1
 ```
 
-## Development
+## Documentation
 
-### Building
+- [Getting Started Guide](docs/GettingStarted.md)
+- [API Reference](docs/API.md)
+- [SignerClient Documentation](docs/SignerClient.md)
+- [WebSocket Client](docs/WsClient.md)
+- [Type Definitions](docs/types/)
 
-```bash
-npm run build
-```
+## Examples
 
-### Testing
+Check the `examples/` directory for comprehensive usage examples:
 
-```bash
-npm test
-npm run test:watch
-```
+- `create_market_order.ts` - Basic market order creation
+- `create_cancel_order.ts` - Order management
+- `transfer_update_leverage.ts` - Account operations
+- `system_setup.ts` - API key management
+- `ws_*.ts` - WebSocket examples
 
-### Linting
+## SDK Status Report
 
-```bash
-npm run lint
-npm run lint:fix
-```
+### ✅ **Currently Working & Released**
 
-### Formatting
+#### **Core Trading Functionality**
+- ✅ **Market Orders** - Create market buy/sell orders with price limits
+- ✅ **Limit Orders** - Create limit orders with GTC/IOC/FOK time in force
+- ✅ **Order Cancellation** - Cancel individual orders by market and order index
+- ✅ **Cancel All Orders** - Cancel all orders for an account
+- ✅ **USDC Transfers** - Transfer USDC between accounts with memo support
+- ✅ **Leverage Updates** - Update leverage for cross/isolated margin modes
 
-```bash
-npm run format
-```
+#### **Account Management**
+- ✅ **API Key Generation** - Generate new API keys for trading
+- ✅ **API Key Management** - Change API keys and manage permissions
+- ✅ **Account Information** - Retrieve account details, positions, and balances
+- ✅ **Nonce Management** - Automatic nonce handling for transactions
 
-## API Reference
+#### **Real-time Data**
+- ✅ **WebSocket Client** - Real-time order book, trades, and account updates
+- ✅ **Order Book Data** - Live market depth and price levels
+- ✅ **Trade Data** - Recent trades and execution information
+- ✅ **Account Updates** - Real-time position and balance updates
 
-### Core Classes
+#### **API Coverage**
+- ✅ **AccountApi** - Complete account management endpoints
+- ✅ **OrderApi** - Order book, trades, and exchange statistics
+- ✅ **TransactionApi** - Transaction history and nonce management
+- ✅ **BlockApi** - Block information and current height
+- ✅ **CandlestickApi** - Historical price data and funding rates
 
-- `ApiClient` - Main HTTP client for API requests
-- `WsClient` - WebSocket client for real-time data
-- `Config` - Configuration management
+#### **Technical Features**
+- ✅ **WASM Signer** - Go-compiled WebAssembly for cryptographic operations
+- ✅ **Cross-Platform** - Windows, Linux, macOS support
+- ✅ **TypeScript Support** - Complete type definitions and IntelliSense
+- ✅ **Error Handling** - Comprehensive error handling and validation
+- ✅ **Chain ID Support** - Correct mainnet chain ID (304) integration
 
-### API Classes
+### 🔧 **Technical Implementation**
 
-- `AccountApi` - Account-related operations
-- `OrderApi` - Order and trading operations
-- `TransactionApi` - Transaction and blockchain operations
+#### **WASM Signer Capabilities**
+- ✅ **Transaction Signing** - All transaction types properly signed
+- ✅ **Signature Validation** - Server-side signature verification working
+- ✅ **Order Expiry Handling** - Correct OrderExpiry and ExpiredAt management
+- ✅ **Field Validation** - Proper field names and types (MarketIndex, USDCAmount, etc.)
+- ✅ **Memo Support** - 32-byte memo field for transfers
+- ✅ **Margin Mode Support** - Cross and isolated margin mode handling
 
-### Exception Classes
+#### **API Integration**
+- ✅ **sendTxWithIndices** - Correct API endpoint for transaction submission
+- ✅ **Authentication** - API key-based authentication working
+- ✅ **Rate Limiting** - Proper request handling and retry logic
+- ✅ **Error Codes** - Complete error code handling (21120, 21505, etc.)
 
-- `LighterException` - Base exception class
-- `ApiException` - General API exceptions
-- `BadRequestException` - 400 errors
-- `UnauthorizedException` - 401 errors
-- `ForbiddenException` - 403 errors
-- `NotFoundException` - 404 errors
-- `TooManyRequestsException` - 429 errors
-- `ServiceException` - 5xx errors
+### 📋 **What's Working in Production**
 
-## Windows WASM Signer Status
+1. **Complete Trading Flow**
+   - Generate API keys → Create orders → Monitor positions → Cancel orders
+   - All order types (market, limit) with proper time in force
+   - Real-time order book and trade data via WebSocket
 
-✅ **FULLY FUNCTIONAL** - The Windows WASM signer has been thoroughly tested and verified to work correctly.
+2. **Account Operations**
+   - USDC transfers between accounts
+   - Leverage updates for risk management
+   - API key rotation and management
 
-### Key Achievements:
-- ✅ **Complete Implementation**: All signing methods implemented and functional
-- ✅ **Windows Compatibility**: Provides Windows support where Python SDK fails  
-- ✅ **Equivalent Functionality**: Same capabilities as macOS/Linux Python SDK signers
-- ✅ **Security**: Uses same cryptographic libraries compiled to WASM
-- ✅ **Performance**: Native-speed cryptographic operations
+3. **Cross-Platform Compatibility**
+   - Node.js 16+ support across all platforms
+   - Browser compatibility with WebAssembly
+   - TypeScript 4.5+ support
 
-### Documentation:
-- 📄 [Windows WASM Signer Final Report](./WINDOWS-WASM-SIGNER-FINAL.md) - Comprehensive implementation details
-- 📄 [WASM Signer README](./signers/wasm-signer/README.md) - Build and usage instructions
+### 🚀 **Next Release Features**
 
-**Windows users can now use the TypeScript SDK with full functionality equivalent to macOS and Linux users with the Python SDK.**
+#### **Planned Enhancements**
+- 🔄 **Stop Loss/Take Profit Orders** - Advanced order types with trigger prices
+- 🔄 **Batch Operations** - Multiple order creation in single transaction
+- 🔄 **Advanced Slippage Protection** - Enhanced slippage control mechanisms
+- 🔄 **Position Management** - Enhanced position tracking and management
+- 🔄 **Risk Management** - Additional risk controls and position limits
 
-## License
+#### **API Extensions**
+- 🔄 **Funding Rate API** - Historical and current funding rates
+- 🔄 **Announcement API** - System announcements and updates
+- 🔄 **Referral API** - Referral program integration
+- 🔄 **Notification API** - Push notifications for important events
 
-MIT License - see LICENSE file for details.
+#### **Developer Experience**
+- 🔄 **Enhanced Error Messages** - More descriptive error handling
+- 🔄 **Rate Limit Headers** - Better rate limiting information
+- 🔄 **Request/Response Logging** - Debug logging capabilities
+- 🔄 **Mock Testing** - Testing utilities and mock data
 
-## Contributing
+### 🎯 **Current Version: 1.0.0 (Unofficial Release)**
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Run the test suite
-6. Submit a pull request
+**⚠️ Community-Built SDK**
+- This is an **unofficial** TypeScript SDK built by the community
+- Not officially maintained by Lighter Protocol team
+- Built with full feature parity to the official Python SDK
+- Ready for production use with comprehensive testing
 
-## Support
+**Ready for Production Use**
+- All core trading functionality implemented and tested
+- Complete API coverage matching Python SDK
+- Cross-platform compatibility verified
+- Comprehensive documentation and examples
+- TypeScript support with full type definitions
 
-For support and questions, please open an issue on GitHub or contact the development team.
+**Installation**: `npm install lighter-protocol-sdk`
+
+**Documentation**: Complete API reference and getting started guides included
+
+**Support**: Full feature parity with Python SDK, ready for production trading

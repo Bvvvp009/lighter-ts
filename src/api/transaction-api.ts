@@ -124,14 +124,41 @@ export class TransactionApi {
   }
 
   public async sendTx(txType: number, txInfo: string): Promise<TxHash> {
-    const formData = new FormData();
-    formData.append('tx_type', txType.toString());
-    formData.append('tx_info', txInfo);
-    
-    const response = await this.client.post<TxHash>('/api/v1/sendTx', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    // Use x-www-form-urlencoded to match Go client behavior
+    const params = new URLSearchParams();
+    params.append('tx_type', txType.toString());
+    params.append('tx_info', txInfo);
+
+    const response = await this.client.post<TxHash>('/api/v1/sendTx', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+    return response.data;
+  }
+
+  // New: multipart with explicit indices, mirroring python usage on some endpoints
+  public async sendTxWithIndices(txType: number, txInfo: string, accountIndex: number, apiKeyIndex: number): Promise<TxHash> {
+    const params = new URLSearchParams();
+    params.append('tx_type', txType.toString());
+    params.append('tx_info', txInfo);
+    params.append('account_index', accountIndex.toString());
+    params.append('api_key_index', apiKeyIndex.toString());
+
+    const response = await this.client.post<TxHash>('/api/v1/sendTx', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+    return response.data;
+  }
+
+  // JSON variant
+  public async sendTxJson(txType: number, txInfo: string, accountIndex: number, apiKeyIndex: number): Promise<TxHash> {
+    const payload = {
+      tx_type: txType,
+      tx_info: txInfo,
+      account_index: accountIndex,
+      api_key_index: apiKeyIndex,
+    } as any;
+    const response = await this.client.post<TxHash>('/api/v1/sendTx', payload, {
+      headers: { 'Content-Type': 'application/json' },
     });
     return response.data;
   }

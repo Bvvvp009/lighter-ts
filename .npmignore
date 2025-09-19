@@ -1,0 +1,41 @@
+# Source files (only include compiled dist)
+src/
+temp-lighter-go/
+lighter-python/
+
+# Development files
+*.log
+*.tgz
+*.tar.gz
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files
+tests/
+*.test.ts
+*.spec.ts
+jest.config.js
+
+# Build artifacts
+node_modules/
+.env
+.env.local
+.env.*.local
+
+# Documentation source (keep compiled docs)
+docs/api/
+
+# Git files
+.git/
+.gitignore
+
+# Other
+go.zip
+tinygo.zip
+setup-env.js
