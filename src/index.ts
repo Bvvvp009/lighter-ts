@@ -2,7 +2,7 @@
  * Lighter TypeScript SDK
  * 
  * A comprehensive TypeScript SDK for interacting with the Lighter Protocol,
- * a decentralized perpetual exchange built on zkSync.
+ * a decentralized perpetual exchange built on zkProof.
  */
 
 // Core API Classes

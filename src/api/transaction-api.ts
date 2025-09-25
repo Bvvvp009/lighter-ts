@@ -30,7 +30,11 @@ export interface NextNonce {
 }
 
 export interface TxHash {
-  hash: string;
+  hash?: string;
+  tx_hash?: string; // API returns tx_hash with underscore
+  code?: number;
+  message?: string;
+  predicted_execution_time_ms?: number;
 }
 
 export interface TxHashes {
@@ -146,6 +150,8 @@ export class TransactionApi {
     const response = await this.client.post<TxHash>('/api/v1/sendTx', params, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
+    
+    
     return response.data;
   }
 

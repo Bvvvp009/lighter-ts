@@ -29,11 +29,52 @@ async function main(): Promise<void> {
     marketIndex: 0,
     clientOrderIndex: Date.now(),
     baseAmount: 10,
-    avgExecutionPrice: 4500,
+    avgExecutionPrice: 4500, 
     isAsk: true,
   });
 
   console.log('Create Market Order:', { tx, txHash, err });
+  if (err) {
+    console.error('❌ Market order failed:', err);
+  } else {
+    console.log('✅ Market order created successfully!');
+    console.log('📋 Order Details:');
+    console.log(`   Market Index: ${tx.MarketIndex}`);
+    console.log(`   Client Order Index: ${tx.ClientOrderIndex}`);
+    console.log(`   Base Amount: ${tx.BaseAmount}`);
+    console.log(`   Price: ${tx.Price}`);
+    console.log(`   Is Ask: ${tx.IsAsk ? 'Yes (Sell)' : 'No (Buy)'}`);
+    console.log(`   Order Type: ${tx.Type === 0 ? 'Limit' : 'Market'}`);
+    console.log(`   Nonce: ${tx.Nonce}`);
+
+    // Wait for transaction confirmation if txHash is available
+    if (txHash) {
+      console.log('\n⏳ Waiting for transaction confirmation...');
+      try {
+        const confirmedTx = await client.waitForTransaction(txHash, 30000, 1000);
+        console.log('✅ Transaction confirmed!');
+        console.log(`   Hash: ${confirmedTx.hash}`);
+        console.log(`   Status: ${confirmedTx.status}`);
+        console.log(`   Block Height: ${confirmedTx.block_height}`);
+      } catch (waitError) {
+        console.log('⚠️ Transaction confirmation failed:', waitError instanceof Error ? waitError.message : 'Unknown error');
+        
+        // Check if it's a timeout or actual failure
+        if (waitError instanceof Error) {
+          if (waitError.message.includes('did not confirm within')) {
+            console.log('   → This is a timeout - transaction may still be processing');
+          } else if (waitError.message.includes('failed with status')) {
+            console.log('   → This is a transaction failure - the order was rejected');
+          } else {
+            console.log('   → This is an API or network error');
+          }
+        }
+      }
+    } else {
+      console.log('⚠️ No transaction hash available for confirmation');
+    }
+  }
+
   await client.close();
 }
 

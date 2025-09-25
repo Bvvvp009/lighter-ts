@@ -25,13 +25,13 @@ async function main(): Promise<void> {
   await client.initialize();
   await (client as any).ensureWasmClient();
 
-  // Create market order with price limit (similar to max slippage)
-  const [tx, txHash, err] = await client.createMarketOrder({
+  // Create market order with maximum slippage limit
+  const [tx, txHash, err] = await client.createMarketOrder_maxSlippage({
     marketIndex: 0,
     clientOrderIndex: Date.now(),
-    baseAmount: 30000000,
-    avgExecutionPrice: 300000, // This acts as a price limit
-    isAsk: true,
+    baseAmount: 1000000, // 0.001 ETH (in wei scale)
+    maxSlippage: 0.01, // 1% max slippage
+    isAsk: true, // Sell order
   });
 
   console.log('Create Market Order with Price Limit:', { tx, txHash, err });

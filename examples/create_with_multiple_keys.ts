@@ -44,13 +44,25 @@ async function main(): Promise<void> {
       triggerPrice: 0,
     });
     console.log({ tx, txHash, err: createErr });
+    
+    if (!createErr && txHash) {
+      console.log('⏳ Waiting for transaction confirmation...');
+      try {
+        const confirmedTx = await client.waitForTransaction(txHash, 30000, 1000);
+        console.log('✅ Transaction confirmed!');
+        console.log(`   Hash: ${confirmedTx.hash}`);
+        console.log(`   Status: ${confirmedTx.status}`);
+      } catch (waitError) {
+        console.log('⚠️ Transaction confirmation timeout:', waitError instanceof Error ? waitError.message : 'Unknown error');
+      }
+    }
   }
 
-  const [cancelTx, cancelTxHash] = await client.cancelAllOrders(
+  const [cancelTx, cancelApiResponse, cancelErr] = await client.cancelAllOrders(
     SignerClient.CANCEL_ALL_TIF_IMMEDIATE, 
     Date.now()
   );
-  console.log('Cancel All Orders:', { tx: cancelTx, txHash: cancelTxHash });
+  console.log('Cancel All Orders:', { tx: cancelTx, apiResponse: cancelApiResponse, err: cancelErr });
 }
 
 if (require.main === module) {
