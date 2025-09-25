@@ -36,9 +36,9 @@ async function main(): Promise<void> {
     marketIndex: 0,
     clientOrderIndex: 123,
     baseAmount: 1000,
-    price: 4500,
+    price: 450000,
     isAsk: true,
-    orderType: SignerClient.ORDER_TYPE_MARKET,
+    orderType: SignerClient.ORDER_TYPE_LIMIT,
     timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
     reduceOnly: false,
     triggerPrice: 0,
@@ -49,10 +49,31 @@ async function main(): Promise<void> {
     throw new Error(createErr);
   }
 
-  const [auth, authErr] = await client.createAuthTokenWithExpiry(SignerClient.DEFAULT_10_MIN_AUTH_EXPIRY);
-  console.log('Auth token:', auth);
-  if (authErr) {
-    throw new Error(authErr);
+  console.log('✅ Order created successfully!');
+  console.log('📋 Order Details:');
+  console.log(`   Market Index: ${tx.MarketIndex}`);
+  console.log(`   Client Order Index: ${tx.ClientOrderIndex}`);
+  console.log(`   Base Amount: ${tx.BaseAmount}`);
+  console.log(`   Price: ${tx.Price}`);
+  console.log(`   Is Ask: ${tx.IsAsk ? 'Yes (Sell)' : 'No (Buy)'}`);
+  console.log(`   Order Type: ${tx.Type === 0 ? 'Limit' : 'Market'}`);
+  console.log(`   Time In Force: ${tx.TimeInForce === 1 ? 'Good Till Time' : 'Immediate or Cancel'}`);
+  console.log(`   Nonce: ${tx.Nonce}`);
+
+  // Wait for transaction confirmation if txHash is available
+  if (txHash) {
+    console.log('\n⏳ Waiting for transaction confirmation...');
+    try {
+      const confirmedTx = await client.waitForTransaction(txHash, 30000, 1000);
+      console.log('✅ Transaction confirmed!');
+      console.log(`   Hash: ${confirmedTx.hash}`);
+      console.log(`   Status: ${confirmedTx.status}`);
+      console.log(`   Block Height: ${confirmedTx.block_height}`);
+    } catch (waitError) {
+      console.log('⚠️ Transaction confirmation timeout or failed:', waitError instanceof Error ? waitError.message : 'Unknown error');
+    }
+  } else {
+    console.log('⚠️ No transaction hash available for confirmation');
   }
 
   // Cancel order
@@ -61,9 +82,28 @@ async function main(): Promise<void> {
     orderIndex: 123,
   });
 
-  console.log('Cancel Order:', { tx: cancelTx, txHash: cancelTxHash, err: cancelErr });
+  console.log('\nCancel Order:', { tx: cancelTx, txHash: cancelTxHash, err: cancelErr });
   if (cancelErr) {
-    throw new Error(cancelErr);
+    console.log('❌ Cancel order error:', cancelErr);
+  } else {
+    console.log('✅ Order cancelled successfully!');
+    console.log('📋 Cancel Order Details:');
+    console.log(`   Market Index: ${cancelTx.MarketIndex}`);
+    console.log(`   Order Index: ${cancelTx.OrderIndex}`);
+    console.log(`   Nonce: ${cancelTx.Nonce}`);
+
+    // Wait for cancellation transaction confirmation if txHash is available
+    if (cancelTxHash) {
+      console.log('\n⏳ Waiting for cancellation transaction confirmation...');
+      try {
+        const confirmedCancelTx = await client.waitForTransaction(cancelTxHash, 30000, 1000);
+        console.log('✅ Cancellation transaction confirmed!');
+        console.log(`   Hash: ${confirmedCancelTx.hash}`);
+        console.log(`   Status: ${confirmedCancelTx.status}`);
+      } catch (waitError) {
+        console.log('⚠️ Cancellation transaction confirmation timeout:', waitError instanceof Error ? waitError.message : 'Unknown error');
+      }
+    }
   }
 
   await client.close();

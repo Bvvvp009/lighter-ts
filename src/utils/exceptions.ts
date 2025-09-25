@@ -72,3 +72,64 @@ export class ConfigurationException extends LighterException {
     this.name = 'ConfigurationException';
   }
 }
+
+// Transaction-specific exceptions based on Python SDK patterns
+export class TransactionException extends LighterException {
+  public txType: string;
+  public txInfo?: any;
+
+  constructor(message: string, txType: string, txInfo?: any) {
+    super(message, 0, 'TRANSACTION_ERROR');
+    this.name = 'TransactionException';
+    this.txType = txType;
+    this.txInfo = txInfo;
+  }
+}
+
+export class SignerException extends LighterException {
+  public operation: string;
+  public signerType: string;
+
+  constructor(message: string, operation: string, signerType: string) {
+    super(message, 0, 'SIGNER_ERROR');
+    this.name = 'SignerException';
+    this.operation = operation;
+    this.signerType = signerType;
+  }
+}
+
+export class NonceException extends LighterException {
+  public apiKeyIndex: number;
+  public nonce: number;
+
+  constructor(message: string, apiKeyIndex: number, nonce: number) {
+    super(message, 0, 'NONCE_ERROR');
+    this.name = 'NonceException';
+    this.apiKeyIndex = apiKeyIndex;
+    this.nonce = nonce;
+  }
+}
+
+// Order-specific exceptions
+export class OrderException extends LighterException {
+  public marketIndex: number;
+  public clientOrderIndex: number | undefined;
+
+  constructor(message: string, marketIndex: number, clientOrderIndex?: number) {
+    super(message, 0, 'ORDER_ERROR');
+    this.name = 'OrderException';
+    this.marketIndex = marketIndex;
+    this.clientOrderIndex = clientOrderIndex;
+  }
+}
+
+// WebSocket-specific exceptions
+export class WebSocketException extends LighterException {
+  public event: string;
+
+  constructor(message: string, event: string) {
+    super(message, 0, 'WEBSOCKET_ERROR');
+    this.name = 'WebSocketException';
+    this.event = event;
+  }
+}
