@@ -13,10 +13,17 @@ const KEYS: Record<number, string> = {
   7: process.env['API_PRIVATE_KEY_7'] || '',
 };
 
+// Check if required keys are available
+const requiredKey = KEYS[5];
+if (!requiredKey) {
+  console.error('API_PRIVATE_KEY_5 environment variable is required');
+  process.exit(1);
+}
+
 async function main(): Promise<void> {
   const client = new SignerClient({
     url: BASE_URL,
-    privateKey: KEYS[5],
+    privateKey: requiredKey!,
     accountIndex: ACCOUNT_INDEX,
     apiKeyIndex: 5,
     wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }

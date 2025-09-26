@@ -13,13 +13,13 @@ This guide will help you get up and running with the Lighter TypeScript SDK quic
 ### Using npm
 
 ```bash
-npm install @lighter/typescript-sdk
+npm install lighter-ts-sdk
 ```
 
 ### Using yarn
 
 ```bash
-yarn add @lighter/typescript-sdk
+yarn add lighter-ts-sdk
 ```
 
 ## Quick Start
@@ -27,7 +27,7 @@ yarn add @lighter/typescript-sdk
 ### 1. Basic API Usage
 
 ```typescript
-import { ApiClient, AccountApi } from '@lighter/typescript-sdk';
+import { ApiClient, AccountApi } from 'lighter-ts-sdk';
 
 async function main() {
   const client = new ApiClient({ host: 'https://mainnet.zklighter.elliot.ai' });
@@ -49,7 +49,7 @@ main().catch(console.error);
 ### 2. Trading with SignerClient
 
 ```typescript
-import { SignerClient } from '@lighter/typescript-sdk';
+import { SignerClient } from 'lighter-ts-sdk';
 
 async function main() {
   const client = new SignerClient({
@@ -115,7 +115,7 @@ Create a `.env` file in your project root:
 
 ```env
 BASE_URL=https://mainnet.zklighter.elliot.ai
-PRIVATE_KEY=0xea5d2eca5be67eca056752eaf27b173518b8a5550117c09d2b58c7ea7d306cc4426f913ccf27ab19 
+API_PRIVATE_KEY=0xea5d2eca5be67eca056752eaf27b173518b8a5550117c09d2b58c7ea7d306cc4426f913ccf27ab19 
 ACCOUNT_INDEX=595
 API_KEY_INDEX=1
 ```
@@ -125,7 +125,7 @@ API_KEY_INDEX=1
 Now you can use the SDK to create orders:
 
 ```typescript
-import { SignerClient } from '@lighter/typescript-sdk';
+import { SignerClient } from 'lighter-ts-sdk';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -203,7 +203,7 @@ npx ts-node examples/[example-name].ts
 For real-time data, use the WebSocket client:
 
 ```typescript
-import { WsClient } from '@lighter/typescript-sdk';
+import { WsClient } from 'lighter-ts-sdk';
 
 const wsClient = new WsClient({
   url: 'wss://mainnet.zklighter.elliot.ai/ws',

@@ -275,7 +275,7 @@ console.log('Order created successfully:', txHash);
 ## Complete Example
 
 ```typescript
-import { SignerClient } from '@lighter/typescript-sdk';
+import { SignerClient } from 'lighter-ts-sdk';
 
 async function main() {
   const client = new SignerClient({

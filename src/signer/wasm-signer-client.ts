@@ -6,6 +6,13 @@ import { NodeWasmSignerClient, createNodeWasmSignerClient } from '../utils/node-
 import { RootApi } from '../api/root-api';
 import { logger, LogLevel } from '../utils/logger';
 import { TransactionException } from '../utils/exceptions';
+import { WasmManager } from '../utils/wasm-manager';
+import { NonceCache } from '../utils/nonce-cache';
+import { performanceMonitor } from '../utils/performance-monitor';
+// import { poolManager } from '../utils/memory-pool';
+// import { cacheManager } from '../utils/advanced-cache';
+import { RequestBatcher } from '../utils/request-batcher';
+import { WebSocketOrderClient } from '../api/ws-order-client';
 
 export interface SignerConfig {
   url: string;
@@ -17,6 +24,10 @@ export interface SignerConfig {
     wasmExecPath?: string;
   }; // Optional: WASM signer configuration
   logLevel?: LogLevel; // Optional: Logging level
+  enableWebSocket?: boolean; // Optional: Enable WebSocket order placement
+  enableBatching?: boolean; // Optional: Enable request batching
+  enableMemoryPooling?: boolean; // Optional: Enable memory pooling
+  enableAdvancedCaching?: boolean; // Optional: Enable advanced caching
 }
 
 export interface CreateOrderParams {
@@ -25,10 +36,10 @@ export interface CreateOrderParams {
   baseAmount: number;
   price: number;
   isAsk: boolean;
-  orderType: number;
-  timeInForce: number;
-  reduceOnly: boolean;
-  triggerPrice: number;
+  orderType?: number;
+  timeInForce?: number;
+  reduceOnly?: boolean;
+  triggerPrice?: number;
   orderExpiry?: number; // Add optional orderExpiry parameter
   nonce?: number; // Add optional nonce parameter
 }
@@ -60,6 +71,9 @@ export class SignerClient {
   private wallet: WasmSignerClient | NodeWasmSignerClient;
   private signerType: 'wasm' | 'node-wasm';
   private clientCreated: boolean = false;
+  private nonceCache: NonceCache | null = null;
+  private wsOrderClient: WebSocketOrderClient | null = null;
+  private orderBatcher: RequestBatcher | null = null;
 
   // Constants from Python SDK
   static readonly ORDER_TYPE_LIMIT = 0;
@@ -116,19 +130,118 @@ export class SignerClient {
       logger.setLevel(config.logLevel);
     }
     
-    // Initialize WASM signer
+    // Initialize WASM signer using manager
     if (config.wasmConfig) {
-      // Check if we're in a browser or Node.js environment
-      if (typeof window !== 'undefined') {
-        this.wallet = createWasmSignerClient(config.wasmConfig);
-        this.signerType = 'wasm';
+      const wasmManager = WasmManager.getInstance();
+      const clientType = typeof window !== 'undefined' ? 'browser' : 'node';
+      
+      // Use pre-initialized WASM client if available
+      if (wasmManager.isReady()) {
+        this.wallet = wasmManager.getWasmClient();
+        this.signerType = clientType === 'browser' ? 'wasm' : 'node-wasm';
       } else {
-        this.wallet = createNodeWasmSignerClient(config.wasmConfig);
-        this.signerType = 'node-wasm';
+        // Fallback to direct initialization
+        if (typeof window !== 'undefined') {
+          this.wallet = createWasmSignerClient(config.wasmConfig);
+          this.signerType = 'wasm';
+        } else {
+          this.wallet = createNodeWasmSignerClient(config.wasmConfig);
+          this.signerType = 'node-wasm';
+        }
       }
     } else {
       throw new Error('wasmConfig must be provided.');
     }
+
+    // Initialize optimization components
+    this.initializeOptimizations();
+  }
+
+  private initializeOptimizations(): void {
+    // Initialize nonce cache first
+    this.nonceCache = new NonceCache(
+      async (apiKeyIndex: number, count: number) => {
+        // Get a single nonce and then calculate sequential nonces
+        const firstNonceResult = await this.transactionApi.getNextNonce(
+          this.config.accountIndex,
+          apiKeyIndex
+        );
+        
+        const nonces: number[] = [];
+        for (let i = 0; i < count; i++) {
+          nonces.push(firstNonceResult.nonce + i);
+        }
+        return nonces;
+      }
+    );
+
+    // Initialize WebSocket order client if enabled
+    if (this.config.enableWebSocket) {
+      this.wsOrderClient = new WebSocketOrderClient({
+        url: this.config.url,
+        reconnectInterval: 5000,
+        maxReconnectAttempts: 10,
+        heartbeatInterval: 30000,
+        timeout: 10000
+      });
+    }
+
+    // Initialize request batcher if enabled
+    if (this.config.enableBatching) {
+      this.orderBatcher = new RequestBatcher(
+        async (requests) => {
+          // Batch processor implementation
+          const results = [];
+          for (const request of requests) {
+            try {
+              let result;
+              if (request.type === 'CREATE_ORDER') {
+                result = await this.processOrderRequest(request.params);
+              } else if (request.type === 'CANCEL_ORDER') {
+                result = await this.processCancelRequest(request.params);
+              }
+              results.push({
+                id: request.id,
+                success: true,
+                result,
+                timestamp: Date.now()
+              });
+            } catch (error) {
+              results.push({
+                id: request.id,
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                timestamp: Date.now()
+              });
+            }
+          }
+          return results;
+        },
+        {
+          maxBatchSize: 10,
+          maxWaitTime: 50,
+          flushInterval: 25
+        }
+      );
+    }
+  }
+
+  private async processOrderRequest(params: any): Promise<any> {
+    // Process individual order request
+    const [, txHash, createErr] = await this.createOrderOptimized(params);
+    if (createErr) {
+      throw new Error(createErr);
+    }
+    return { txHash };
+  }
+
+  private async processCancelRequest(params: any): Promise<any> {
+    // Process individual cancel request
+    const [, txHash, cancelErr] = await this.cancelOrder(params.marketIndex);
+    if (cancelErr) {
+      throw new Error(cancelErr);
+    }
+    return { txHash };
   }
 
   /**
@@ -209,58 +322,141 @@ export class SignerClient {
   }
 
   async createOrder(params: CreateOrderParams): Promise<[any, string, string | null]> {
+    const endTimer = performanceMonitor.startTimer('create_order', {
+      orderType: (params.orderType || SignerClient.ORDER_TYPE_LIMIT).toString(),
+      marketIndex: params.marketIndex.toString()
+    });
+
     try {
-      // Get next nonce
-      const nextNonce = await this.transactionApi.getNextNonce(
-        this.config.accountIndex,
-        this.config.apiKeyIndex
-      );
+      // Try WebSocket first if enabled and connected
+      if (this.config.enableWebSocket && this.wsOrderClient?.isReady()) {
+        try {
+          // Get next nonce
+          const nonceResult = await this.getNextNonce();
+          const nonce = nonceResult.nonce;
 
-      // Handle order expiry - use real timestamp for GTT orders (milliseconds)
-      const orderExpiry = params.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY;
+          // Sign the order using WASM - use the existing method signature
+          const wasmParams = {
+            marketIndex: params.marketIndex,
+            clientOrderIndex: params.clientOrderIndex,
+            baseAmount: params.baseAmount,
+            price: params.price,
+            isAsk: params.isAsk ? 1 : 0,
+            orderType: params.orderType || SignerClient.ORDER_TYPE_LIMIT,
+            timeInForce: params.timeInForce || SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+            reduceOnly: params.reduceOnly ? 1 : 0,
+            triggerPrice: params.triggerPrice || SignerClient.NIL_TRIGGER_PRICE,
+            orderExpiry: params.orderExpiry || SignerClient.DEFAULT_IOC_EXPIRY,
+            nonce
+          };
 
-      // Use WASM signer
-      // For IOC orders, use NilOrderExpiry (0)
-      const wasmOrderExpiry = params.timeInForce === SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL ? 
-        0 : orderExpiry;
-        
-      const wasmParams = {
-        marketIndex: params.marketIndex,
-        clientOrderIndex: params.clientOrderIndex,
-        baseAmount: params.baseAmount,
-        price: params.price,
-        isAsk: params.isAsk ? 1 : 0,
-        orderType: params.orderType,
-        timeInForce: params.timeInForce,
-        reduceOnly: params.reduceOnly ? 1 : 0,
-        triggerPrice: params.triggerPrice,
-        orderExpiry: wasmOrderExpiry,
-        nonce: nextNonce.nonce
-      };
+          const txInfoStr = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signCreateOrder(wasmParams);
+          const txInfo = JSON.parse(txInfoStr);
 
-      const txInfoStr = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signCreateOrder(wasmParams);
-      // Send exactly what WASM produced, using urlencoded form like Python/Go
-      console.log('WASM signCreateOrder result:', txInfoStr);
-      const txHash = await this.transactionApi.sendTxWithIndices(
-        SignerClient.TX_TYPE_CREATE_ORDER,
-        txInfoStr,
-        this.config.accountIndex,
-        this.config.apiKeyIndex
-      );
-      return [JSON.parse(txInfoStr), txHash.tx_hash || txHash.hash || '', null];
+          // Send via WebSocket using official Lighter API
+          const wsTransaction = await this.wsOrderClient.sendTransaction(
+            SignerClient.TX_TYPE_CREATE_ORDER,
+            JSON.stringify(txInfo)
+          );
+
+          return [txInfo, wsTransaction.hash, null];
+        } catch (error) {
+          logger.warning('WebSocket order failed, falling back to HTTP', { error: error instanceof Error ? error.message : String(error) });
+        }
+      }
+
+      // Try batching if enabled
+      if (this.config.enableBatching && this.orderBatcher) {
+        const result = await this.orderBatcher.addRequest('CREATE_ORDER', params);
+        return [result, result.txHash || '', null];
+      }
+
+      // Fallback to optimized HTTP method
+      return await this.createOrderOptimized(params);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      performanceMonitor.recordCounter('create_order_error', 1, {
+        error: errorMessage.substring(0, 50)
+      });
       return [null, '', errorMessage];
+    } finally {
+      endTimer();
     }
   }
 
+  private async createOrderOptimized(params: CreateOrderParams): Promise<[any, string, string | null]> {
+    // Get next nonce (with caching)
+    const nextNonce = await this.getNextNonce();
+
+    // Handle order expiry - use real timestamp for GTT orders (milliseconds)
+    const orderExpiry = params.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY;
+
+    // Use WASM signer
+    // For IOC orders, use NilOrderExpiry (0)
+    const wasmOrderExpiry = params.timeInForce === SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL ? 
+      0 : orderExpiry;
+      
+    const wasmParams = {
+      marketIndex: params.marketIndex,
+      clientOrderIndex: params.clientOrderIndex,
+      baseAmount: params.baseAmount,
+      price: params.price,
+      isAsk: params.isAsk ? 1 : 0,
+      orderType: params.orderType || SignerClient.ORDER_TYPE_LIMIT,
+      timeInForce: params.timeInForce || SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+      reduceOnly: (params.reduceOnly || false) ? 1 : 0,
+      triggerPrice: params.triggerPrice || SignerClient.NIL_TRIGGER_PRICE,
+      orderExpiry: wasmOrderExpiry,
+      nonce: nextNonce.nonce
+    };
+
+    const txInfoStr = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signCreateOrder(wasmParams);
+    // Send exactly what WASM produced, using urlencoded form like Python/Go
+    console.log('WASM signCreateOrder result:', txInfoStr);
+    const txHash = await this.transactionApi.sendTxWithIndices(
+      SignerClient.TX_TYPE_CREATE_ORDER,
+      txInfoStr,
+      this.config.accountIndex,
+      this.config.apiKeyIndex
+    );
+    return [JSON.parse(txInfoStr), txHash.tx_hash || txHash.hash || '', null];
+  }
+
+  private async getNextNonce(): Promise<{ nonce: number }> {
+    // Use the pre-initialized nonce cache
+    if (!this.nonceCache) {
+      throw new Error('Nonce cache not initialized');
+    }
+
+    const nonce = await this.nonceCache.getNextNonce(this.config.apiKeyIndex);
+    return { nonce };
+  }
+
+  /**
+   * Pre-warm the nonce cache for better performance
+   */
+  async preWarmNonceCache(): Promise<void> {
+    if (this.nonceCache) {
+      await this.nonceCache.preWarmCache([this.config.apiKeyIndex]);
+      logger.info('Nonce cache pre-warmed', { apiKeyIndex: this.config.apiKeyIndex });
+    }
+  }
+
+  /**
+   * Get nonce cache statistics for monitoring
+   */
+  getNonceCacheStats(): Record<number, { count: number; oldest: number; newest: number }> | null {
+    return this.nonceCache ? this.nonceCache.getCacheStats() : null;
+  }
+
   async createMarketOrder(params: CreateMarketOrderParams): Promise<[any, string, string | null]> {
+    const endTimer = performanceMonitor.startTimer('create_market_order', {
+      marketIndex: params.marketIndex.toString()
+    });
+
     try {
-      // Get next nonce
-      const nextNonce = await this.transactionApi.getNextNonce(
-        this.config.accountIndex,
-        this.config.apiKeyIndex
-      );
+      // Get next nonce (with caching)
+      const nextNonce = await this.getNextNonce();
 
       // Use WASM signer
       const wasmParams = {
@@ -290,8 +486,13 @@ export class SignerClient {
       );
       return [JSON.parse(txInfoStr), txHash.tx_hash || txHash.hash || '', null];
     } catch (error) {
-      console.error('Error creating market order:', error);
-      return [null, '', error instanceof Error ? error.message : 'Unknown error'];
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      performanceMonitor.recordCounter('create_market_order_error', 1, {
+        error: errorMessage.substring(0, 50)
+      });
+      return [null, '', errorMessage];
+    } finally {
+      endTimer();
     }
   }
 
@@ -378,11 +579,8 @@ export class SignerClient {
 
   async cancelOrder(params: CancelOrderParams): Promise<[any, string, string | null]> {
     try {
-      // Get next nonce
-      const nextNonce = await this.transactionApi.getNextNonce(
-        this.config.accountIndex,
-        this.config.apiKeyIndex
-      );
+      // Get next nonce (with caching)
+      const nextNonce = await this.getNextNonce();
 
       // Use WASM signer
       const wasmParams = {
@@ -453,9 +651,9 @@ export class SignerClient {
    */
   async cancelAllOrders(timeInForce: number, time: number, nonce: number = -1): Promise<[any, any, string | null]> {
     try {
-      // Get next nonce if not provided
+      // Get next nonce if not provided (with caching)
       const nextNonce = nonce === -1 ? 
-        await this.transactionApi.getNextNonce(this.config.accountIndex, this.config.apiKeyIndex) :
+        await this.getNextNonce() :
         { nonce };
 
       // Use WASM signer
@@ -680,9 +878,9 @@ export class SignerClient {
    */
   async transfer(toAccountIndex: number, usdcAmount: number, nonce: number = -1): Promise<[any, string, string | null]> {
     try {
-      // Get next nonce if not provided
+      // Get next nonce if not provided (with caching)
       const nextNonce = nonce === -1 ? 
-        await this.transactionApi.getNextNonce(this.config.accountIndex, this.config.apiKeyIndex) :
+        await this.getNextNonce() :
         { nonce };
 
       const scaledAmount = Math.floor(usdcAmount * SignerClient.USDC_TICKER_SCALE);
@@ -718,9 +916,9 @@ export class SignerClient {
    */
   async updateLeverage(marketIndex: number, marginMode: number, initialMarginFraction: number, nonce: number = -1): Promise<[any, string, string | null]> {
     try {
-      // Get next nonce if not provided
+      // Get next nonce if not provided (with caching)
       const nextNonce = nonce === -1 ? 
-        await this.transactionApi.getNextNonce(this.config.accountIndex, this.config.apiKeyIndex) :
+        await this.getNextNonce() :
         { nonce };
 
       // Use WASM signer

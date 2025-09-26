@@ -162,7 +162,7 @@ export class SignerClient {
         JSON.stringify(txInfo)
       );
 
-      return [orderTx, txHash.hash, null];
+      return [orderTx, txHash.hash || '', null];
     } catch (error) {
       return [null, '', error instanceof Error ? error.message : 'Unknown error'];
     }
@@ -245,7 +245,7 @@ export class SignerClient {
         JSON.stringify(txInfo)
       );
 
-      return [cancelTx, txHash.hash, null];
+      return [cancelTx, txHash.hash || '', null];
     } catch (error) {
       return [null, '', error instanceof Error ? error.message : 'Unknown error'];
     }

@@ -16,7 +16,7 @@ Configuration object for the `SignerClient` class.
 ## Example
 
 ```typescript
-import { SignerClient } from '@lighter/typescript-sdk';
+import { SignerClient } from 'lighter-ts-sdk';
 
 const config: SignerConfig = {
   url: 'https://mainnet.zklighter.elliot.ai',
