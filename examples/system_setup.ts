@@ -11,6 +11,7 @@ const ETH_PRIVATE_KEY = process.env['ETH_PRIVATE_KEY'] || '123456781234567812345
 const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '3', 10);
 
 async function main(): Promise<void> {
+
   // Verify that the account exists & fetch account index
   const apiClient = new ApiClient({ host: BASE_URL });
   const wallet = new ethers.Wallet(ETH_PRIVATE_KEY);
@@ -70,14 +71,7 @@ async function main(): Promise<void> {
     if (checkErr) {
       throw new Error(checkErr);
     }
-
-    console.log(`
-BASE_URL = '${BASE_URL}'
-API_KEY_PRIVATE_KEY = '${privateKey}'
-ACCOUNT_INDEX = ${accountIndex}
-API_KEY_INDEX = ${API_KEY_INDEX}
-    `);
-
+    
     await txClient.close();
     await apiClient.close();
 

@@ -319,11 +319,6 @@ export class SignerClient {
       throw new Error('Private key is required and must be a string');
     }
     
-    // Validate private key format (should be hex string)
-    if (!/^0x[a-fA-F0-9]{64}$/.test(config.privateKey)) {
-      throw new Error('Private key must be a valid 64-character hex string with 0x prefix');
-    }
-    
     if (typeof config.accountIndex !== 'number' || config.accountIndex < 0) {
       throw new Error('Account index must be a non-negative number');
     }
