@@ -3,7 +3,7 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+const BASE_URL = process.env['BASE_URL'] || 'wss://mainnet.zklighter.elliot.ai';
 
 function onMessage(data: any): void {
   console.log('WebSocket message received:', JSON.stringify(data, null, 2));

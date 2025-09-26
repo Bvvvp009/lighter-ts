@@ -180,7 +180,7 @@ interface PriceLevel {
 ## Complete Example
 
 ```typescript
-import { WsClient, SignerClient } from '@lighter/typescript-sdk';
+import { WsClient, SignerClient } from 'lighter-ts-sdk';
 
 async function main() {
   const wsClient = new WsClient({

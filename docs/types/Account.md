@@ -16,7 +16,7 @@ Account information returned by the `AccountApi.getAccount()` method.
 ## Example
 
 ```typescript
-import { AccountApi } from '@lighter/typescript-sdk';
+import { AccountApi } from 'lighter-ts-sdk';
 
 const accountApi = new AccountApi(client);
 const account = await accountApi.getAccount({ by: 'index', value: '123' });

@@ -87,32 +87,39 @@ export class NodeWasmSignerClient {
     }
 
     try {
-      // Resolve wasm_exec.js runtime
+      // Resolve WASM paths relative to package root if they're relative paths
+      const resolvedWasmPath = this.resolveWasmPath(this.config.wasmPath);
       let wasmExecPath = this.config.wasmExecPath;
-      // Prefer official Go runtime first if available (node-specific if present)
-      try {
-        const goroot = execSync('go env GOROOT').toString().trim();
-        const libPath = require('path').join(goroot, 'lib', 'wasm', 'wasm_exec.js');
-        const miscPath = require('path').join(goroot, 'misc', 'wasm', 'wasm_exec.js');
-        const nodeCli = require('path').join(goroot, 'lib', 'wasm', 'wasm_exec_node.js');
-        if (fs.existsSync(libPath)) {
-          wasmExecPath = libPath;
-        } else if (fs.existsSync(miscPath)) {
-          wasmExecPath = miscPath;
-        } else if (fs.existsSync(nodeCli)) {
-          // fallback only if nothing else is available
-          wasmExecPath = nodeCli;
-        }
-      } catch {}
 
-      if (!wasmExecPath) {
-        const candidates = [
-          'wasm/wasm_exec_nodejs.js',
-          'wasm/wasm_exec.js'
-        ];
-        for (const c of candidates) {
-          const abs = require('path').resolve(process.cwd(), c);
-          if (fs.existsSync(abs)) { wasmExecPath = abs; break; }
+      // Resolve wasm_exec.js runtime
+      if (wasmExecPath) {
+        wasmExecPath = this.resolveWasmPath(wasmExecPath);
+      } else {
+        // Prefer official Go runtime first if available (node-specific if present)
+        try {
+          const goroot = execSync('go env GOROOT').toString().trim();
+          const libPath = require('path').join(goroot, 'lib', 'wasm', 'wasm_exec.js');
+          const miscPath = require('path').join(goroot, 'misc', 'wasm', 'wasm_exec.js');
+          const nodeCli = require('path').join(goroot, 'lib', 'wasm', 'wasm_exec_node.js');
+          if (fs.existsSync(libPath)) {
+            wasmExecPath = libPath;
+          } else if (fs.existsSync(miscPath)) {
+            wasmExecPath = miscPath;
+          } else if (fs.existsSync(nodeCli)) {
+            // fallback only if nothing else is available
+            wasmExecPath = nodeCli;
+          }
+        } catch {}
+
+        if (!wasmExecPath) {
+          const candidates = [
+            'wasm/wasm_exec_nodejs.js',
+            'wasm/wasm_exec.js'
+          ];
+          for (const c of candidates) {
+            const resolved = this.resolveWasmPath(c);
+            if (fs.existsSync(resolved)) { wasmExecPath = resolved; break; }
+          }
         }
       }
 
@@ -123,7 +130,7 @@ export class NodeWasmSignerClient {
       await this.loadWasmExec(wasmExecPath);
 
       // Load the WASM binary
-      const wasmBytes = await this.loadWasmBinary(this.config.wasmPath);
+      const wasmBytes = await this.loadWasmBinary(resolvedWasmPath);
       
       // Initialize the Go runtime
       const Go = (global as any).Go;
@@ -376,6 +383,57 @@ export class NodeWasmSignerClient {
     } catch (error) {
       throw new Error(`Failed to load wasm_exec.js: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /**
+   * Resolve WASM path relative to package root
+   */
+  private resolveWasmPath(path: string): string {
+    // If path is already absolute, return as-is
+    if (require('path').isAbsolute(path)) {
+      return path;
+    }
+
+    // Try to resolve relative to package root first
+    try {
+      // Look for the package root by finding node_modules/lighter-ts-sdk
+      const packageRoot = this.findPackageRoot();
+      if (packageRoot) {
+        const resolvedPath = require('path').join(packageRoot, path);
+        if (fs.existsSync(resolvedPath)) {
+          return resolvedPath;
+        }
+      }
+    } catch {}
+
+    // Fallback to current working directory
+    return require('path').resolve(process.cwd(), path);
+  }
+
+  /**
+   * Find the package root directory
+   */
+  private findPackageRoot(): string | null {
+    try {
+      // Try to resolve the package.json of lighter-ts-sdk
+      const packageJsonPath = require.resolve('lighter-ts-sdk/package.json');
+      return require('path').dirname(packageJsonPath);
+    } catch {
+      // Fallback: look for node_modules/lighter-ts-sdk in current or parent directories
+      let currentDir = process.cwd();
+      const maxDepth = 10; // Prevent infinite loops
+      let depth = 0;
+      
+      while (currentDir && depth < maxDepth) {
+        const packagePath = require('path').join(currentDir, 'node_modules', 'lighter-ts-sdk');
+        if (fs.existsSync(packagePath)) {
+          return packagePath;
+        }
+        currentDir = require('path').dirname(currentDir);
+        depth++;
+      }
+    }
+    return null;
   }
 
   /**

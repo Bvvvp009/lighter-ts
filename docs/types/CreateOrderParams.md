@@ -20,7 +20,7 @@ Parameters for creating a limit order using the `SignerClient.createOrder()` met
 ## Example
 
 ```typescript
-import { SignerClient } from '@lighter/typescript-sdk';
+import { SignerClient } from 'lighter-ts-sdk';
 
 const orderParams: CreateOrderParams = {
   marketIndex: 0, // ETH/USDC

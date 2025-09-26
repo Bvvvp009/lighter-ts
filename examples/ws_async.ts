@@ -5,13 +5,14 @@ dotenv.config();
 
 const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
-function onOrderBookUpdate(marketId: number, orderBook: any): void {
-  console.log(`Order book ${marketId}:`, JSON.stringify(orderBook, null, 2));
-}
+// Unused functions - keeping for reference
+// function onOrderBookUpdate(marketId: number, orderBook: any): void {
+//   console.log(`Order book ${marketId}:`, JSON.stringify(orderBook, null, 2));
+// }
 
-function onAccountUpdate(accountId: number, account: any): void {
-  console.log(`Account ${accountId}:`, JSON.stringify(account, null, 2));
-}
+// function onAccountUpdate(accountId: number, account: any): void {
+//   console.log(`Account ${accountId}:`, JSON.stringify(account, null, 2));
+// }
 
 async function main() {
   const client = new WsClient({

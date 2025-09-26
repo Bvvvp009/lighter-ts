@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive TypeScript type definitions
 - 14 example scripts covering all major functionality
 - Complete documentation with API reference
-- Support for all order types (limit, market, stop-loss, take-profit)
+- Support for basic order types (limit, market)
 - Account management operations (transfer, leverage updates)
 - Batch transaction support
 - Automatic reconnection for WebSocket connections
@@ -44,7 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Order Types Supported
 - Limit orders with various time-in-force options
 - Market orders with slippage protection
-- Stop-loss and take-profit orders
 - Reduce-only orders
 - Batch order operations
 
@@ -59,7 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `create_market_order.ts` - Basic market order creation
 - `create_cancel_order.ts` - Limit order creation and cancellation
 - `create_market_order_max_slippage.ts` - Market orders with price protection
-- `create_sl_tp.ts` - Stop-loss and take-profit orders
 - `create_with_multiple_keys.ts` - Multi-key trading
 - `system_setup.ts` - Account setup and API key generation
 - `transfer_update_leverage.ts` - Account management operations
@@ -67,8 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ws.ts` - WebSocket real-time data
 - `ws_async.ts` - Asynchronous WebSocket handling
 - `ws_send_tx.ts` - WebSocket transaction sending
-- `ws_send_batch_tx.ts` - WebSocket batch transactions
 - `send_tx_batch.ts` - Batch transaction processing
+- `performance_test.ts` - Basic performance testing
+- `market_data_json.ts` - Market data retrieval
+- `wait_for_transaction.ts` - Transaction confirmation
 
 ### Documentation
 - Complete API reference documentation
@@ -95,12 +95,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - WebAssembly support
 - WebSocket support
 
+## [1.0.2] - 2025-01-26
+
+### Fixed
+- Updated README examples with correct method signatures
+- Fixed order type constants in documentation
+- Corrected transfer and leverage update method parameters
+- Updated changelog with precise enhancement descriptions
+
+### Documentation
+- Corrected all code examples to match actual API
+- Updated order type constants to use proper naming
+- Fixed method parameter order in examples
+- Enhanced changelog with detailed performance improvements
+- Added comprehensive list of new order types
+
+## [1.0.1] - 2025-01-26
+
+### Fixed
+- Fixed WASM path resolution issues in NPM packages
+- Resolved "Cannot find module" errors for relative WASM paths
+- Fixed automatic wasm_exec.js detection in Node.js environments
+
+### Performance
+- ~200ms performance improvement in WASM initialization
+- Enhanced nonce caching for improved transaction throughput
+- Optimized HTTP client with connection pooling
+- Memory pool management for reduced allocation overhead
+- Request batching for multiple operations
+- Advanced caching for frequently accessed data
+
+### Added
+- Stop Loss Orders (SL) - Market orders triggered by price levels
+- Stop Loss Limit Orders (SLL) - Limit orders triggered by price levels
+- Take Profit Orders (TP) - Market orders for profit taking
+- Take Profit Limit Orders (TPL) - Limit orders for profit taking
+- TWAP Orders - Time-weighted average price orders
+- Performance monitoring and benchmarking utilities
+- Enhanced error handling and recovery mechanisms
+- Comprehensive performance testing examples
+
+### Enhanced
+- Automatic WASM path resolution relative to package root
+- Improved error messages for better debugging
+- Enhanced WebSocket client with better reconnection logic
+- Optimized order creation and cancellation workflows
+- Better memory management and garbage collection
+
+### Examples
+- `final_optimized_performance_test.ts` - Comprehensive performance benchmarking
+- `create_sl_tp.ts` - Stop-loss and take-profit order examples
+- `ws_send_batch_tx.ts` - WebSocket batch transaction examples
+- `close_all_positions.ts` - Position management examples
+- Enhanced existing examples with better error handling
+
+### Technical
+- Improved TypeScript type definitions
+- Better Node.js compatibility across platforms
+- Enhanced WASM runtime detection and loading
+- Optimized build process and bundle size
+- Better documentation and code comments
+
 ## [Unreleased]
 
 ### Planned Features
 - Additional order types
 - Enhanced error recovery
-- Performance optimizations
 - Additional WebSocket subscriptions
 - Enhanced documentation
 - Unit tests
