@@ -156,6 +156,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optimized build process and bundle size
 - Better documentation and code comments
 
+## [1.0.3] - 2025-01-26
+
+### Fixed
+- Removed problematic private key length validation that was causing errors
+- Fixed validation issues that were breaking package functionality
+
 ## [Unreleased]
 
 ### Planned Features
