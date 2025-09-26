@@ -104,7 +104,7 @@ npx ts-node examples/system_setup.ts
 This will output something like:
 ```
 BASE_URL = 'https://mainnet.zklighter.elliot.ai'
-API_KEY_PRIVATE_KEY = 'ea5d2eca5be67eca056752eaf27b173518b8a5550117c09d2b58c7ea7d306cc4426f913ccf27ab19'
+API_KEY_PRIVATE_KEY = '0x...' # Your generated API private key
 ACCOUNT_INDEX = 595
 API_KEY_INDEX = 1
 ```
@@ -115,7 +115,7 @@ Create a `.env` file in your project root:
 
 ```env
 BASE_URL=https://mainnet.zklighter.elliot.ai
-API_PRIVATE_KEY=0xea5d2eca5be67eca056752eaf27b173518b8a5550117c09d2b58c7ea7d306cc4426f913ccf27ab19 
+API_PRIVATE_KEY=0x... # Your generated API private key
 ACCOUNT_INDEX=595
 API_KEY_INDEX=1
 ```

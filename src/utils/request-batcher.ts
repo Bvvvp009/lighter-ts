@@ -113,7 +113,9 @@ export class RequestBatcher {
     });
 
     try {
-      console.log(`📦 Processing batch of ${currentBatch.length} requests`);
+      if (process.env["NODE_ENV"] === 'development') {
+        console.log(`📦 Processing batch of ${currentBatch.length} requests`);
+      }
       
       // Process batch
       const responses = await this.batchProcessor(currentBatch);
@@ -141,7 +143,9 @@ export class RequestBatcher {
         }
       }
 
-      console.log(`✅ Batch processed: ${responses.length} responses`);
+      if (process.env["NODE_ENV"] === 'development') {
+        console.log(`✅ Batch processed: ${responses.length} responses`);
+      }
       
     } catch (error) {
       console.error('❌ Batch processing failed:', error);

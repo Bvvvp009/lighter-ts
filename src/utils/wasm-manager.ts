@@ -45,7 +45,9 @@ export class WasmManager {
 
   private async doInitialize(config: WasmConfig, clientType: WasmClientType): Promise<void> {
     try {
-      console.log('🚀 Initializing WASM client...');
+      if (process.env['NODE_ENV'] === 'development') {
+        console.log('🚀 Initializing WASM client...');
+      }
       const startTime = Date.now();
 
       this.config = config;
@@ -60,11 +62,14 @@ export class WasmManager {
       await (this.wasmClient as any).initialize();
 
       const initTime = Date.now() - startTime;
-      console.log(`✅ WASM client initialized in ${initTime.toFixed(2)}ms`);
+      if (process.env['NODE_ENV'] === 'development') {
+        console.log(`✅ WASM client initialized in ${initTime.toFixed(2)}ms`);
+      }
 
       this.isInitialized = true;
     } catch (error) {
-      console.error('❌ Failed to initialize WASM client:', error);
+      // Always log initialization errors for debugging
+      console.error('❌ Failed to initialize WASM client:', error instanceof Error ? error.message : String(error));
       throw error;
     }
   }

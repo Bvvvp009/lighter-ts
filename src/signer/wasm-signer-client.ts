@@ -120,6 +120,9 @@ export class SignerClient {
   static readonly ISOLATED_MARGIN_MODE = 1
 
   constructor(config: SignerConfig) {
+    // Validate configuration
+    this.validateConfig(config);
+    
     this.config = config;
     this.apiClient = new ApiClient({ host: config.url });
     this.transactionApi = new TransactionApi(this.apiClient);
@@ -307,6 +310,33 @@ export class SignerClient {
     this.clientCreated = true;
   }
 
+  private validateConfig(config: SignerConfig): void {
+    if (!config.url || typeof config.url !== 'string') {
+      throw new Error('URL is required and must be a string');
+    }
+    
+    if (!config.privateKey || typeof config.privateKey !== 'string') {
+      throw new Error('Private key is required and must be a string');
+    }
+    
+    // Validate private key format (should be hex string)
+    if (!/^0x[a-fA-F0-9]{64}$/.test(config.privateKey)) {
+      throw new Error('Private key must be a valid 64-character hex string with 0x prefix');
+    }
+    
+    if (typeof config.accountIndex !== 'number' || config.accountIndex < 0) {
+      throw new Error('Account index must be a non-negative number');
+    }
+    
+    if (typeof config.apiKeyIndex !== 'number' || config.apiKeyIndex < 0) {
+      throw new Error('API key index must be a non-negative number');
+    }
+    
+    if (!config.wasmConfig || !config.wasmConfig.wasmPath) {
+      throw new Error('WASM configuration with wasmPath is required');
+    }
+  }
+
   checkClient(): string | null {
     // Basic validation
     if (!this.config.privateKey) {
@@ -412,7 +442,10 @@ export class SignerClient {
 
     const txInfoStr = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signCreateOrder(wasmParams);
     // Send exactly what WASM produced, using urlencoded form like Python/Go
-    console.log('WASM signCreateOrder result:', txInfoStr);
+    // Note: This may contain sensitive information - remove in production
+    if (process.env["NODE_ENV"] === 'development') {
+      console.log('WASM signCreateOrder result:', txInfoStr);
+    }
     const txHash = await this.transactionApi.sendTxWithIndices(
       SignerClient.TX_TYPE_CREATE_ORDER,
       txInfoStr,
@@ -475,8 +508,14 @@ export class SignerClient {
 
       const txInfoStr = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signCreateOrder(wasmParams);
       
-      // Debug: Log the transaction info string to see what WASM is producing
+    // Debug: Log the transaction info string to see what WASM is producing
+    // Note: This may contain sensitive information - remove in production
+    if (process.env["NODE_ENV"] === 'development') {
+      // Note: This may contain sensitive information - remove in production
+    if (process.env["NODE_ENV"] === 'development') {
       console.log('WASM signCreateOrder result:', txInfoStr);
+    }
+    }
       
       const txHash = await this.transactionApi.sendTxWithIndices(
         SignerClient.TX_TYPE_CREATE_ORDER,
@@ -533,8 +572,9 @@ export class SignerClient {
         reduceOnly: params.reduceOnly || false
       });
     } catch (error) {
-      console.error('Error creating market order with max slippage:', error);
-      return [null, '', error instanceof Error ? error.message : 'Unknown error'];
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error creating market order with max slippage:', errorMessage);
+      return [null, '', errorMessage];
     }
   }
 
@@ -572,8 +612,9 @@ export class SignerClient {
         reduceOnly: params.reduceOnly || false
       });
     } catch (error) {
-      console.error('Error creating market order if slippage:', error);
-      return [null, '', error instanceof Error ? error.message : 'Unknown error'];
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error creating market order if slippage:', errorMessage);
+      return [null, '', errorMessage];
     }
   }
 
@@ -596,8 +637,9 @@ export class SignerClient {
       );
       return [JSON.parse(txInfoStr), txHash.tx_hash || txHash.hash || '', null];
     } catch (error) {
-      console.error('Error canceling order:', error);
-      return [null, '', error instanceof Error ? error.message : 'Unknown error'];
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error canceling order:', errorMessage);
+      return [null, '', errorMessage];
     }
   }
 
@@ -613,8 +655,9 @@ export class SignerClient {
         undefined : Math.floor(Date.now() / 1000) + expirySeconds;
       return await (this.wallet as WasmSignerClient | NodeWasmSignerClient).createAuthToken(deadline);
     } catch (error) {
-      console.error('Error creating auth token:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error creating auth token:', errorMessage);
+      throw new Error(errorMessage);
     }
   }
 
@@ -625,7 +668,8 @@ export class SignerClient {
     try {
       return await (this.wallet as WasmSignerClient | NodeWasmSignerClient).generateAPIKey(seed);
     } catch (error) {
-      console.error('Error generating API key:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error generating API key:', errorMessage);
       return null;
     }
   }
@@ -676,8 +720,9 @@ export class SignerClient {
       );
       return [txInfo, apiResponse, null];
     } catch (error) {
-      console.error('Error canceling all orders:', error);
-      return [null, null, error instanceof Error ? error.message : 'Unknown error'];
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error canceling all orders:', errorMessage);
+      return [null, null, errorMessage];
     }
   }
 
@@ -738,8 +783,9 @@ export class SignerClient {
 
       return [closedTransactions, closedResponses, errors];
     } catch (error) {
-      console.error('Error closing all positions:', error);
-      return [[], [], [error instanceof Error ? error.message : 'Unknown error']];
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error closing all positions:', errorMessage);
+      return [[], [], [errorMessage]];
     }
   }
 
@@ -906,8 +952,9 @@ export class SignerClient {
       );
       return [JSON.parse(txInfo.txInfo), txHash.tx_hash || txHash.hash || '', null];
     } catch (error) {
-      console.error('Error transferring:', error);
-      return [null, '', error instanceof Error ? error.message : 'Unknown error'];
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error transferring:', errorMessage);
+      return [null, '', errorMessage];
     }
   }
 
@@ -941,8 +988,9 @@ export class SignerClient {
       );
       return [JSON.parse(txInfo.txInfo), txHash.tx_hash || txHash.hash || '', null];
     } catch (error) {
-      console.error('Error updating leverage:', error);
-      return [null, '', error instanceof Error ? error.message : 'Unknown error'];
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error updating leverage:', errorMessage);
+      return [null, '', errorMessage];
     }
   }
 
