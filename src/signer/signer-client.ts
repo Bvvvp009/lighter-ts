@@ -145,7 +145,9 @@ export class SignerClient {
         orderTx.ExpiredAt = orderExpiry;
       }
 
-      console.log('Order transaction structure:', JSON.stringify(orderTx, null, 2));
+      if (process.env['NODE_ENV'] === 'development') {
+        console.log('Order transaction structure:', JSON.stringify(orderTx, null, 2));
+      }
 
       // Sign the transaction
       const signature = await this.signTransaction(orderTx);

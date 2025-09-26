@@ -16,7 +16,7 @@ This directory contains comprehensive examples demonstrating how to use the Ligh
    - The output should look like:
 ```
 BASE_URL = 'https://testnet.zklighter.elliot.ai'
-API_KEY_PRIVATE_KEY = '0xea5d2eca5be67eca056752eaf27b173518b8a5550117c09d2b58c7ea7d306cc4426f913ccf27ab19'
+API_KEY_PRIVATE_KEY = '0x...' # Your generated API private key
 ACCOUNT_INDEX = 595
 API_KEY_INDEX = 1
 ```

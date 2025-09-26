@@ -134,7 +134,9 @@ export class AdvancedCache<T> {
     }
 
     if (keysToDelete.length > 0) {
-      console.log(`🧹 Cache cleanup: removed ${keysToDelete.length} expired entries`);
+      if (process.env['NODE_ENV'] === 'development') {
+        console.log(`🧹 Cache cleanup: removed ${keysToDelete.length} expired entries`);
+      }
     }
   }
 
@@ -257,7 +259,9 @@ export class CacheManager {
 
   // Warm up caches
   async warmup(): Promise<void> {
-    console.log('🔥 Warming up caches...');
+    if (process.env["NODE_ENV"] === 'development') {
+      console.log('🔥 Warming up caches...');
+    }
     // Pre-populate commonly accessed data
     // This would be called during initialization
   }
