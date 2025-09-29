@@ -39,9 +39,8 @@ async function main(): Promise<void> {
       url: BASE_URL,
       privateKey: ETH_PRIVATE_KEY,
       accountIndex: accountIndex,
-      apiKeyIndex: API_KEY_INDEX,
-      wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
-    });
+      apiKeyIndex: API_KEY_INDEX    
+      });
 
     await txClient.initialize();
     await (txClient as any).ensureWasmClient();

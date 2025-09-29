@@ -47,7 +47,7 @@ async function getAccountInfo() {
 getAccountInfo().catch(console.error);
 ```
 
-### 2. Create Market Order
+### 2. Create Market Order (Standalone WASM Signer)
 
 ```typescript
 import { SignerClient } from 'lighter-ts-sdk';
@@ -57,18 +57,18 @@ async function createMarketOrder() {
     url: 'https://mainnet.zklighter.elliot.ai',
     privateKey: 'your-api-key-private-key',
     accountIndex: 123,
-    apiKeyIndex: 0,
-    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+    apiKeyIndex: 0
+    // No wasmConfig needed - standalone signer auto-resolves paths
   });
 
   await client.initialize();
-  await client.ensureWasmClient();
+  await (client as any).ensureWasmClient();
 
   const [tx, txHash, err] = await client.createMarketOrder({
     marketIndex: 0,
     clientOrderIndex: Date.now(),
-    baseAmount: 1000000, // 1 BTC in satoshis
-    avgExecutionPrice: 300000000, // $30,000 in cents
+    baseAmount: 10, // Base amount
+    avgExecutionPrice: 4500, // Price in cents
     isAsk: true // Sell order
   });
 
@@ -92,20 +92,19 @@ async function createLimitOrder() {
     url: 'https://mainnet.zklighter.elliot.ai',
     privateKey: 'your-api-key-private-key',
     accountIndex: 123,
-    apiKeyIndex: 0,
-    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+    apiKeyIndex: 0
   });
 
   await client.initialize();
-  await client.ensureWasmClient();
+  await (client as any).ensureWasmClient();
 
   const [tx, txHash, err] = await client.createOrder({
     marketIndex: 0,
     clientOrderIndex: Date.now(),
-    baseAmount: 500000, // 0.5 BTC
-    price: 295000000, // $29,500
+    baseAmount: 5, // Base amount
+    price: 4500, // Price in cents
     isAsk: false, // Buy order
-    timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME // Good Till Cancel
+    timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME
   });
 
   if (err) {
@@ -128,12 +127,11 @@ async function cancelOrder() {
     url: 'https://mainnet.zklighter.elliot.ai',
     privateKey: 'your-api-key-private-key',
     accountIndex: 123,
-    apiKeyIndex: 0,
-    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+    apiKeyIndex: 0
   });
 
   await client.initialize();
-  await client.ensureWasmClient();
+  await (client as any).ensureWasmClient();
 
   const [tx, txHash, err] = await client.cancelOrder({
     marketIndex: 0,
@@ -160,12 +158,11 @@ async function transferUSDC() {
     url: 'https://mainnet.zklighter.elliot.ai',
     privateKey: 'your-api-key-private-key',
     accountIndex: 123,
-    apiKeyIndex: 0,
-    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+    apiKeyIndex: 0
   });
 
   await client.initialize();
-  await client.ensureWasmClient();
+  await (client as any).ensureWasmClient();
 
   const [tx, txHash, err] = await client.transfer(
     456, // toAccountIndex
@@ -192,12 +189,11 @@ async function updateLeverage() {
     url: 'https://mainnet.zklighter.elliot.ai',
     privateKey: 'your-api-key-private-key',
     accountIndex: 123,
-    apiKeyIndex: 0,
-    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+    apiKeyIndex: 0
   });
 
   await client.initialize();
-  await client.ensureWasmClient();
+  await (client as any).ensureWasmClient();
 
   const [tx, txHash, err] = await client.updateLeverage(
     0, // marketIndex
@@ -225,12 +221,11 @@ async function cancelAllOrders() {
     url: 'https://mainnet.zklighter.elliot.ai',
     privateKey: 'your-api-key-private-key',
     accountIndex: 123,
-    apiKeyIndex: 0,
-    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+    apiKeyIndex: 0
   });
 
   await client.initialize();
-  await client.ensureWasmClient();
+  await (client as any).ensureWasmClient();
 
   const [tx, txHash, err] = await client.cancelAllOrders(
     SignerClient.CANCEL_ALL_TIF_IMMEDIATE, // timeInForce
@@ -247,7 +242,42 @@ async function cancelAllOrders() {
 cancelAllOrders().catch(console.error);
 ```
 
-### 8. WebSocket Real-time Data
+### 8. Get Referral Points with Auth Token
+
+```typescript
+import { SignerClient, ApiClient } from 'lighter-ts-sdk';
+
+async function getReferralPoints() {
+  const signerClient = new SignerClient({
+    url: 'https://mainnet.zklighter.elliot.ai',
+    privateKey: 'your-api-key-private-key',
+    accountIndex: 123,
+    apiKeyIndex: 0
+  });
+
+  await signerClient.initialize();
+  await (signerClient as any).ensureWasmClient();
+
+  // Create an authentication token
+  const authToken = await signerClient.createAuthTokenWithExpiry(600); // 10 minutes
+  console.log('Auth Token:', authToken);
+
+  // Initialize API client
+  const apiClient = new ApiClient({ host: 'https://mainnet.zklighter.elliot.ai' });
+  
+  // Get referral points using auth token
+  const response = await apiClient.get('/api/v1/referral/points', {
+    account_index: 123,
+    auth: authToken
+  });
+  
+  console.log('Referral points:', response.data);
+}
+
+getReferralPoints().catch(console.error);
+```
+
+### 9. WebSocket Real-time Data
 
 ```typescript
 import { WsClient } from 'lighter-ts-sdk';
@@ -273,9 +303,9 @@ async function connectWebSocket() {
 connectWebSocket().catch(console.error);
 ```
 
-## Signer Client Configuration
+## Standalone WASM Signer
 
-The `SignerClient` requires the following configuration:
+The SDK now includes a **standalone WASM signer** that requires no Go installation:
 
 ```typescript
 interface SignerConfig {
@@ -283,11 +313,14 @@ interface SignerConfig {
   privateKey: string;            // API key private key
   accountIndex: number;          // Your account index
   apiKeyIndex: number;           // API key index (usually 0)
-  wasmConfig: {
-    wasmPath: string;           // Path to WASM file
-  };
+  // wasmConfig is optional - auto-resolves bundled wasm files
 }
 ```
+
+### Key Features:
+- ✅ **No Go Required** - Users don't need Go installed
+- ✅ **Auto Path Resolution** - Automatically finds bundled wasm files
+- ✅ **Cross-Platform** - Works on Windows, Linux, macOS
 
 ## Available Constants
 
@@ -322,6 +355,7 @@ Check the `examples/` directory for comprehensive usage examples:
 - `create_cancel_order.ts` - Order management
 - `transfer_update_leverage.ts` - Account operations
 - `system_setup.ts` - API key management
+- `get_points.ts` - Referral points with auth tokens
 - `ws_*.ts` - WebSocket examples
 
 ## SDK Status Report

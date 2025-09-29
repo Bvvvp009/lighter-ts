@@ -25,8 +25,7 @@ async function main(): Promise<void> {
     url: BASE_URL,
     privateKey: requiredKey!,
     accountIndex: ACCOUNT_INDEX,
-    apiKeyIndex: 5,
-    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+    apiKeyIndex: 5
   });
 
   await client.initialize();
