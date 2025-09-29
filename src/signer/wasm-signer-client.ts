@@ -252,12 +252,15 @@ export class SignerClient {
    */
   async initialize(): Promise<void> {
     if (this.signerType === 'wasm' || this.signerType === 'node-wasm') {
+      console.log('Initializing signer client, type:', this.signerType);
+      console.log('Wallet instance:', this.wallet.constructor.name);
       await (this.wallet as WasmSignerClient | NodeWasmSignerClient).initialize();
       // Leave client creation to ensureWasmClient or server path
     }
   }
 
   async ensureWasmClient(): Promise<void> {
+
     if (this.signerType !== 'wasm' && this.signerType !== 'node-wasm') return;
     if (this.clientCreated) return;
 
@@ -327,8 +330,9 @@ export class SignerClient {
       throw new Error('API key index must be a non-negative number');
     }
     
-    if (!config.wasmConfig || !config.wasmConfig.wasmPath) {
-      throw new Error('WASM configuration with wasmPath is required');
+    if (!config.wasmConfig) {
+      // Auto-fill defaults so consumers don't need to pass paths
+      config.wasmConfig = { wasmPath: 'wasm/lighter-signer.wasm' } as any;
     }
   }
 

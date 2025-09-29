@@ -46,7 +46,7 @@ async function main() {
 main().catch(console.error);
 ```
 
-### 2. Trading with SignerClient
+### 2. Trading with Standalone WASM Signer
 
 ```typescript
 import { SignerClient } from 'lighter-ts-sdk';
@@ -56,20 +56,20 @@ async function main() {
     url: 'https://mainnet.zklighter.elliot.ai',
     privateKey: 'your-api-key-private-key',
     accountIndex: 123,
-    apiKeyIndex: 0,
-    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+    apiKeyIndex: 0
+    // No wasmConfig needed - standalone signer auto-resolves paths
   });
 
   try {
     await client.initialize();
-    await client.ensureWasmClient();
+    await (client as any).ensureWasmClient();
 
     // Create a market order
     const [tx, txHash, err] = await client.createMarketOrder({
       marketIndex: 0, // ETH/USDC
       clientOrderIndex: Date.now(),
-      baseAmount: 1000000, // 1 ETH
-      avgExecutionPrice: 300000000, // Max $3000
+      baseAmount: 10, // Base amount
+      avgExecutionPrice: 4500, // Max price in cents
       isAsk: true // Sell order
     });
 
@@ -134,8 +134,8 @@ const client = new SignerClient({
   url: process.env.BASE_URL!,
   privateKey: process.env.API_PRIVATE_KEY!,
   accountIndex: parseInt(process.env.ACCOUNT_INDEX!),
-  apiKeyIndex: parseInt(process.env.API_KEY_INDEX!),
-  wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+  apiKeyIndex: parseInt(process.env.API_KEY_INDEX!)
+  // No wasmConfig needed - standalone signer auto-resolves paths
 });
 
 // Your trading logic here...
@@ -188,6 +188,7 @@ The SDK includes comprehensive examples in the `examples/` directory:
 - `create_market_order.ts` - Basic market order creation
 - `create_cancel_order.ts` - Limit order creation and cancellation
 - `get_info.ts` - API information retrieval
+- `get_points.ts` - Referral points with auth tokens
 - `system_setup.ts` - Account setup and API key generation
 - `transfer_update_leverage.ts` - Account management operations
 - `ws.ts` - WebSocket real-time data
@@ -230,8 +231,8 @@ wsClient.subscribeAccount((data) => {
 ### Common Issues
 
 1. **"WASM functions not properly registered"**
-   - Ensure the WASM binary is built and accessible
-   - Check that the `wasmPath` is correct
+   - The standalone signer auto-resolves WASM paths
+   - Ensure you're using the latest version of the SDK
 
 2. **"Invalid signature" errors**
    - Verify your API key private key is correct

@@ -5,6 +5,30 @@ All notable changes to the Lighter TypeScript SDK will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2025-01-29
+
+### Added
+- **Standalone WASM signer** - No Go installation required
+- **Auto path resolution** - Automatic detection of bundled WASM files
+- **Simplified configuration** - No `wasmConfig` needed for basic usage
+- **Cross-platform support** - Works on Windows, Linux, macOS without Go
+- **Referral points example** - New `get_points.ts` example with auth tokens
+
+### Changed
+- **Removed Go dependency** - Users don't need Go installed to use the SDK
+- **Updated documentation** - All examples now show simplified configuration
+- **Improved WASM runtime** - Uses official Go `wasm_exec.js` instead of custom version
+- **Enhanced error handling** - Better runtime initialization error messages
+
+### Fixed
+- **WASM initialization** - Fixed `mem.set is not a function` error
+- **Runtime compatibility** - Replaced incompatible `wasm_exec_nodejs.js`
+- **Memory management** - Proper DataView initialization in WASM runtime
+- **Import resolution** - Correct module name mapping for Go runtime
+
+### Security
+- **Production ready** - Thoroughly tested on machines with and without Go installation
+
 ## [1.0.0] - 2025-01-19
 
 ### Added

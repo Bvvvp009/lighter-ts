@@ -1,6 +1,6 @@
 {
   "name": "lighter-ts-sdk",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "TypeScript SDK for Lighter Protocol Unofficial - Trade perpetuals with unmatched efficiency and fairness on Lighter ",
   "type": "commonjs",
   "main": "dist/index.js",
@@ -14,8 +14,10 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:wasm": "cd temp-lighter-go && go build -o ../wasm/lighter-signer.wasm -target wasm ./wasm",
-    "build:wasm:nodejs": "cd temp-lighter-go && GOOS=js GOARCH=wasm go build -o ../wasm/lighter-signer.wasm ./wasm",
+    "build:wasm": "node scripts/build-wasm.js",
+    "build:wasm:nodejs": "node scripts/build-wasm.js",
+    "verify:wasm": "node scripts/verify-wasm.js",
+    "prepublishOnly": "npm run build && npm run verify:wasm",
     "dev": "tsc --watch",
     "test": "jest",
     "lint": "eslint src/**/*.ts",

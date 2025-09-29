@@ -17,7 +17,7 @@ new SignerClient(config: SignerConfig)
 | `accountIndex` | `number` | Yes | Your account index |
 | `apiKeyIndex` | `number` | Yes | Your API key index |
 | `signerServerUrl` | `string` | No | URL of the signer server (alternative to WASM) |
-| `wasmConfig` | `WasmSignerConfig` | No | Configuration for WASM signer |
+| `wasmConfig` | `WasmSignerConfig` | No | Configuration for WASM signer (optional - auto-resolves paths) |
 
 ## Methods
 
@@ -60,8 +60,8 @@ Creates a limit order.
 const [tx, txHash, err] = await client.createOrder({
   marketIndex: 0,
   clientOrderIndex: Date.now(),
-  baseAmount: 1000000, // 1 ETH in smallest unit
-  price: 300000000, // $3000 in smallest unit
+  baseAmount: 10, // Base amount
+  price: 4500, // Price in cents
   isAsk: true,
   orderType: SignerClient.ORDER_TYPE_LIMIT,
   timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
@@ -89,8 +89,8 @@ Creates a market order.
 const [tx, txHash, err] = await client.createMarketOrder({
   marketIndex: 0,
   clientOrderIndex: Date.now(),
-  baseAmount: 1000000, // 1 ETH in smallest unit
-  avgExecutionPrice: 300000000, // Max $3000 average price
+  baseAmount: 10, // Base amount
+  avgExecutionPrice: 4500, // Max price in cents
   isAsk: true
 });
 ```
@@ -146,7 +146,7 @@ Transfers USDC between accounts.
 
 **Example:**
 ```typescript
-const [tx, txHash, err] = await client.transfer(456, 100); // Transfer 100 USDC
+const [tx, txHash, err] = await client.transfer(456, 1000000); // Transfer 100 USDC (in cents)
 ```
 
 ### updateLeverage(marketIndex: number, marginMode: number, initialMarginFraction: number)
@@ -282,13 +282,13 @@ async function main() {
     url: 'https://mainnet.zklighter.elliot.ai',
     privateKey: 'your-api-key-private-key',
     accountIndex: 123,
-    apiKeyIndex: 0,
-    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+    apiKeyIndex: 0
+    // No wasmConfig needed - standalone signer auto-resolves paths
   });
 
   try {
     await client.initialize();
-    await client.ensureWasmClient();
+    await (client as any).ensureWasmClient();
 
     // Check client status
     const checkError = client.checkClient();
@@ -300,8 +300,8 @@ async function main() {
     const [tx, txHash, err] = await client.createOrder({
       marketIndex: 0,
       clientOrderIndex: Date.now(),
-      baseAmount: 1000000,
-      price: 300000000,
+      baseAmount: 10,
+      price: 4500,
       isAsk: true,
       orderType: SignerClient.ORDER_TYPE_LIMIT,
       timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,

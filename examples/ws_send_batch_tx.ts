@@ -7,7 +7,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
-const API_KEY_PRIVATE_KEY = process.env['PRIVATE_KEY'];
+const API_KEY_PRIVATE_KEY = process.env['API_PRIVATE_KEY'];
 const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
 const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0', 10);
 
@@ -49,7 +49,7 @@ async function wsFlow(txTypes: number[], txInfos: string[]): Promise<void> {
 
 async function main(): Promise<void> {
   if (!API_KEY_PRIVATE_KEY) {
-    console.error('PRIVATE_KEY environment variable is required');
+    console.error('API_PRIVATE_KEY environment variable is required');
     return;
   }
 
@@ -57,8 +57,7 @@ async function main(): Promise<void> {
     url: BASE_URL,
     privateKey: API_KEY_PRIVATE_KEY,
     accountIndex: ACCOUNT_INDEX,
-    apiKeyIndex: API_KEY_INDEX,
-    wasmConfig: { wasmPath: 'wasm/lighter-signer.wasm' }
+    apiKeyIndex: API_KEY_INDEX
   });
 
   const apiClient = new ApiClient({ host: BASE_URL });
