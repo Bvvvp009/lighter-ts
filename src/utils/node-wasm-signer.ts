@@ -69,6 +69,11 @@ export interface UpdateLeverageParams {
   nonce: number;
 }
 
+export interface WithdrawParams {
+  usdcAmount: number;
+  nonce: number;
+}
+
 export class NodeWasmSignerClient {
   private wasmModule: any = null;
   private wasmInstance: any = null; // Keep reference to prevent GC
@@ -206,6 +211,7 @@ export class NodeWasmSignerClient {
         signCancelOrder: (global as any).SignCancelOrder || (global as any).signCancelOrder || (global as any).lighterWasmFunctions?.signCancelOrder,
         signCancelAllOrders: (global as any).SignCancelAllOrders || (global as any).signCancelAllOrders || (global as any).lighterWasmFunctions?.signCancelAllOrders,
         signTransfer: (global as any).SignTransfer || (global as any).signTransfer || (global as any).lighterWasmFunctions?.signTransfer,
+        signWithdraw: (global as any).SignWithdraw || (global as any).signWithdraw || (global as any).lighterWasmFunctions?.signWithdraw,
         signUpdateLeverage: (global as any).SignUpdateLeverage || (global as any).signUpdateLeverage || (global as any).lighterWasmFunctions?.signUpdateLeverage,
         createAuthToken: (global as any).CreateAuthToken || (global as any).createAuthToken || (global as any).lighterWasmFunctions?.createAuthToken,
         checkClient: (global as any).CheckClient || (global as any).checkClient || (global as any).lighterWasmFunctions?.checkClient,
@@ -349,6 +355,24 @@ export class NodeWasmSignerClient {
       params.usdcAmount,
       params.fee,
       params.memo,
+      params.nonce
+    );
+    
+    if (result.error) {
+      return { txInfo: '', error: result.error };
+    }
+    
+    return { txInfo: result.txInfo };
+  }
+
+  /**
+   * Sign a withdraw transaction
+   */
+  async signWithdraw(params: WithdrawParams): Promise<{ txInfo: string; error?: string }> {
+    await this.ensureInitialized();
+    
+    const result = this.wasmModule.signWithdraw(
+      params.usdcAmount,
       params.nonce
     );
     

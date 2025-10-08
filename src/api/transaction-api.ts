@@ -7,11 +7,22 @@ export interface Transaction {
   sequence_index: number;
   account_index: number;
   nonce: number;
-  type: string;
-  data: any;
-  status: 'pending' | 'confirmed' | 'failed';
-  created_at: string;
-  updated_at: string;
+  type: string | number;
+  info?: string; // JSON string containing transaction info
+  event_info?: string; // JSON string containing event information
+  data?: any;
+  status: number | 'pending' | 'confirmed' | 'failed'; // Numeric status code or string
+  transaction_index?: number;
+  l1_address?: string;
+  expire_at?: number;
+  queued_at?: number;
+  committed_at?: number;
+  verified_at?: number;
+  executed_at?: number;
+  parent_hash?: string;
+  created_at?: string;
+  updated_at?: string;
+  code?: number; // API response code
 }
 
 export interface Block {

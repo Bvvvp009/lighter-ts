@@ -7,7 +7,6 @@ const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai
 const API_KEY_PRIVATE_KEY = process.env['API_PRIVATE_KEY'];
 const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
 const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0', 10);
-console.log(API_KEY_PRIVATE_KEY, ACCOUNT_INDEX, API_KEY_INDEX);
 
 async function main(): Promise<void> {
   if (!API_KEY_PRIVATE_KEY) {

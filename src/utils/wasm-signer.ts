@@ -64,6 +64,11 @@ export interface UpdateLeverageParams {
   nonce: number;
 }
 
+export interface WithdrawParams {
+  usdcAmount: number;
+  nonce: number;
+}
+
 export interface WasmSignerResponse<T = any> {
   success?: boolean;
   error?: string;
@@ -107,6 +112,7 @@ export class WasmSignerClient {
         signCancelOrder: (window as any).signCancelOrder,
         signCancelAllOrders: (window as any).signCancelAllOrders,
         signTransfer: (window as any).signTransfer,
+        signWithdraw: (window as any).signWithdraw,
         signUpdateLeverage: (window as any).signUpdateLeverage,
         createAuthToken: (window as any).createAuthToken,
       };
@@ -229,6 +235,24 @@ export class WasmSignerClient {
       params.usdcAmount,
       params.fee,
       params.memo,
+      params.nonce
+    );
+    
+    if (result.error) {
+      return { txInfo: '', error: result.error };
+    }
+    
+    return { txInfo: result.txInfo };
+  }
+
+  /**
+   * Sign a withdraw transaction
+   */
+  async signWithdraw(params: WithdrawParams): Promise<{ txInfo: string; error?: string }> {
+    await this.ensureInitialized();
+    
+    const result = this.wasmModule.signWithdraw(
+      params.usdcAmount,
       params.nonce
     );
     

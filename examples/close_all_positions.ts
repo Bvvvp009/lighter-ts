@@ -19,7 +19,7 @@ async function main(): Promise<void> {
 
   const client = new SignerClient({
     url: BASE_URL,
-    privateKey: API_KEY_PRIVATE_KEY,
+    privateKey: API_KEY_PRIVATE_KEY,  
     accountIndex: ACCOUNT_INDEX,
     apiKeyIndex: API_KEY_INDEX
   });
