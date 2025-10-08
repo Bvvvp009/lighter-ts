@@ -116,6 +116,14 @@ export class SignerClient {
   static readonly DEFAULT_10_MIN_AUTH_EXPIRY = -1
   static readonly MINUTE = 60
 
+  // Transaction status codes
+  static readonly TX_STATUS_PENDING = 0
+  static readonly TX_STATUS_QUEUED = 1
+  static readonly TX_STATUS_COMMITTED = 2
+  static readonly TX_STATUS_EXECUTED = 3
+  static readonly TX_STATUS_FAILED = 4
+  static readonly TX_STATUS_REJECTED = 5
+
   static readonly CROSS_MARGIN_MODE = 0
   static readonly ISOLATED_MARGIN_MODE = 1
 
@@ -674,11 +682,41 @@ export class SignerClient {
   }
 
   /**
-   * Withdraw USDC from account
+   * Withdraw USDC from account to Ethereum L1
+   * @param usdcAmount - Amount of USDC to withdraw
+   * @param nonce - Optional nonce (will fetch if not provided)
+   * @returns [withdrawInfo, txHash, error]
    */
-  async withdraw(_usdcAmount: number, _nonce: number = -1): Promise<[any, string, string | null]> {
-    // WASM signer doesn't support withdraw yet
-    throw new Error('withdraw not supported with WASM signer.');
+  async withdraw(usdcAmount: number, nonce: number = -1): Promise<[any, string, string | null]> {
+    try {
+      // Get next nonce if not provided (with caching)
+      const nextNonce = nonce === -1 ? 
+        await this.getNextNonce() :
+        { nonce };
+
+      // Scale USDC amount to proper units (multiply by 1e6)
+      const scaledAmount = Math.floor(usdcAmount * SignerClient.USDC_TICKER_SCALE);
+
+      // Sign withdraw transaction using WASM
+      const txInfo = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signWithdraw({
+        usdcAmount: scaledAmount,
+        nonce: nextNonce.nonce
+      });
+
+      if (txInfo.error) {
+        return [null, '', txInfo.error];
+      }
+
+      // Send the signed transaction
+      const txHash = await this.transactionApi.sendTx(
+        SignerClient.TX_TYPE_WITHDRAW,
+        txInfo.txInfo
+      );
+
+      return [JSON.parse(txInfo.txInfo), txHash.tx_hash || txHash.hash || '', null];
+    } catch (error) {
+      return [null, '', error instanceof Error ? error.message : 'Unknown error'];
+    }
   }
 
   /**
@@ -732,17 +770,20 @@ export class SignerClient {
   async closeAllPositions(): Promise<[any[], any[], string[]]> {
     try {
       // Get account data to retrieve open positions
-      const account = await this.accountApi.getAccount({
+      const accountData = await this.accountApi.getAccount({
         by: 'index',
         value: this.config.accountIndex.toString()
       });
+      
+      // Extract account from response
+      const account = (accountData as any).accounts?.[0] || accountData;
       
       // Check if account has positions data
       if (!account.positions || !Array.isArray(account.positions)) {
         return [[], [], []]; // No positions data available
       }
       
-      const openPositions = account.positions.filter(pos => parseFloat(pos.size) > 0);
+      const openPositions = account.positions.filter((pos: any) => parseFloat(pos.position) !== 0);
       
       if (openPositions.length === 0) {
         return [[], [], []]; // No positions to close
@@ -755,25 +796,34 @@ export class SignerClient {
       // Close each position by creating opposite market orders
       for (const position of openPositions) {
         try {
-          const isLong = position.side === 'long';
-          const positionSize = Math.floor(parseFloat(position.size));
+          // sign: -1 = short position, 1 = long position
+          const isLong = position.sign === 1;
+          const positionSize = Math.abs(parseFloat(position.position));
+          
+          // Convert position size to base units (multiply by appropriate scale)
+          // For ETH, position is in decimal (0.0030 = 3000 in base units)
+          const baseAmount = Math.floor(positionSize * 1000000); // Scale appropriately
+          
+          // Get mark price from position_value / position
+          const avgPrice = Math.abs(parseFloat(position.avg_entry_price));
+          const priceInUnits = Math.floor(avgPrice * 100000); // Convert to price units
           
           // Create market order in opposite direction to close position
           const [tx, apiResponse, err] = await this.createMarketOrder({
             marketIndex: position.market_id,
-            clientOrderIndex: Date.now() + Math.random() * 1000, // Unique index
-            baseAmount: positionSize,
-            avgExecutionPrice: Math.floor(parseFloat(position.mark_price)), // Use mark price as reference
-            isAsk: isLong, // If long position, sell to close; if short, buy to close
+            clientOrderIndex: Date.now() + Math.floor(Math.random() * 1000), // Unique index
+            baseAmount: baseAmount,
+            avgExecutionPrice: priceInUnits * 2, // Give enough room for execution
+            isAsk: isLong, // If long position (sign=1), sell to close; if short (sign=-1), buy to close
             reduceOnly: true // This is a position-closing order
           });
 
           if (err) {
-            errors.push(`Failed to close position in market ${position.market_id}: ${err}`);
+            errors.push(`Failed to close position in market ${position.market_id} (${position.symbol}): ${err}`);
           } else {
             closedTransactions.push(tx);
             closedResponses.push(apiResponse);
-            console.log(`✅ Position closed in market ${position.market_id}: ${isLong ? 'Long' : 'Short'} ${positionSize} units`);
+            console.log(`✅ Position closed in market ${position.market_id} (${position.symbol}): ${isLong ? 'Long' : 'Short'} ${position.position} units`);
           }
         } catch (positionError) {
           errors.push(`Error closing position in market ${position.market_id}: ${positionError instanceof Error ? positionError.message : 'Unknown error'}`);
@@ -829,6 +879,9 @@ export class SignerClient {
     reduceOnly: boolean = false,
     nonce: number = -1
   ): Promise<[any, string, string | null]> {
+    // Use 1 hour expiry for TP orders
+    const oneHourFromNow = Date.now() + (60 * 60 * 1000);
+    
     return await this.createOrder({
       marketIndex,
       clientOrderIndex,
@@ -839,7 +892,7 @@ export class SignerClient {
       timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
       reduceOnly,
       triggerPrice,
-      orderExpiry: SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY,
+      orderExpiry: oneHourFromNow, // Use real timestamp instead of -1
       nonce
     });
   }
@@ -860,6 +913,9 @@ export class SignerClient {
     // For Stop Loss orders, use trigger price as execution price if price is 0 or too low
     const executionPrice = price <= 1 ? triggerPrice : price;
     
+    // Use 1 hour expiry for SL orders
+    const oneHourFromNow = Date.now() + (60 * 60 * 1000);
+    
     return await this.createOrder({
       marketIndex,
       clientOrderIndex,
@@ -870,7 +926,7 @@ export class SignerClient {
       timeInForce: SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
       reduceOnly,
       triggerPrice,
-      orderExpiry: SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY, // Use same expiry as other orders
+      orderExpiry: oneHourFromNow, // Use real timestamp instead of -1
       nonce
     });
   }
@@ -888,6 +944,9 @@ export class SignerClient {
     reduceOnly: boolean = false,
     nonce: number = -1
   ): Promise<[any, string, string | null]> {
+    // Use 1 hour expiry for SL orders
+    const oneHourFromNow = Date.now() + (60 * 60 * 1000);
+    
     return await this.createOrder({
       marketIndex,
       clientOrderIndex,
@@ -898,7 +957,7 @@ export class SignerClient {
       timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
       reduceOnly,
       triggerPrice,
-      orderExpiry: SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY,
+      orderExpiry: oneHourFromNow, // Use real timestamp instead of -1
       nonce
     });
   }
@@ -1025,6 +1084,41 @@ export class SignerClient {
       }
       process.stdout.write('\r' + ' '.repeat(80) + '\r'); // Clear the line
     };
+
+    // Helper to get status name from code
+    const getStatusName = (status: number | string): string => {
+      if (typeof status === 'string') return status;
+      switch (status) {
+        case SignerClient.TX_STATUS_PENDING: return 'Pending';
+        case SignerClient.TX_STATUS_QUEUED: return 'Queued';
+        case SignerClient.TX_STATUS_COMMITTED: return 'Committed';
+        case SignerClient.TX_STATUS_EXECUTED: return 'Executed';
+        case SignerClient.TX_STATUS_FAILED: return 'Failed';
+        case SignerClient.TX_STATUS_REJECTED: return 'Rejected';
+        default: return `Unknown (${status})`;
+      }
+    };
+
+    // Helper to extract error information from transaction
+    const getErrorInfo = (transaction: Transaction): string => {
+      try {
+        if (transaction.event_info) {
+          const eventInfo = JSON.parse(transaction.event_info);
+          if (eventInfo.ae) {
+            return eventInfo.ae; // ae = actual error
+          }
+        }
+        if (transaction.info) {
+          const info = JSON.parse(transaction.info);
+          if (info.Error || info.error) {
+            return info.Error || info.error;
+          }
+        }
+      } catch (e) {
+        // Failed to parse, return generic message
+      }
+      return 'No error details available';
+    };
     
     try {
       startAnimation();
@@ -1036,21 +1130,29 @@ export class SignerClient {
             value: txHash
           });
           
-          // Check if transaction is confirmed
-          if (transaction.status === 'confirmed') {
+          const status = typeof transaction.status === 'number' ? transaction.status : transaction.status;
+          const statusName = getStatusName(transaction.status);
+          
+          // Status 3 = EXECUTED (successful)
+          if (status === SignerClient.TX_STATUS_EXECUTED || transaction.status === 'confirmed') {
             stopAnimation();
-            console.log(`✅ Transaction ${txHash.substring(0, 16)} confirmed`);
+            console.log(`✅ Transaction ${txHash.substring(0, 16)} executed successfully`);
             return transaction;
-          } else if (transaction.status === 'failed') {
+          } 
+          // Status 4 = FAILED, Status 5 = REJECTED
+          else if (status === SignerClient.TX_STATUS_FAILED || status === SignerClient.TX_STATUS_REJECTED || transaction.status === 'failed') {
             stopAnimation();
-            console.log(`❌ Transaction ${txHash.substring(0, 16)} failed`);
+            const errorInfo = getErrorInfo(transaction);
+            console.log(`❌ Transaction ${txHash.substring(0, 16)} ${statusName.toLowerCase()}: ${errorInfo}`);
             throw new TransactionException(
-              `Transaction ${txHash} failed with status: ${transaction.status}`,
+              `Transaction ${txHash} ${statusName.toLowerCase()}: ${errorInfo}`,
               'waitForTransaction',
               transaction
             );
-          } else {
-            // Transaction is still processing (pending or unknown status)
+          } 
+          // Status 0,1,2 = Still processing (PENDING, QUEUED, COMMITTED)
+          else {
+            // Transaction is still processing
             await new Promise(resolve => setTimeout(resolve, pollInterval));
           }
           
@@ -1063,6 +1165,11 @@ export class SignerClient {
           )) {
             await new Promise(resolve => setTimeout(resolve, pollInterval));
             continue;
+          }
+          
+          // If it's a TransactionException, re-throw it
+          if (error instanceof TransactionException) {
+            throw error;
           }
           
           // For other errors, continue trying

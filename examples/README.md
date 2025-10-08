@@ -40,6 +40,13 @@ Demonstrates how to create a market order using the WASM signer.
 npx ts-node examples/create_market_order.ts
 ```
 
+#### [Create Limit Orders](create_limit_order.ts)
+Comprehensive example showing different types of limit orders including basic limit orders, IOC orders, and stop limit orders.
+
+```bash
+npx ts-node examples/create_limit_order.ts
+```
+
 #### [Create & Cancel Orders](create_cancel_order.ts)
 Shows how to create limit orders and cancel them.
 
@@ -75,6 +82,59 @@ Shows how to transfer USDC between accounts and update leverage settings.
 
 ```bash
 npx ts-node examples/transfer_update_leverage.ts
+```
+
+#### [Withdraw to Ethereum L1](withdraw.ts)
+Demonstrates how to withdraw USDC from Lighter L2 to Ethereum L1 (takes ~2 hours).
+
+```bash
+npx ts-node examples/withdraw.ts
+```
+
+#### [Check Transaction Status](check_transaction_status.ts)
+Demonstrates proper transaction status handling with detailed information about success/failure.
+
+```bash
+npx ts-node examples/check_transaction_status.ts
+```
+
+#### [Cancel All Orders](cancel_all_orders.ts)
+Cancel all open orders immediately.
+
+```bash
+npx ts-node examples/cancel_all_orders.ts
+```
+
+#### [Cancel Specific Order](cancel_order.ts)
+Cancel a specific order or the top order in a market. Supports canceling by order index or client order index.
+
+```bash
+# Cancel top order in market 0 (auto)
+npx ts-node examples/cancel_order.ts
+
+# Cancel specific order by index
+MARKET_INDEX=0 ORDER_INDEX=0 npx ts-node examples/cancel_order.ts
+
+# Cancel by client order index
+MARKET_INDEX=0 CLIENT_ORDER_INDEX=123456789 npx ts-node examples/cancel_order.ts
+```
+
+#### [Close All Positions](close_all_positions.ts)
+Close all open positions across all markets.
+
+```bash
+npx ts-node examples/close_all_positions.ts
+```
+
+#### [Close Specific Position](close_position.ts)
+Close a specific position or the top position in a market.
+
+```bash
+# Close top position in market 0 (auto)
+npx ts-node examples/close_position.ts
+
+# Close specific position by index
+MARKET_INDEX=0 POSITION_INDEX=0 npx ts-node examples/close_position.ts
 ```
 
 #### [Create Orders with Multiple Keys](create_with_multiple_keys.ts)
@@ -156,6 +216,16 @@ Make sure you have:
 1. Installed dependencies: `npm install`
 2. Set up your `.env` file with correct credentials
 3. Built the WASM signer (if using signer examples)
+
+## Security Best Practices
+
+**⚠️ IMPORTANT SECURITY NOTES:**
+
+1. **Never commit `.env` file** - It contains your private keys
+2. **Never share console output** - May contain sensitive transaction data
+3. **Use environment variables** - Never hardcode private keys in code
+4. **Keep private keys secure** - Treat API private keys like passwords
+5. **Testnet first** - Always test with testnet before using mainnet
 
 ## Error Handling
 

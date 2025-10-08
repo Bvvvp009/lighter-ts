@@ -76,28 +76,6 @@ async function main(): Promise<void> {
   console.log('⚠️  Note: Stop Loss market orders currently have expiry validation issues');
   console.log('   Consider using Stop Loss Limit orders instead for better reliability\n');
   
-  // Uncomment the following code when the Stop Loss market order issue is resolved:
-  /*
-  const [slTx, slTxHash, slErr] = await client.createSlOrder(
-    marketIndex,
-    clientOrderIndex + 1,
-    baseAmount,
-    stopLossPrice, // trigger price
-    0, // price = 0 for market order
-    true, // isAsk = true (sell order to stop loss on long position)
-    true  // reduceOnly = true (closing position)
-  );
-
-  if (slErr) {
-    console.error('❌ Stop Loss order failed:', slErr);
-  } else {
-    console.log('✅ Stop Loss order created successfully!');
-    console.log(`   Order Index: ${slTx.ClientOrderIndex}`);
-    console.log(`   Trigger Price: $${stopLossPrice / 100000}`);
-    console.log(`   Amount: ${baseAmount} units`);
-    console.log(`   TX Hash: ${slTxHash}\n`);
-  }
-  */
 
   // Create Stop Loss Limit order (alternative to market order)
   console.log('🛡️ Creating Stop Loss Limit Order...');

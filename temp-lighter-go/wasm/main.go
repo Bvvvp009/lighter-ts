@@ -659,6 +659,40 @@ func main() {
         return js.ValueOf(map[string]any{"txInfo": txInfoStr, "error": ""})
     }))
 
+    js.Global().Set("SignWithdraw", js.FuncOf(func(this js.Value, args []js.Value) any {
+        if txClient == nil {
+            return js.ValueOf(map[string]any{"error": "client not initialized"})
+        }
+        if len(args) < 2 {
+            return js.ValueOf(map[string]any{"error": "SignWithdraw expects 2 args: usdcAmount, nonce"})
+        }
+
+        usdcAmount := uint64(args[0].Int())
+        nonce := int64(args[1].Int())
+
+        req := &types.WithdrawTxReq{
+            USDCAmount: usdcAmount,
+        }
+        
+        fromAcc := txClient.GetAccountIndex()
+        apiIdx := txClient.GetApiKeyIndex()
+        ops := &types.TransactOpts{
+            FromAccountIndex: &fromAcc,
+            ApiKeyIndex:      &apiIdx,
+            Nonce:            &nonce,
+        }
+
+        txInfoObj, err := txClient.GetWithdrawTransaction(req, ops)
+        if err != nil {
+            return js.ValueOf(map[string]any{"error": wrapErr(err)})
+        }
+        txInfoStr, err := txInfoObj.GetTxInfo()
+        if err != nil {
+            return js.ValueOf(map[string]any{"error": wrapErr(err)})
+        }
+        return js.ValueOf(map[string]any{"txInfo": txInfoStr, "error": ""})
+    }))
+
     js.Global().Set("CreateAuthToken", js.FuncOf(func(this js.Value, args []js.Value) any {
         if txClient == nil {
             return js.ValueOf(map[string]any{"error": "client not initialized"})
