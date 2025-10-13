@@ -1,10 +1,10 @@
 // Send Transaction Batch Example
-// This example demonstrates how to send multiple orders in a single batch transaction
+// This example demonstrates how to send multiple transactions in a single batch
 // for improved efficiency and reduced latency
 
 import { SignerClient } from '../src/signer/wasm-signer-client';
 import { ApiClient } from '../src/api/api-client';
-import { waitAndCheckTransaction, printTransactionResult } from '../src/utils/transaction-helper';
+import { TransactionApi } from '../src/api/transaction-api';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -21,7 +21,6 @@ async function main(): Promise<void> {
   }
 
   console.log('📦 Batch Transaction Example\n');
-  console.log('═'.repeat(80));
 
   const client = new SignerClient({
     url: BASE_URL,
@@ -31,6 +30,7 @@ async function main(): Promise<void> {
   });
 
   const apiClient = new ApiClient({ host: BASE_URL });
+  const transactionApi = new TransactionApi(apiClient);
 
   try {
     await client.initialize();
@@ -42,110 +42,113 @@ async function main(): Promise<void> {
       return;
     }
 
-    console.log('\n📝 Creating batch of 3 orders...\n');
+    console.log('📝 Creating batch of 2 limit orders...\n');
 
-    // NOTE: For now, we'll send orders individually since batch requires proper
-    // transaction signing which needs special handling. This approach is more reliable.
+    // Get next nonce
+    const nextNonce = await transactionApi.getNextNonce(ACCOUNT_INDEX, API_KEY_INDEX);
+    let nonceValue = nextNonce.nonce;
+
+    // Calculate order expiry (1 hour from now)
+    const oneHourLater = Date.now() + (60 * 60 * 1000);
+
+    // Sign first order
+    const askTxInfo = await (client as any).wallet.signCreateOrder({
+      marketIndex: 0,
+      clientOrderIndex: Date.now(),
+      baseAmount: 50,
+      price: 420000, // $4200
+      isAsk: 1,
+      orderType: SignerClient.ORDER_TYPE_LIMIT,
+      timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      reduceOnly: 0,
+      triggerPrice: 0,
+      orderExpiry: oneHourLater,
+      nonce: nonceValue++
+    });
+
+    // Sign second order
+    const bidTxInfo = await (client as any).wallet.signCreateOrder({
+      marketIndex: 0,
+      clientOrderIndex: Date.now() + 1,
+      baseAmount: 50,
+      price: 410000, // $4100
+      isAsk: 0,
+      orderType: SignerClient.ORDER_TYPE_LIMIT,
+      timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      reduceOnly: 0,
+      triggerPrice: 0,
+      orderExpiry: oneHourLater,
+      nonce: nonceValue++
+    });
+
+    // Send batch transaction
+    const txTypes = JSON.stringify([
+      SignerClient.TX_TYPE_CREATE_ORDER,
+      SignerClient.TX_TYPE_CREATE_ORDER
+    ]);
+    const txInfos = JSON.stringify([askTxInfo, bidTxInfo]);
     
-    const timestamp = Date.now();
-    const orders = [
-      {
-        marketIndex: 0,
-        clientOrderIndex: timestamp,
-        baseAmount: 50,
-        price: 410000, // $4100
-        isAsk: false,
-        orderType: SignerClient.ORDER_TYPE_LIMIT,
-        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-        reduceOnly: false,
-        triggerPrice: 0,
-      },
-      {
-        marketIndex: 0,
-        clientOrderIndex: timestamp + 1,
-        baseAmount: 50,
-        price: 420000, // $4200
-        isAsk: true,
-        orderType: SignerClient.ORDER_TYPE_LIMIT,
-        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-        reduceOnly: false,
-        triggerPrice: 0,
-      },
-      {
-        marketIndex: 0,
-        clientOrderIndex: timestamp + 2,
-        baseAmount: 75,
-        price: 405000, // $4050
-        isAsk: false,
-        orderType: SignerClient.ORDER_TYPE_LIMIT,
-        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-        reduceOnly: false,
-        triggerPrice: 0,
-      }
-    ];
-
-    const results: Array<{ success: boolean; error?: string; hash?: string; tx?: any }> = [];
+    const batch1Hashes = await transactionApi.sendTransactionBatch({
+      tx_types: txTypes,
+      tx_infos: txInfos
+    });
     
-    for (let i = 0; i < orders.length; i++) {
-      const order = orders[i];
-      if (!order) continue;
-      
-      console.log(`📌 Order ${i + 1}/${orders.length}:`);
-      console.log(`   Type: ${order.isAsk ? 'SELL' : 'BUY'}`);
-      console.log(`   Amount: ${order.baseAmount} units`);
-      console.log(`   Price: $${order.price / 100}`);
-      
-      const [tx, txHash, createErr] = await client.createOrder(order);
-      
-      if (createErr) {
-        console.log(`   ❌ Failed: ${createErr}\n`);
-        results.push({ success: false, error: createErr });
-      } else {
-        console.log(`   ✅ Created: ${txHash}\n`);
-        results.push({ success: true, hash: txHash, tx });
-        
-        // Small delay to avoid nonce conflicts
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-
-    // Summary
-    console.log('═'.repeat(80));
-    console.log('\n📊 Batch Results Summary:\n');
-    
-    const successful = results.filter(r => r.success);
-    const failed = results.filter(r => !r.success);
-    
-    console.log(`✅ Successful: ${successful.length}/${orders.length}`);
-    console.log(`❌ Failed: ${failed.length}/${orders.length}\n`);
-
-    if (successful.length > 0) {
-      console.log('Transaction Hashes:');
-      successful.forEach((result: any, idx) => {
-        console.log(`   ${idx + 1}. ${result.hash}`);
-      });
-
-      // Wait for first transaction confirmation as example
-      if (successful[0]?.hash) {
-        console.log('\n⏳ Checking first transaction status...\n');
-        const result = await waitAndCheckTransaction(apiClient, successful[0].hash, {
-          maxWaitTime: 30000,
-          pollInterval: 2000
-        });
-        printTransactionResult('First Order', successful[0].hash, result);
-      }
-    }
-
-    if (failed.length > 0) {
-      console.log('\nFailed Orders:');
-      failed.forEach((result: any, idx) => {
-        console.log(`   ${idx + 1}. ${result.error}`);
+    console.log('✅ Batch 1 submitted successfully!');
+    console.log('📋 Transaction Hashes:');
+    if (batch1Hashes.tx_hash && Array.isArray(batch1Hashes.tx_hash)) {
+      batch1Hashes.tx_hash.forEach((hash: string, idx: number) => {
+        console.log(`   ${idx + 1}. ${hash}`);
       });
     }
+    console.log('');
 
-    console.log('\n💡 Note: True batch transactions require special signing.');
-    console.log('   This example uses sequential orders for reliability.');
-    console.log('   For high-frequency trading, consider using WebSocket batch API.\n');
+    // Wait before second batch
+    console.log('⏳ Waiting 5 seconds before second batch...\n');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    console.log('📝 Creating mixed batch (cancel + create order)...\n');
+
+    // Sign cancel order
+    const cancelTxInfo = await (client as any).wallet.signCancelOrder({
+      marketIndex: 0,
+      orderIndex: Date.now(),
+      nonce: nonceValue++
+    });
+
+    // Sign new order
+    const newAskTxInfo = await (client as any).wallet.signCreateOrder({
+      marketIndex: 0,
+      clientOrderIndex: Date.now() + 2,
+      baseAmount: 75,
+      price: 415000, // $4150
+      isAsk: 1,
+      orderType: SignerClient.ORDER_TYPE_LIMIT,
+      timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      reduceOnly: 0,
+      triggerPrice: 0,
+      orderExpiry: oneHourLater,
+      nonce: nonceValue++
+    });
+
+    // Send second batch
+    const txTypes2 = JSON.stringify([
+      SignerClient.TX_TYPE_CANCEL_ORDER,
+      SignerClient.TX_TYPE_CREATE_ORDER
+    ]);
+    const txInfos2 = JSON.stringify([cancelTxInfo, newAskTxInfo]);
+    
+    const batch2Hashes = await transactionApi.sendTransactionBatch({
+      tx_types: txTypes2,
+      tx_infos: txInfos2
+    });
+    
+    console.log('✅ Batch 2 submitted successfully!');
+    console.log('📋 Transaction Hashes:');
+    if (batch2Hashes.tx_hash && Array.isArray(batch2Hashes.tx_hash)) {
+      batch2Hashes.tx_hash.forEach((hash: string, idx: number) => {
+        console.log(`   ${idx + 1}. ${hash}`);
+      });
+    }
 
   } catch (error) {
     console.error('❌ Error:', error instanceof Error ? error.message : String(error));
