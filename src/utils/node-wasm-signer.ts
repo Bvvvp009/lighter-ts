@@ -76,7 +76,8 @@ export interface WithdrawParams {
 
 export class NodeWasmSignerClient {
   private wasmModule: any = null;
-  private wasmInstance: any = null; // Keep reference to prevent GC
+  // @ts-ignore - Keep reference to prevent GC even though not directly accessed
+  private wasmInstance: any = null;
   private isInitialized = false;
   private config: WasmSignerConfig;
   // private wasiSigner: WasiSigner | null = null;  // removed
@@ -166,8 +167,16 @@ export class NodeWasmSignerClient {
       // Don't initialize mem here - let wasm_exec.js handle it
       
       // Set up the Go runtime environment before running
-      go.env = Object.assign({ TMPDIR: require('os').tmpdir() }, process.env);
-      go.argv = process.argv;
+      // Only pass essential environment variables to avoid exceeding WASM limits
+      const essentialEnvVars: Record<string, string> = {
+        TMPDIR: require('os').tmpdir(),
+        HOME: process.env['HOME'] || '',
+        PATH: process.env['PATH'] || '',
+        // Add any specific vars your signer needs here
+      };
+      go.env = essentialEnvVars;
+      // Limit argv to avoid exceeding length limits
+      go.argv = ['js']; // Minimal argv
       go.exit = process.exit;
       
       // Minimal globals (official runtime sets most as needed)
@@ -183,30 +192,23 @@ export class NodeWasmSignerClient {
       (global as any).wasmInstance = result.instance;
       // Store the memory buffer globally to prevent detachment
       (global as any).wasmMemory = result.instance.exports['mem'];
-      console.log('WASM instance stored:', !!this.wasmInstance);
       
       // Run the WASM module using the standard Go runtime approach
-      console.log('About to run Go WASM module...');
       try {
         go.run(result.instance);
-        console.log('Go WASM module run completed');
       } catch (runError) {
-        console.error('Error during go.run():', runError);
         throw new Error(`Go runtime failed: ${runError instanceof Error ? runError.message : String(runError)}`);
       }
 
       // Wait for functions to be registered
-      console.log('Waiting for functions to be registered...');
       await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Debug: Log what's available on global
-      console.log('Global functions available:', Object.keys(global).filter(k => k.includes('generate') || k.includes('create') || k.includes('sign')));
-      //console.log('lighterWasmFunctions:', (global as any).lighterWasmFunctions);
 
       // Try multiple ways to access the functions (Go exports are capitalized)
       this.wasmModule = {
         generateAPIKey: (global as any).GenerateAPIKey || (global as any).generateAPIKey || (global as any).lighterWasmFunctions?.generateAPIKey,
+        getPublicKey: (global as any).GetPublicKey || (global as any).getPublicKey || (global as any).lighterWasmFunctions?.getPublicKey,
         createClient: (global as any).CreateClient || (global as any).createClient || (global as any).lighterWasmFunctions?.createClient,
+        signChangePubKey: (global as any).SignChangePubKey || (global as any).signChangePubKey || (global as any).lighterWasmFunctions?.signChangePubKey,
         signCreateOrder: (global as any).SignCreateOrder || (global as any).signCreateOrder || (global as any).lighterWasmFunctions?.signCreateOrder,
         signCancelOrder: (global as any).SignCancelOrder || (global as any).signCancelOrder || (global as any).lighterWasmFunctions?.signCancelOrder,
         signCancelAllOrders: (global as any).SignCancelAllOrders || (global as any).signCancelAllOrders || (global as any).lighterWasmFunctions?.signCancelAllOrders,
@@ -243,6 +245,48 @@ export class NodeWasmSignerClient {
       privateKey: result.privateKey,
       publicKey: result.publicKey,
     };
+  }
+
+  /**
+   * Get public key from private key
+   */
+  async getPublicKey(privateKey: string): Promise<string> {
+    await this.ensureInitialized();
+    
+    const result = this.wasmModule.getPublicKey(privateKey);
+    
+    if (result.error) {
+      throw new Error(`Failed to get public key: ${result.error}`);
+    }
+    
+    return result.publicKey;
+  }
+
+  /**
+   * Sign a ChangePubKey transaction
+   */
+  async signChangePubKey(params: {
+    pubkey: string;
+    l1Sig: string;
+    newApiKeyIndex: number;
+    nonce: number;
+    expiredAt: number;
+  }): Promise<{ txInfo: string; error?: string }> {
+    await this.ensureInitialized();
+    
+    const result = this.wasmModule.signChangePubKey(
+      params.pubkey,
+      params.l1Sig,
+      params.newApiKeyIndex,
+      params.nonce,
+      params.expiredAt
+    );
+    
+    if (result.error) {
+      return { txInfo: '', error: result.error };
+    }
+    
+    return { txInfo: result.txInfo };
   }
 
   /**
@@ -436,13 +480,9 @@ export class NodeWasmSignerClient {
         }
       }
 
-      console.log('Loading wasm_exec from:', absolutePath);
-
       // Directly require the wasm_exec.js file
       delete require.cache[absolutePath];
       const wasmExec = require(absolutePath);
-      
-      console.log('wasm_exec loaded, Go class:', !!wasmExec?.Go);
       
       // Set Go class on global object
       if (wasmExec && wasmExec.Go) {

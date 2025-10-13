@@ -2,6 +2,8 @@
 // This example shows how to cancel all open orders
 
 import { SignerClient } from '../src/signer/wasm-signer-client';
+import { ApiClient } from '../src/api/api-client';
+import { waitAndCheckTransaction, printTransactionResult } from '../src/utils/transaction-helper';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -55,15 +57,16 @@ async function main(): Promise<void> {
 
     // Wait for cancellation transaction confirmation if we have a hash
     if (apiResponse && apiResponse.hash) {
-      console.log('\n⏳ Waiting for cancellation transaction confirmation...');
-      try {
-        const confirmedTx = await client.waitForTransaction(apiResponse.hash, 30000, 1000);
-        console.log('✅ Cancellation transaction confirmed!');
-        console.log(`   Hash: ${confirmedTx.hash}`);
-        console.log(`   Status: ${confirmedTx.status}`);
-        console.log(`   Block Height: ${confirmedTx.block_height}`);
-      } catch (waitError) {
-        console.log('⚠️ Cancellation transaction confirmation timeout:', waitError instanceof Error ? waitError.message : 'Unknown error');
+      console.log('');
+      const apiClient = new ApiClient({ host: BASE_URL });
+      const result = await waitAndCheckTransaction(apiClient, apiResponse.hash);
+      printTransactionResult('Cancel All Orders', apiResponse.hash, result);
+      await apiClient.close();
+      
+      if (result.success) {
+        console.log('\n🎉 All orders successfully canceled!');
+      } else if (result.error) {
+        console.log(`\n❌ Cancellation failed: ${result.error}`);
       }
     }
   }

@@ -2,6 +2,8 @@
 // This example shows how to withdraw USDC from Lighter L2 to Ethereum L1
 
 import { SignerClient } from '../src/signer/wasm-signer-client';
+import { ApiClient } from '../src/api/api-client';
+import { waitAndCheckTransaction, printTransactionResult } from '../src/utils/transaction-helper';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -85,18 +87,18 @@ async function main(): Promise<void> {
       console.log('   - Check your Ethereum wallet after ~2 hours');
       console.log('   - Funds will appear in your L1 address');
 
-      // Wait for transaction confirmation if hash is available
+      // Wait for L2 transaction confirmation with proper error handling
       if (txHash) {
-        console.log();
-        console.log('⏳ Waiting for L2 transaction confirmation...');
-        try {
-          const confirmedTx = await client.waitForTransaction(txHash, 30000, 1000);
-          console.log('✅ L2 transaction confirmed!');
-          console.log(`   Hash: ${confirmedTx.hash}`);
-          console.log(`   Status: ${confirmedTx.status}`);
-          console.log(`   Block Height: ${confirmedTx.block_height}`);
-        } catch (waitError) {
-          console.log('⚠️ L2 transaction confirmation timeout:', waitError instanceof Error ? waitError.message : 'Unknown error');
+        console.log('');
+        const apiClient = new ApiClient({ host: BASE_URL });
+        const result = await waitAndCheckTransaction(apiClient, txHash);
+        printTransactionResult('L2 Withdrawal', txHash, result);
+        await apiClient.close();
+        
+        if (result.success) {
+          console.log('\n🎉 L2 transaction confirmed! Waiting for L1 finalization (~2 hours)...');
+        } else if (result.error) {
+          console.log(`\n❌ Withdrawal failed: ${result.error}`);
         }
       }
     }

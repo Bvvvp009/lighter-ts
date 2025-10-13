@@ -60,7 +60,6 @@ export class SignerServerClient {
       const data = await response.json();
       return data.status === 'ok';
     } catch (error) {
-      console.error('Health check failed:', error);
       return false;
     }
   }

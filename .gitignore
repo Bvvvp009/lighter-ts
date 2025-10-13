@@ -61,6 +61,18 @@ jspm_packages/
 .env.test
 .env.local
 .env.*.local
+.env.production
+
+# Private keys and secrets
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_rsa.pub
+*.secret
+secrets/
+.secrets/
 
 # parcel-bundler cache
 .cache
@@ -118,8 +130,8 @@ dist/
 # Test coverage
 coverage/
 
-# WASM files (keep the working ones)
-wasm/lighter-signer-*.wasm
-!wasm/lighter-signer.wasm
-!wasm/wasm_exec.js
-!wasm/wasm_exec_nodejs.js
+#volume_check directory
+volume_check/*
+volume_check/.DS_Store
+volume_check
+

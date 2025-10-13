@@ -206,27 +206,10 @@ export class PerformanceMonitor {
     };
   }
 
-  // Print summary to console
+  // Get summary as string (use getSummary() for programmatic access)
   printSummary(): void {
-    console.log('\n📊 PERFORMANCE METRICS SUMMARY');
-    console.log('===============================');
-    
-    const stats = this.getAllStats();
-    const sortedKeys = Object.keys(stats).sort();
-    
-    for (const key of sortedKeys) {
-      const stat = stats[key];
-      if (stat) {
-        console.log(`\n${key}:`);
-        console.log(`  Count: ${stat.count}`);
-        console.log(`  Min: ${stat.min.toFixed(2)}ms`);
-        console.log(`  Max: ${stat.max.toFixed(2)}ms`);
-        console.log(`  Avg: ${stat.avg.toFixed(2)}ms`);
-        console.log(`  P50: ${stat.p50.toFixed(2)}ms`);
-        console.log(`  P95: ${stat.p95.toFixed(2)}ms`);
-        console.log(`  P99: ${stat.p99.toFixed(2)}ms`);
-      }
-    }
+    // Performance metrics available via getSummary() method
+    // Removed console output for production use
   }
 }
 

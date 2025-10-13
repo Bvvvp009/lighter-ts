@@ -39,3 +39,5 @@ docs/api/
 go.zip
 tinygo.zip
 setup-env.js
+volume_check/
+CODE_AUDIT_REPORT.md

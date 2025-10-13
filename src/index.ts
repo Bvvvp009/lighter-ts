@@ -56,6 +56,7 @@ export {
 // Types from AccountApi
 export type { 
   Account,
+  SubAccount,
   AccountPosition,
   AccountApiKeys,
   ApiKey,
@@ -113,6 +114,15 @@ export type {
 export { Config } from './utils/configuration';
 export { createApiKey, generateRandomSeed } from './utils/api-key-utils';
 export type { ApiKeyPair } from './utils/api-key-utils';
+
+// Transaction Utilities
+export { 
+  waitAndCheckTransaction, 
+  printTransactionResult, 
+  isTransactionSuccessful, 
+  getTransactionError 
+} from './utils/transaction-helper';
+export type { TransactionResult } from './utils/transaction-helper';
 
 // Constants
 export const LIGHTER_CONSTANTS = {

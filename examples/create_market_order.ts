@@ -1,4 +1,6 @@
 import { SignerClient } from '../src/signer/wasm-signer-client';
+import { ApiClient } from '../src/api/api-client';
+import { waitAndCheckTransaction, printTransactionResult } from '../src/utils/transaction-helper';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -18,7 +20,7 @@ async function main(): Promise<void> {
     url: BASE_URL,
     privateKey: API_KEY_PRIVATE_KEY,
     accountIndex: ACCOUNT_INDEX,
-    apiKeyIndex: API_KEY_INDEX
+    apiKeyIndex: API_KEY_INDEX,
   });
 
   await client.initialize();
@@ -46,31 +48,15 @@ async function main(): Promise<void> {
     console.log(`   Order Type: ${tx.Type === 0 ? 'Limit' : 'Market'}`);
     console.log(`   Nonce: ${tx.Nonce}`);
 
-    // Wait for transaction confirmation if txHash is available
+    // Wait for transaction confirmation with proper error handling
     if (txHash) {
-      console.log('\n⏳ Waiting for transaction confirmation...');
-      try {
-        const confirmedTx = await client.waitForTransaction(txHash, 30000, 1000);
-        console.log('✅ Transaction confirmed!');
-        console.log(`   Hash: ${confirmedTx.hash}`);
-        console.log(`   Status: ${confirmedTx.status}`);
-        console.log(`   Block Height: ${confirmedTx.block_height}`);
-      } catch (waitError) {
-        console.log('⚠️ Transaction confirmation failed:', waitError instanceof Error ? waitError.message : 'Unknown error');
-        
-        // Check if it's a timeout or actual failure
-        if (waitError instanceof Error) {
-          if (waitError.message.includes('did not confirm within')) {
-            console.log('   → This is a timeout - transaction may still be processing');
-          } else if (waitError.message.includes('failed with status')) {
-            console.log('   → This is a transaction failure - the order was rejected');
-          } else {
-            console.log('   → This is an API or network error');
-          }
-        }
-      }
+      console.log('');
+      const apiClient = new ApiClient({ host: BASE_URL });
+      const result = await waitAndCheckTransaction(apiClient, txHash);
+      printTransactionResult('Market Order', txHash, result);
+      await apiClient.close();
     } else {
-      console.log('⚠️ No transaction hash available for confirmation');
+      console.log('⚠️ No transaction hash available');
     }
   }
 

@@ -113,10 +113,6 @@ export class RequestBatcher {
     });
 
     try {
-      if (process.env["NODE_ENV"] === 'development') {
-        console.log(`📦 Processing batch of ${currentBatch.length} requests`);
-      }
-      
       // Process batch
       const responses = await this.batchProcessor(currentBatch);
 
@@ -142,13 +138,9 @@ export class RequestBatcher {
           pending.reject(new Error('No response received for batch request'));
         }
       }
-
-      if (process.env["NODE_ENV"] === 'development') {
-        console.log(`✅ Batch processed: ${responses.length} responses`);
-      }
       
     } catch (error) {
-      console.error('❌ Batch processing failed:', error);
+      // Batch processing failed
       
       // Reject all pending requests in this batch
       for (const request of currentBatch) {

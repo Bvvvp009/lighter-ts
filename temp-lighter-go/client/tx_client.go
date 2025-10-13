@@ -89,6 +89,10 @@ func (c *TxClient) GetKeyManager() signer.KeyManager {
 	return c.keyManager
 }
 
+func (c *TxClient) GetChainId() uint32 {
+	return c.chainId
+}
+
 func (c *TxClient) GetAuthToken(deadline time.Time) (string, error) {
 	if time.Until(deadline) > (7 * time.Hour) {
 		return "", fmt.Errorf("deadline should be within 7 hours")
