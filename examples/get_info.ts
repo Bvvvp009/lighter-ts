@@ -8,7 +8,12 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
-const L1_ADDRESS = process.env['L1_ADDRESS'] || '0x23bc4Dc9172d15Bbe02E57C0269EcD46c007EB95';
+const L1_ADDRESS = process.env['L1_ADDRESS'];
+if (!L1_ADDRESS) {
+  console.error('❌ L1_ADDRESS environment variable is required');
+  console.error('   Please set it in your .env file');
+  process.exit(1);
+}
 const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '65', 10);
 
 async function printApi(method: any, ...args: any[]): Promise<void> {

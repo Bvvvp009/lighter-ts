@@ -1,12 +1,16 @@
 package main
 
 import (
+    "crypto/rand"
+    "encoding/hex"
     "fmt"
     "strconv"
+    "strings"
     "time"
     "syscall/js"
 
     "github.com/elliottech/lighter-go/client"
+    "github.com/elliottech/lighter-go/signer"
     "github.com/elliottech/lighter-go/types"
 )
 
@@ -439,18 +443,124 @@ func main() {
     }))
 
     js.Global().Set("GenerateAPIKey", js.FuncOf(func(this js.Value, args []js.Value) any {
-        // Placeholder deterministic pair based on seed for now
-        var seed string
-        if len(args) > 0 {
-            seed = args[0].String()
-        } else {
-            seed = ""
+        // Generate random 40-byte private key
+        privateKeyBytes := make([]byte, 40)
+        _, err := rand.Read(privateKeyBytes)
+        if err != nil {
+            return js.ValueOf(map[string]any{"error": wrapErr(err)})
         }
-        priv, pub, errStr := GenerateAPIKey(seed)
+        
+        privateKeyHex := hex.EncodeToString(privateKeyBytes)
+        
+        // Derive public key
+        keyManager, err := signer.NewKeyManager(privateKeyBytes)
+        if err != nil {
+            return js.ValueOf(map[string]any{"error": wrapErr(err)})
+        }
+        
+        pubKeyBytes := keyManager.PubKeyBytes()
+        publicKeyHex := hex.EncodeToString(pubKeyBytes[:])
+        
         return js.ValueOf(map[string]any{
-            "privateKey": priv,
-            "publicKey": pub,
-            "error":     errStr,
+            "privateKey": privateKeyHex,
+            "publicKey":  publicKeyHex,
+            "error":      "",
+        })
+    }))
+
+    js.Global().Set("GetPublicKey", js.FuncOf(func(this js.Value, args []js.Value) any {
+        if len(args) < 1 {
+            return js.ValueOf(map[string]any{"error": "GetPublicKey expects 1 arg: privateKey"})
+        }
+        
+        privateKeyHex := args[0].String()
+        if len(privateKeyHex) >= 2 && privateKeyHex[:2] == "0x" {
+            privateKeyHex = privateKeyHex[2:]
+        }
+        
+        privateKeyBytes, err := hex.DecodeString(privateKeyHex)
+        if err != nil {
+            return js.ValueOf(map[string]any{"error": wrapErr(err)})
+        }
+        
+        if len(privateKeyBytes) != 40 {
+            return js.ValueOf(map[string]any{"error": "private key must be 40 bytes"})
+        }
+        
+        keyManager, err := signer.NewKeyManager(privateKeyBytes)
+        if err != nil {
+            return js.ValueOf(map[string]any{"error": wrapErr(err)})
+        }
+        
+        pubKeyBytes := keyManager.PubKeyBytes()
+        publicKeyHex := hex.EncodeToString(pubKeyBytes[:])
+        
+        return js.ValueOf(map[string]any{
+            "publicKey": publicKeyHex,
+            "error":     "",
+        })
+    }))
+
+    js.Global().Set("SignChangePubKey", js.FuncOf(func(this js.Value, args []js.Value) any {
+        if txClient == nil {
+            return js.ValueOf(map[string]any{"error": "client not initialized"})
+        }
+        if len(args) < 5 {
+            return js.ValueOf(map[string]any{
+                "error": "SignChangePubKey expects 5 args: pubkeyHex, l1Sig, newApiKeyIndex, nonce, expiredAt",
+            })
+        }
+        
+        pubkeyHex := args[0].String()
+        l1Sig := args[1].String()
+        newApiKeyIndex := uint8(args[2].Int())
+        nonce := int64(args[3].Int())
+        expiredAt := int64(args[4].Int())
+        
+        // Decode pubkey
+        pubkeyBytes, err := hex.DecodeString(strings.TrimPrefix(pubkeyHex, "0x"))
+        if err != nil {
+            return js.ValueOf(map[string]any{"error": wrapErr(err)})
+        }
+        
+        if len(pubkeyBytes) != 40 {
+            return js.ValueOf(map[string]any{"error": "pubkey must be 40 bytes"})
+        }
+        
+        var pubkey [40]byte
+        copy(pubkey[:], pubkeyBytes)
+        
+        req := &types.ChangePubKeyReq{
+            PubKey: pubkey,
+        }
+        
+        fromAcc := txClient.GetAccountIndex()
+        // IMPORTANT: Use the NEW API key index for registration, not the current one
+        ops := &types.TransactOpts{
+            FromAccountIndex: &fromAcc,
+            ApiKeyIndex:      &newApiKeyIndex,
+            Nonce:            &nonce,
+            ExpiredAt:        expiredAt,
+        }
+        
+        // Use existing GetChangePubKeyTransaction method
+        txInfoObj, err := txClient.GetChangePubKeyTransaction(req, ops)
+        if err != nil {
+            return js.ValueOf(map[string]any{"error": wrapErr(err)})
+        }
+        
+        // Set L1 signature
+        txInfoObj.L1Sig = l1Sig
+        
+        // Get transaction info as JSON string
+        txInfoStr, err := txInfoObj.GetTxInfo()
+        if err != nil {
+            return js.ValueOf(map[string]any{"error": wrapErr(err)})
+        }
+        
+        return js.ValueOf(map[string]any{
+            "txInfo": txInfoStr,
+            "error":  "",
         })
     }))
 

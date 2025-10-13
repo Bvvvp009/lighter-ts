@@ -1,6 +1,12 @@
 import { ApiClient } from './api-client';
 import { AccountParams, PaginationParams } from '../types';
 
+export interface SubAccount {
+  index: string;
+  l1_address: string;
+  l2_address: string;
+}
+
 export interface Account {
   index: string;
   l1_address: string;
@@ -11,6 +17,7 @@ export interface Account {
   free_margin: string;
   margin_used: string;
   margin_ratio: string;
+  sub_accounts?: SubAccount[];  // List of subaccounts under this master account
   positions: AccountPosition[];
   orders: Order[];
   trades: Trade[];

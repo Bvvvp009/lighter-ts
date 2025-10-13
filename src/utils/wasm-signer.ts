@@ -106,15 +106,17 @@ export class WasmSignerClient {
       go.run(result.instance);
 
       this.wasmModule = {
-        generateAPIKey: (window as any).generateAPIKey,
-        createClient: (window as any).createClient,
-        signCreateOrder: (window as any).signCreateOrder,
-        signCancelOrder: (window as any).signCancelOrder,
-        signCancelAllOrders: (window as any).signCancelAllOrders,
-        signTransfer: (window as any).signTransfer,
-        signWithdraw: (window as any).signWithdraw,
-        signUpdateLeverage: (window as any).signUpdateLeverage,
-        createAuthToken: (window as any).createAuthToken,
+        generateAPIKey: (window as any).GenerateAPIKey || (window as any).generateAPIKey,
+        getPublicKey: (window as any).GetPublicKey || (window as any).getPublicKey,
+        createClient: (window as any).CreateClient || (window as any).createClient,
+        signChangePubKey: (window as any).SignChangePubKey || (window as any).signChangePubKey,
+        signCreateOrder: (window as any).SignCreateOrder || (window as any).signCreateOrder,
+        signCancelOrder: (window as any).SignCancelOrder || (window as any).signCancelOrder,
+        signCancelAllOrders: (window as any).SignCancelAllOrders || (window as any).signCancelAllOrders,
+        signTransfer: (window as any).SignTransfer || (window as any).signTransfer,
+        signWithdraw: (window as any).SignWithdraw || (window as any).signWithdraw,
+        signUpdateLeverage: (window as any).SignUpdateLeverage || (window as any).signUpdateLeverage,
+        createAuthToken: (window as any).CreateAuthToken || (window as any).createAuthToken,
       };
 
       this.isInitialized = true;
@@ -138,6 +140,48 @@ export class WasmSignerClient {
       privateKey: result.privateKey,
       publicKey: result.publicKey,
     };
+  }
+
+  /**
+   * Get public key from private key
+   */
+  async getPublicKey(privateKey: string): Promise<string> {
+    await this.ensureInitialized();
+    
+    const result = this.wasmModule.getPublicKey(privateKey);
+    
+    if (result.error) {
+      throw new Error(`Failed to get public key: ${result.error}`);
+    }
+    
+    return result.publicKey;
+  }
+
+  /**
+   * Sign a ChangePubKey transaction
+   */
+  async signChangePubKey(params: {
+    pubkey: string;
+    l1Sig: string;
+    newApiKeyIndex: number;
+    nonce: number;
+    expiredAt: number;
+  }): Promise<{ txInfo: string; error?: string }> {
+    await this.ensureInitialized();
+    
+    const result = this.wasmModule.signChangePubKey(
+      params.pubkey,
+      params.l1Sig,
+      params.newApiKeyIndex,
+      params.nonce,
+      params.expiredAt
+    );
+    
+    if (result.error) {
+      return { txInfo: '', error: result.error };
+    }
+    
+    return { txInfo: result.txInfo };
   }
 
   /**

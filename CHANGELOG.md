@@ -5,6 +5,22 @@ All notable changes to the Lighter TypeScript SDK will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2025-10-13
+
+### Added
+- **Authentication Examples** - New `create_auth_token.ts` example for creating auth tokens
+- **Nonce Manager Example** - Comprehensive `nonce_manager.ts` example for single and multiple API key nonce management
+- **Deposit to Subaccounts** - New `deposit_to_subaccounts.ts` example for managing subaccount deposits
+- **Transaction Helper Utilities** - New `transaction-helper.ts` with reusable transaction confirmation functions
+- **Withdraw to L1** - New `withdraw.ts` example for withdraw funds to L1 Address
+
+### Fixed
+- **Logger Integration** - Improved consistency in error handling throughout codebase
+- **WebSocket Logging** - Removed verbose connection and reconnection logs
+
+### Improved
+- **Production Ready** - Source code now suitable for production with minimal logging
+
 ## [1.0.4] - 2025-01-29
 
 ### Added

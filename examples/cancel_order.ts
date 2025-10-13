@@ -2,6 +2,8 @@
 // This example shows how to cancel a specific order or the top order in a market
 
 import { SignerClient } from '../src/signer/wasm-signer-client';
+import { ApiClient } from '../src/api/api-client';
+import { waitAndCheckTransaction, printTransactionResult } from '../src/utils/transaction-helper';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -126,17 +128,18 @@ async function main(): Promise<void> {
     console.log(`   Nonce: ${cancelTx.Nonce}`);
     console.log(`   TX Hash: ${cancelTxHash}`);
 
-    // Wait for transaction confirmation
+    // Wait for transaction confirmation with proper error handling
     if (cancelTxHash) {
-      console.log('\n⏳ Waiting for cancellation confirmation...');
-      try {
-        const confirmedTx = await client.waitForTransaction(cancelTxHash, 60000, 2000);
-        console.log('✅ Order cancellation confirmed!');
-        console.log(`   Status: ${confirmedTx.status}`);
-        console.log(`   Block Height: ${confirmedTx.block_height}`);
-      } catch (waitError) {
-        console.log('⚠️ Transaction confirmation timeout:', waitError instanceof Error ? waitError.message : 'Unknown error');
-        console.log('   The order may still be canceling - check your order book');
+      console.log('');
+      const apiClient = new ApiClient({ host: BASE_URL });
+      const result = await waitAndCheckTransaction(apiClient, cancelTxHash);
+      printTransactionResult('Order Cancellation', cancelTxHash, result);
+      await apiClient.close();
+      
+      if (result.success) {
+        console.log('\n🎉 Order successfully canceled!');
+      } else if (result.error) {
+        console.log(`\n❌ Cancellation failed: ${result.error}`);
       }
     }
 

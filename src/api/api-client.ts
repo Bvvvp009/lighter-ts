@@ -118,7 +118,6 @@ export class ApiClient {
         data,
         ...config,
       });
- //     console.log(response);
 
       return {
         data: response.data,

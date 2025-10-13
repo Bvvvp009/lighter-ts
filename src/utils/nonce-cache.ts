@@ -7,7 +7,7 @@ export interface NonceInfo {
 
 export class NonceCache {
   private cache = new Map<number, NonceInfo[]>();
-  private batchSize = 10; // Pre-fetch 10 nonces at a time
+  private batchSize = 20; // Pre-fetch 20 nonces at a time (was 10, now 20 for multiple markets)
   private maxCacheAge = 30000; // 30 seconds
   private lastFetch = 0;
   private fetchPromise: Promise<void> | null = null;
@@ -37,7 +37,7 @@ export class NonceCache {
     
     // If cache is getting low, pre-fetch more nonces
     if (cachedNonces.length <= 2) {
-      this.refreshNonces(apiKeyIndex).catch(console.error);
+      this.refreshNonces(apiKeyIndex).catch(() => {});
     }
 
     return nonceInfo.nonce;
@@ -82,10 +82,7 @@ export class NonceCache {
 
       this.cache.set(apiKeyIndex, nonceInfos);
       this.lastFetch = Date.now();
-      
-      console.log(`✅ Cached ${newNonces.length} nonces for API key ${apiKeyIndex}`);
     } catch (error) {
-      console.error(`❌ Failed to refresh nonces for API key ${apiKeyIndex}:`, error);
       throw error;
     }
   }

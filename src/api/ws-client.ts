@@ -46,7 +46,7 @@ export class WsClient {
             const message = JSON.parse(data.toString());
             this.config.onMessage?.(message);
           } catch (error) {
-            console.error('Failed to parse WebSocket message:', error);
+            // Silently ignore parse errors
           }
         });
 
@@ -126,16 +126,13 @@ export class WsClient {
 
   private attemptReconnect(): void {
     if (this.reconnectAttempts >= (this.config.maxReconnectAttempts || 5)) {
-      console.error('Max reconnection attempts reached');
       return;
     }
 
     this.reconnectAttempts++;
-    console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.config.maxReconnectAttempts})`);
 
     this.reconnectTimer = setTimeout(() => {
-      this.connect().catch((error) => {
-        console.error('Reconnection failed:', error);
+      this.connect().catch(() => {
         this.attemptReconnect();
       });
     }, this.config.reconnectInterval || 5000);

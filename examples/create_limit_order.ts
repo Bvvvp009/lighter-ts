@@ -47,7 +47,7 @@ async function main(): Promise<void> {
     marketIndex: 0, // SOL/USDC market
     clientOrderIndex: Date.now(),
     baseAmount: 50, // 0.05 SOL (minimum allowed)
-    price: 444000, // $0.219 limit price (0.5% below ~$0.220 market - extremely close!)
+    price: 412000, // $0.219 limit price (0.5% below ~$0.220 market - extremely close!)
     isAsk: false, // Buy order
     orderType: SignerClient.ORDER_TYPE_LIMIT,
     timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
@@ -81,33 +81,6 @@ async function main(): Promise<void> {
       }
     }
   }
-
-  console.log('\n💡 Key Success Factors:');
-  console.log('   ✅ Use SOL/USDC market (marketIndex: 2)');
-  console.log('   ✅ Use minimum allowed amount (50 = 0.05 SOL)');
-  console.log('   ✅ Use REALISTIC prices close to market (5-10% away)');
-  console.log('   ✅ Use real timestamps for orderExpiry (not -1)');
-  console.log('   ✅ Use unique clientOrderIndex values');
-  console.log('   ✅ Check current market price before placing orders');
-
-  console.log('\n📊 Example Order Details:');
-  console.log('   Market: SOL/USDC (Index 2)');
-  console.log('   Amount: 0.05 SOL');
-  console.log('   Price: $0.218 limit buy (1% below ~$0.220 market)');
-  console.log('   Expiry: 1 hour from now');
-  console.log('   Type: Good Till Time (GTT)');
-
-  console.log('\n⚠️ IMPORTANT - LIMIT ORDER CONSTRAINTS:');
-  console.log('   🔴 This exchange has VERY strict price validation for limit orders');
-  console.log('   🔴 Orders must be within < 1% of current market price');
-  console.log('   🔴 Orders outside this range will be rejected with "price too far from mark price"');
-  console.log('   ');
-  console.log('   ✅ For testing, use MARKET ORDERS instead (see create_market_order.ts)');
-  console.log('   ✅ Market orders have looser validation and execute immediately');
-  console.log('   ✅ Run check_sol_price.ts to see current market conditions');
-  console.log('   ');
-  console.log('   📝 Limit orders are best used in production when you need specific price control');
-  console.log('   📝 Consider using IOC (Immediate or Cancel) orders for tighter price control');
 
   await client.close();
 }

@@ -96,7 +96,6 @@ export class WebSocketOrderClient extends EventEmitter {
         this.ws = new WebSocket(wsUrl);
 
         this.ws.on('open', () => {
-          console.log('✅ WebSocket order client connected');
           this.isConnected = true;
           this.reconnectAttempts = 0;
           this.startHeartbeat();
@@ -109,7 +108,6 @@ export class WebSocketOrderClient extends EventEmitter {
         });
 
         this.ws.on('error', (error: Error) => {
-          console.error('❌ WebSocket order client error:', error);
           this.emit('error', error);
           if (!this.isConnected) {
             reject(error);
@@ -117,7 +115,6 @@ export class WebSocketOrderClient extends EventEmitter {
         });
 
         this.ws.on('close', (code: number, reason: string) => {
-          console.log(`🔌 WebSocket order client closed: ${code} ${reason}`);
           this.isConnected = false;
           this.stopHeartbeat();
           this.emit('disconnected', { code, reason });
@@ -165,7 +162,7 @@ export class WebSocketOrderClient extends EventEmitter {
         this.emit('response', response);
       }
     } catch (error) {
-      console.error('❌ Failed to parse WebSocket message:', error);
+      // Silently ignore parse errors
     }
   }
 
@@ -186,16 +183,14 @@ export class WebSocketOrderClient extends EventEmitter {
 
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.config.maxReconnectAttempts!) {
-      console.error('❌ Max reconnection attempts reached');
       this.emit('maxReconnectAttemptsReached');
       return;
     }
 
     this.reconnectAttempts++;
-    console.log(`🔄 Scheduling reconnect attempt ${this.reconnectAttempts} in ${this.config.reconnectInterval}ms`);
 
     this.reconnectTimer = setTimeout(() => {
-      this.connect().catch(console.error);
+      this.connect().catch(() => {});
     }, this.config.reconnectInterval);
   }
 
