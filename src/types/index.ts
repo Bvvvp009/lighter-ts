@@ -87,9 +87,11 @@ export interface SendTransactionParams {
 }
 
 export interface SendTransactionBatchParams {
-  account_index: number;
-  api_key_index: number;
-  transactions: string[];
+  account_index?: number;
+  api_key_index?: number;
+  transactions?: string[];
+  tx_types?: string; // JSON stringified array of transaction types
+  tx_infos?: string; // JSON stringified array of transaction infos
 }
 
 export interface WebSocketConfig {
