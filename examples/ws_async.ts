@@ -15,8 +15,11 @@ const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai
 // }
 
 async function main() {
+  const wsUrl = BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+  console.log(`Connecting to WebSocket: ${wsUrl}`);
+  
   const client = new WsClient({
-    url: BASE_URL,
+    url: wsUrl,
     onOpen: () => console.log('WebSocket connected'),
     onMessage: (message) => {
       console.log('Received message:', message);

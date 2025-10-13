@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Deposit to Subaccounts** - New `deposit_to_subaccounts.ts` example for managing subaccount deposits
 - **Transaction Helper Utilities** - New `transaction-helper.ts` with reusable transaction confirmation functions
 - **Withdraw to L1** - New `withdraw.ts` example for withdraw funds to L1 Address
+- **Market Order with SL/TP** - New `market_order_with_sl_tp.ts` example showing complete workflow for opening position with protection
 
 ### Fixed
 - **Logger Integration** - Improved consistency in error handling throughout codebase

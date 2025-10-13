@@ -43,7 +43,7 @@ async function main(): Promise<void> {
     const markets: any = {};
     
     // Get market data for IDs 0-50
-    for (let marketId = 0; marketId <= 1000; marketId++) {
+    for (let marketId = 0; marketId <= 100; marketId++) {
       const marketData = await getMarketData(marketId, orderApi);
       console.log(`Number of market ${marketId} ${marketData ? 'found' : 'not found'}`);
       if (marketData) {
