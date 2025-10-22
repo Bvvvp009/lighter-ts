@@ -206,9 +206,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned Features
-- Additional order types
+- Additional order types as of API supported 
+- Adding SL and Tp to transaction type instead of sending separately send with order
+- Additional WebSocket subscriptions 
+
+## [1.0.6] - 2024-12-XX
+
+### Added
+- **Unified Order Interface** - Revolutionary new `createUnifiedOrder()` method that integrates SL/TP functionality
+- **Automatic SL/TP Handling** - Background batch sending of stop-loss and take-profit orders
+- **Unified Order Parameters** - Single interface for limit, market, and TWAP orders with optional SL/TP
+- **Atomic Order Operations** - All orders (main + SL/TP) succeed or fail together
+- **Enhanced Error Handling** - Unified error reporting for complex order setups
+- **New Example** - `create_unified_order_with_sl_tp.ts` demonstrating the new functionality
+
+### Enhanced
+- **Batch Transaction Processing** - Improved efficiency for multiple order creation
+- **Developer Experience** - Simplified API for complex trading strategies
+- **Order Management** - Reduced complexity for SL/TP order creation
+
+### Technical Details
+- `UnifiedOrderParams` interface supports all order types with optional SL/TP parameters
+- `UnifiedOrderResult` provides comprehensive result reporting
+- Automatic nonce management and sequential transaction signing
+- Background batch sending using existing `sendTransactionBatch()` infrastructure
+- Maintains backward compatibility with existing order creation methods 
 - Enhanced error recovery
-- Additional WebSocket subscriptions
 - Enhanced documentation
 - Unit tests
 - Integration tests

@@ -68,6 +68,26 @@ Demonstrates advanced order types with trigger prices.
 npx ts-node examples/create_sl_tp.ts
 ```
 
+#### [Create Unified Order with SL/TP](create_unified_order_with_sl_tp.ts) ⭐ **NEW**
+**Revolutionary unified order creation with integrated SL/TP functionality!**
+
+This example demonstrates the new `createUnifiedOrder()` method that automatically handles:
+- Main order creation (limit, market, or TWAP)
+- Automatic SL/TP order creation and signing
+- Background batch transaction sending
+- Unified error handling and result reporting
+
+**Key Benefits:**
+- Single method call for complex order setups
+- Automatic SL/TP order creation and batching
+- Unified error handling and result reporting
+- Reduced complexity for developers
+- Atomic operations - all orders succeed or fail together
+
+```bash
+npx ts-node examples/create_unified_order_with_sl_tp.ts
+```
+
 ### Account Management Examples
 
 #### [System Setup](system_setup.ts)
@@ -187,6 +207,8 @@ npx ts-node examples/ws_send_batch_tx.ts
 
 #### [Send Transaction Batch](send_tx_batch.ts)
 Batch transaction processing for improved efficiency.
+
+**Note:** For orders with SL/TP, consider using the new `createUnifiedOrder()` method which automatically handles SL/TP order creation and batch sending in the background.
 
 ```bash
 npx ts-node examples/send_tx_batch.ts

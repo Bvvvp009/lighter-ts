@@ -116,7 +116,10 @@ export class NodeWasmSignerClient {
               break;
             }
           }
-        } catch {}
+        } catch (goError) {
+          // Go not installed or not in PATH - this is expected in production
+          // We'll fall back to bundled wasm_exec.js
+        }
 
         // Fallback to bundled official wasm_exec.js (no custom nodejs version)
         if (!wasmExecPath) {

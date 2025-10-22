@@ -54,7 +54,7 @@ export class NonceCache {
     return nonces;
   }
 
-  private async refreshNonces(apiKeyIndex: number): Promise<void> {
+  async refreshNonces(apiKeyIndex: number): Promise<void> {
     // Prevent concurrent fetches
     if (this.fetchPromise) {
       await this.fetchPromise;

@@ -18,9 +18,7 @@ export { CandlestickApi } from './api/candlestick-api';
 export { SignerClient } from './signer/wasm-signer-client';
 export type { SignerConfig } from './signer/wasm-signer-client';
 
-// Signer Server Client
-export { SignerServerClient, createSignerServerClient } from './utils/signer-server';
-export type { SignerServerConfig, SignerServerResponse } from './utils/signer-server';
+// Note: Signer Server Client removed - using local WASM signer instead
 
 // WASM Signer Classes
 export { WasmSignerClient, createWasmSignerClient } from './utils/wasm-signer';
@@ -33,8 +31,18 @@ export type {
   CancelAllOrdersParams,
   TransferParams,
   UpdateLeverageParams,
-  WasmSignerResponse
-} from './utils/wasm-signer';
+  WasmSignerResponse,
+  TransactionParams,
+  UnifiedOrderResult
+} from './signer/wasm-signer-client';
+
+// Export Order Types and Enums from the unified order file
+export { 
+  OrderType,
+  TimeInForce,
+  TransactionStatus,
+  TransactionType
+} from './signer/wasm-signer-client';
 
 // WebSocket Client
 export { WsClient } from './api/ws-client';
@@ -100,7 +108,6 @@ export type {
 export type {
   OrderBookParams,
   TradeParams,
-  TransactionParams,
   BlockParams,
   PaginationParams,
   Configuration,
@@ -123,6 +130,11 @@ export {
   getTransactionError 
 } from './utils/transaction-helper';
 export type { TransactionResult } from './utils/transaction-helper';
+
+// New Utility Exports
+export * from './utils/price-utils';
+export * from './utils/nonce-manager';
+export * from './utils/transaction-utils';
 
 // Constants
 export const LIGHTER_CONSTANTS = {
