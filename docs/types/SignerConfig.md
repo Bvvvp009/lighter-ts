@@ -10,7 +10,7 @@ Configuration object for the `SignerClient` class.
 | `privateKey` | `string` | Yes | Your API key private key |
 | `accountIndex` | `number` | Yes | Your account index |
 | `apiKeyIndex` | `number` | Yes | Your API key index |
-| `signerServerUrl` | `string` | No | URL of the signer server (alternative to WASM) |
+| ~~`signerServerUrl`~~ | ~~`string`~~ | ~~No~~ | ~~URL of the signer server (deprecated - use WASM signer)~~ |
 | `wasmConfig` | `WasmSignerConfig` | No | Configuration for WASM signer |
 
 ## Example
@@ -34,7 +34,7 @@ const client = new SignerClient(config);
 
 ## Notes
 
-- Either `signerServerUrl` or `wasmConfig` must be provided
 - The `privateKey` should be your API key private key, not your Ethereum private key
 - The `accountIndex` and `apiKeyIndex` can be obtained from the system setup process
+- WASM signer is now the default and only signing method
 - The `wasmPath` should point to the compiled WASM binary file

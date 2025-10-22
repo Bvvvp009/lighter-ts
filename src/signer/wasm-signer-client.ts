@@ -64,6 +64,92 @@ export interface ChangeApiKeyParams {
   newApiKeyIndex?: number; // Optional, defaults to config.apiKeyIndex + 1
 }
 
+/**
+ * Order Type Constants and Enums
+ * Provides easy-to-understand order type references without context
+ */
+export enum OrderType {
+  LIMIT = 0,
+  MARKET = 1,
+  STOP_LOSS = 2,
+  STOP_LOSS_LIMIT = 3,
+  TAKE_PROFIT = 4,
+  TAKE_PROFIT_LIMIT = 5,
+  TWAP = 6
+}
+
+export enum TimeInForce {
+  IMMEDIATE_OR_CANCEL = 0,
+  GOOD_TILL_TIME = 1,
+  POST_ONLY = 2
+}
+
+export enum TransactionStatus {
+  PENDING = 0,
+  QUEUED = 1,
+  COMMITTED = 2,
+  EXECUTED = 3,
+  FAILED = 4,
+  REJECTED = 5
+}
+
+export enum TransactionType {
+  TRANSFER = 12,
+  WITHDRAW = 13,
+  CREATE_ORDER = 14,
+  CANCEL_ORDER = 15,
+  CANCEL_ALL_ORDERS = 16,
+  MODIFY_ORDER = 17,
+  MINT_SHARES = 18,
+  BURN_SHARES = 19,
+  UPDATE_LEVERAGE = 20
+}
+
+// Transaction Parameters Interface with integrated SL/TP
+export interface TransactionParams {
+  // Common parameters
+  marketIndex: number;
+  clientOrderIndex: number;
+  baseAmount: number;
+  isAsk: boolean;
+  reduceOnly?: boolean;
+  
+  // Order type specific
+  orderType: 'limit' | 'market' | 'twap';
+  
+  // Price parameters (conditional based on order type)
+  price?: number;           // For limit orders
+  avgExecutionPrice?: number; // For market orders
+  twapDuration?: number;    // For TWAP orders
+  
+  // Optional SL/TP integration (background batch)
+  stopLoss?: {
+    triggerPrice: number;
+    price?: number;         // For SL limit orders
+    isLimit?: boolean;      // true = SL limit, false = SL market
+  };
+  takeProfit?: {
+    triggerPrice: number;
+    price?: number;         // For TP limit orders  
+    isLimit?: boolean;      // true = TP limit, false = TP market
+  };
+  
+  // Additional parameters
+  timeInForce?: number;
+  orderExpiry?: number;
+  nonce?: number;
+}
+
+// Result interface for unified order creation
+export interface UnifiedOrderResult {
+  mainOrder: { tx: any, hash: string, error: string | null };
+  stopLoss?: { tx: any, hash: string, error: string | null };
+  takeProfit?: { tx: any, hash: string, error: string | null };
+  batchResult: { hashes: string[], errors: string[] };
+  success: boolean;
+  message: string;
+}
+
 export class SignerClient {
   private config: SignerConfig;
   private apiClient: ApiClient;
@@ -478,6 +564,16 @@ export class SignerClient {
 
     const nonce = await this.nonceCache.getNextNonce(this.config.apiKeyIndex);
     return { nonce };
+  }
+
+  private async getNextNonces(count: number): Promise<number[]> {
+    // Use the pre-initialized nonce cache to get multiple nonces
+    if (!this.nonceCache) {
+      throw new Error('Nonce cache not initialized');
+    }
+
+    const nonces = await this.nonceCache.getNextNonces(this.config.apiKeyIndex, count);
+    return nonces;
   }
 
   /**
@@ -1001,8 +1097,235 @@ export class SignerClient {
   }
 
   /**
-   * Modify an existing order
+   * Create unified order with integrated SL/TP functionality
+   * Automatically handles signing and batch sending of main order + SL/TP orders
    */
+  async createUnifiedOrder(params: TransactionParams): Promise<UnifiedOrderResult> {
+    const endTimer = performanceMonitor.startTimer('create_unified_order', {
+      marketIndex: params.marketIndex.toString(),
+      orderType: params.orderType,
+      hasSL: !!params.stopLoss ? 'true' : 'false',
+      hasTP: !!params.takeProfit ? 'true' : 'false'
+    });
+
+    try {
+      // Get nonces for all orders in the batch
+      const orderCount = 1 + (params.stopLoss ? 1 : 0) + (params.takeProfit ? 1 : 0);
+      const nonces = await this.getNextNonces(orderCount);
+
+      // Prepare transactions array
+      const transactions: any[] = [];
+      const txTypes: number[] = [];
+      const txInfos: string[] = [];
+
+      // 1. Sign main order
+      const mainOrderParams = this.buildMainOrderParams(params, nonces[0]!);
+      const mainTxInfo = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signCreateOrder(mainOrderParams);
+      
+      transactions.push({ type: 'main', params: mainOrderParams, txInfo: mainTxInfo });
+      txTypes.push(SignerClient.TX_TYPE_CREATE_ORDER);
+      txInfos.push(mainTxInfo);
+
+      // 2. Sign SL order (if provided)
+      let slTxInfo: string | null = null;
+      if (params.stopLoss) {
+        const slOrderParams = this.buildSLOrderParams(params, nonces[1]!);
+        slTxInfo = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signCreateOrder(slOrderParams);
+        
+        transactions.push({ type: 'sl', params: slOrderParams, txInfo: slTxInfo });
+        txTypes.push(SignerClient.TX_TYPE_CREATE_ORDER);
+        txInfos.push(slTxInfo);
+      }
+
+      // 3. Sign TP order (if provided)
+      let tpTxInfo: string | null = null;
+      if (params.takeProfit) {
+        const tpOrderParams = this.buildTPOrderParams(params, nonces[params.stopLoss ? 2 : 1]!);
+        tpTxInfo = await (this.wallet as WasmSignerClient | NodeWasmSignerClient).signCreateOrder(tpOrderParams);
+        
+        transactions.push({ type: 'tp', params: tpOrderParams, txInfo: tpTxInfo });
+        txTypes.push(SignerClient.TX_TYPE_CREATE_ORDER);
+        txInfos.push(tpTxInfo);
+      }
+
+      // 4. Send batch transaction
+      const batchResult = await this.transactionApi.sendTransactionBatch({
+        tx_types: JSON.stringify(txTypes),
+        tx_infos: JSON.stringify(txInfos)
+      });
+
+      // 5. Parse results
+      const result: UnifiedOrderResult = {
+        mainOrder: { tx: JSON.parse(mainTxInfo), hash: '', error: null },
+        batchResult: { hashes: [], errors: [] },
+        success: false,
+        message: ''
+      };
+
+      // Extract hashes from batch result
+      if (batchResult.tx_hash && Array.isArray(batchResult.tx_hash)) {
+        result.batchResult.hashes = batchResult.tx_hash;
+        result.mainOrder.hash = batchResult.tx_hash[0] || '';
+        
+        if (params.stopLoss && batchResult.tx_hash[1]) {
+          result.stopLoss = { tx: JSON.parse(slTxInfo!), hash: batchResult.tx_hash[1], error: null };
+        }
+        
+        if (params.takeProfit && batchResult.tx_hash[params.stopLoss ? 2 : 1]) {
+          const tpHash = batchResult.tx_hash[params.stopLoss ? 2 : 1];
+          if (tpHash) {
+            result.takeProfit = { tx: JSON.parse(tpTxInfo!), hash: tpHash, error: null };
+          }
+        }
+      }
+
+      // Determine success status
+      result.success = result.batchResult.hashes.length === orderCount;
+      result.message = result.success 
+        ? `Successfully created ${orderCount} order(s) with batch transaction`
+        : `Partial failure: Created ${result.batchResult.hashes.length}/${orderCount} orders`;
+
+      return result;
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      performanceMonitor.recordCounter('create_unified_order_error', 1, {
+        error: errorMessage.substring(0, 50)
+      });
+
+      return {
+        mainOrder: { tx: null, hash: '', error: errorMessage },
+        batchResult: { hashes: [], errors: [errorMessage] },
+        success: false,
+        message: `Failed to create unified order: ${errorMessage}`
+      };
+    } finally {
+      endTimer();
+    }
+  }
+
+  /**
+   * Build main order parameters based on order type
+   */
+  private buildMainOrderParams(params: TransactionParams, nonce: number): any {
+    const baseParams = {
+      marketIndex: params.marketIndex,
+      clientOrderIndex: params.clientOrderIndex,
+      baseAmount: params.baseAmount,
+      isAsk: params.isAsk ? 1 : 0,
+      reduceOnly: params.reduceOnly ? 1 : 0,
+      triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
+      nonce
+    };
+
+    switch (params.orderType) {
+      case 'limit':
+        // Handle order expiry conversion for limit orders (same logic as createOrderOptimized)
+        let orderExpiry = params.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY;
+        if (orderExpiry === -1 || orderExpiry === SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY) {
+          // Convert -1 to 28 days from now (in milliseconds)
+          orderExpiry = Date.now() + (28 * 24 * 60 * 60 * 1000);
+        }
+        
+        return {
+          ...baseParams,
+          price: params.price!,
+          orderType: SignerClient.ORDER_TYPE_LIMIT,
+          timeInForce: params.timeInForce ?? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+          orderExpiry: orderExpiry
+        };
+
+      case 'market':
+        return {
+          ...baseParams,
+          price: params.avgExecutionPrice!,
+          orderType: SignerClient.ORDER_TYPE_MARKET,
+          timeInForce: SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+          orderExpiry: 0 // Market orders use 0 for orderExpiry (required by WASM)
+        };
+
+      case 'twap':
+        // TWAP implementation - placeholder for now
+        throw new Error('TWAP orders not yet implemented');
+
+      default:
+        throw new Error(`Unsupported order type: ${params.orderType}`);
+    }
+  }
+
+  /**
+   * Build SL order parameters
+   */
+  private buildSLOrderParams(params: TransactionParams, nonce: number): any {
+    const sl = params.stopLoss!;
+    const isLimit = sl.isLimit ?? false;
+    
+    // Handle order expiry conversion for SL orders (same logic as createOrderOptimized)
+    let orderExpiry = 0; // Default for market SL orders
+    if (isLimit) {
+      orderExpiry = SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY;
+      if (orderExpiry === -1 || orderExpiry === SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY) {
+        // Convert -1 to 28 days from now (in milliseconds)
+        orderExpiry = Date.now() + (28 * 24 * 60 * 60 * 1000);
+      }
+    }
+    
+    // SL orders should be in OPPOSITE direction of main order and reduce-only
+    // If main order is BUY (isAsk=false), SL should be SELL (isAsk=true)
+    // If main order is SELL (isAsk=true), SL should be BUY (isAsk=false)
+    const slIsAsk = !params.isAsk;
+    
+    return {
+      marketIndex: params.marketIndex,
+      clientOrderIndex: params.clientOrderIndex + 1000, // Offset to avoid conflicts
+      baseAmount: params.baseAmount,
+      isAsk: slIsAsk ? 1 : 0,
+      orderType: isLimit ? SignerClient.ORDER_TYPE_STOP_LOSS_LIMIT : SignerClient.ORDER_TYPE_STOP_LOSS,
+      timeInForce: isLimit ? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+      reduceOnly: 1, // SL orders are always reduce-only
+      triggerPrice: sl.triggerPrice,
+      price: sl.price ?? sl.triggerPrice, // Use trigger price if limit price not specified
+      orderExpiry: orderExpiry,
+      nonce
+    };
+  }
+
+  /**
+   * Build TP order parameters
+   */
+  private buildTPOrderParams(params: TransactionParams, nonce: number): any {
+    const tp = params.takeProfit!;
+    const isLimit = tp.isLimit ?? false;
+    
+    // Handle order expiry conversion for TP orders (same logic as createOrderOptimized)
+    let orderExpiry = 0; // Default for market TP orders
+    if (isLimit) {
+      orderExpiry = SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY;
+      if (orderExpiry === -1 || orderExpiry === SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY) {
+        // Convert -1 to 28 days from now (in milliseconds)
+        orderExpiry = Date.now() + (28 * 24 * 60 * 60 * 1000);
+      }
+    }
+    
+    // TP orders should be in OPPOSITE direction of main order and reduce-only
+    // If main order is BUY (isAsk=false), TP should be SELL (isAsk=true)
+    // If main order is SELL (isAsk=true), TP should be BUY (isAsk=false)
+    const tpIsAsk = !params.isAsk;
+    
+    return {
+      marketIndex: params.marketIndex,
+      clientOrderIndex: params.clientOrderIndex + 2000, // Offset to avoid conflicts
+      baseAmount: params.baseAmount,
+      isAsk: tpIsAsk ? 1 : 0,
+      orderType: isLimit ? SignerClient.ORDER_TYPE_TAKE_PROFIT_LIMIT : SignerClient.ORDER_TYPE_TAKE_PROFIT,
+      timeInForce: isLimit ? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+      reduceOnly: 1, // TP orders are always reduce-only
+      triggerPrice: tp.triggerPrice,
+      price: tp.price ?? tp.triggerPrice, // Use trigger price if limit price not specified
+      orderExpiry: orderExpiry,
+      nonce
+    };
+  }
   async modifyOrder(
     _marketIndex: number,
     _orderIndex: number,

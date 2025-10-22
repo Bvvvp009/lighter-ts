@@ -1,6 +1,9 @@
 // Send Transaction Batch Example
 // This example demonstrates how to send multiple transactions in a single batch
 // for improved efficiency and reduced latency
+//
+// NOTE: For orders with SL/TP, consider using the new createUnifiedOrder() method
+// which automatically handles SL/TP order creation and batch sending in the background.
 
 import { SignerClient } from '../src/signer/wasm-signer-client';
 import { ApiClient } from '../src/api/api-client';
@@ -21,6 +24,12 @@ async function main(): Promise<void> {
   }
 
   console.log('📦 Batch Transaction Example\n');
+  console.log('📊 MANUAL BATCH APPROACH (Legacy):');
+  console.log('   • Manual signing of each transaction');
+  console.log('   • Manual batch preparation and sending');
+  console.log('   • Manual error handling for each transaction');
+  console.log('   • Requires understanding of nonce management\n');
+  console.log('💡 For SL/TP orders, use createUnifiedOrder() instead!\n');
 
   const client = new SignerClient({
     url: BASE_URL,

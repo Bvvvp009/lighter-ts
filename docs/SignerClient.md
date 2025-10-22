@@ -16,7 +16,7 @@ new SignerClient(config: SignerConfig)
 | `privateKey` | `string` | Yes | Your API key private key |
 | `accountIndex` | `number` | Yes | Your account index |
 | `apiKeyIndex` | `number` | Yes | Your API key index |
-| `signerServerUrl` | `string` | No | URL of the signer server (alternative to WASM) |
+| ~~`signerServerUrl`~~ | ~~`string`~~ | ~~No~~ | ~~URL of the signer server (deprecated - use WASM signer)~~ |
 | `wasmConfig` | `WasmSignerConfig` | No | Configuration for WASM signer (optional - auto-resolves paths) |
 
 ## Methods

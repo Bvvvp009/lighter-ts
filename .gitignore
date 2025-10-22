@@ -134,4 +134,4 @@ coverage/
 volume_check/*
 volume_check/.DS_Store
 volume_check
-
+market_data.json
