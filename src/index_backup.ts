@@ -49,13 +49,6 @@ export {
   TransactionType
 } from './signer/wasm-signer-client';
 
-// Export MarketHelper for simplified market utilities
-export { MarketHelper } from './utils/market-helper';
-
-// Export Order Status Checking utilities
-export { checkOrderStatus, formatOrderResult, getCancelReason } from './utils/order-status-checker';
-export type { OrderStatusResult } from './utils/order-status-checker';
-
 // WebSocket Client
 export { WsClient } from './api/ws-client';
 
@@ -176,6 +169,7 @@ export { Config } from './utils/configuration';
 // New Utility Exports
 export * from './utils/price-utils';
 export * from './utils/nonce-manager';
+export * from './utils/error-utils';
 // Client Factory removed - use direct client creation instead
 
 // Constants

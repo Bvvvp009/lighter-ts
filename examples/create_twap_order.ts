@@ -1,5 +1,5 @@
 /**
- * Example: Create Limit Order with SL/TP
+ * Example: Create TWAP Order with SL/TP
  */
 
 import { SignerClient, OrderType, ApiClient, OrderApi, MarketHelper } from '../src';
@@ -11,10 +11,10 @@ function trimException(e: Error): string {
   return e.message.trim().split('\n').pop() || 'Unknown error';
 }
 
-async function createLimitOrderWithSLTP() {
+async function createTWAPOrderWithSLTP() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "100");
-  const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "1");
+  const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
   const signerClient = new SignerClient({
@@ -34,36 +34,39 @@ async function createLimitOrderWithSLTP() {
   const market = new MarketHelper(0, orderApi);
   await market.initialize();
 
-  const limitOrderParams = {
+  const currentPrice = market.lastPrice || market.priceToUnits(3961.79);
+
+  const twapOrderParams = {
     marketIndex: 0,
     clientOrderIndex: Date.now(),
     baseAmount: market.amountToUnits(0.01),
-    price: market.priceToUnits(4100),
-    isAsk: true, // SELL
-    orderType: OrderType.LIMIT,
-    orderExpiry: Date.now() + (60 * 60 * 1000),
+    price: currentPrice,
+    isAsk: false,
+    orderType: OrderType.TWAP,
+    orderExpiry: Date.now() + (30 * 60 * 1000),
     stopLoss: {
-      triggerPrice: market.priceToUnits(4200),
+      triggerPrice: Math.round(currentPrice * 0.95),
       isLimit: false
     },
     takeProfit: {
-      triggerPrice: market.priceToUnits(3800),
+      triggerPrice: Math.round(currentPrice * 1.05),
       isLimit: false
     }
   };
 
   try {
-    const result = await signerClient.createUnifiedOrder(limitOrderParams);
+    const result = await signerClient.createUnifiedOrder(twapOrderParams);
 
     if (result.success) {
-      console.log(`✓ Limit order created: ${result.mainOrder.hash.substring(0, 16)}...`);
+      console.log(`✓ TWAP order created: ${result.mainOrder.hash.substring(0, 16)}...`);
+      console.log(`  Duration: 30 minutes`);
       
       // Wait for main order
       try {
         await signerClient.waitForTransaction(result.mainOrder.hash, 30000, 2000);
-        console.log('✓ Limit order placed');
+        console.log('✓ TWAP order placed');
       } catch (error) {
-        console.error(`❌ Limit order failed: ${trimException(error as Error)}`);
+        console.error(`❌ TWAP order failed: ${trimException(error as Error)}`);
       }
       
       // Wait for SL/TP orders
@@ -74,7 +77,6 @@ async function createLimitOrderWithSLTP() {
             try {
               await signerClient.waitForTransaction(hash, 30000, 2000);
             } catch (error) {
-              // SL/TP errors are logged but don't fail the main order
               console.log(`⚠️ SL/TP: ${trimException(error as Error)}`);
             }
           }
@@ -89,7 +91,7 @@ async function createLimitOrderWithSLTP() {
 }
 
 if (require.main === module) {
-  createLimitOrderWithSLTP().catch(console.error);
+  createTWAPOrderWithSLTP().catch(console.error);
 }
 
-export { createLimitOrderWithSLTP };
+export { createTWAPOrderWithSLTP };

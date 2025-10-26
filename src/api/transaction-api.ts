@@ -23,6 +23,7 @@ export interface Transaction {
   created_at?: string;
   updated_at?: string;
   code?: number; // API response code
+  message?: string; // API response message
 }
 
 export interface Block {

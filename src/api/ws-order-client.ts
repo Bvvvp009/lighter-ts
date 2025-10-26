@@ -1,7 +1,7 @@
 // WebSocket-based order client for real-time order placement using Lighter WebSocket API
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import { performanceMonitor } from '../utils/performance-monitor';
+// Performance monitoring removed
 
 // Lighter WebSocket API interfaces based on official documentation
 export interface LighterWsSendTx {
@@ -199,9 +199,7 @@ export class WebSocketOrderClient extends EventEmitter {
       throw new Error('WebSocket not connected');
     }
 
-    const endTimer = performanceMonitor.startTimer('ws_send_tx', {
-      txType: txType.toString()
-    });
+    // Performance monitoring removed
 
     try {
       const requestId = `tx_${Date.now()}_${++this.messageId}`;
@@ -222,7 +220,6 @@ export class WebSocketOrderClient extends EventEmitter {
       const result = await this.sendRequest(request);
       return result as LighterWsTransaction;
     } finally {
-      endTimer();
     }
   }
 
@@ -239,9 +236,7 @@ export class WebSocketOrderClient extends EventEmitter {
       throw new Error('Batch size cannot exceed 50 transactions');
     }
 
-    const endTimer = performanceMonitor.startTimer('ws_send_batch_tx', {
-      batchSize: txTypes.length.toString()
-    });
+    // Performance monitoring removed
 
     try {
       const requestId = `batch_${Date.now()}_${++this.messageId}`;
@@ -262,7 +257,6 @@ export class WebSocketOrderClient extends EventEmitter {
       const result = await this.sendRequest(request);
       return result as LighterWsTransaction[];
     } finally {
-      endTimer();
     }
   }
 
@@ -271,9 +265,7 @@ export class WebSocketOrderClient extends EventEmitter {
       throw new Error('WebSocket not connected');
     }
 
-    const endTimer = performanceMonitor.startTimer('ws_batch_orders', {
-      count: orders.length.toString()
-    });
+    // Performance monitoring removed
 
     try {
       const requestId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -294,7 +286,6 @@ export class WebSocketOrderClient extends EventEmitter {
       const result = await this.sendRequest(request);
       return result;
     } finally {
-      endTimer();
     }
   }
 
@@ -335,7 +326,7 @@ export class WebSocketOrderClient extends EventEmitter {
       this.stopHeartbeat();
 
       // Reject all pending requests
-      for (const [, pending] of this.pendingRequests.entries()) {
+      for (const [, pending] of Array.from(this.pendingRequests.entries())) {
         clearTimeout(pending.timeout);
         pending.reject(new Error('WebSocket disconnected'));
       }

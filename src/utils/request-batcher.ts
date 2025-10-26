@@ -1,5 +1,5 @@
 // Request batching system for multiple operations in single API call
-import { performanceMonitor } from './performance-monitor';
+// Performance monitoring removed
 
 export interface BatchRequest {
   id: string;
@@ -108,9 +108,7 @@ export class RequestBatcher {
       return;
     }
 
-    const endTimer = performanceMonitor.startTimer('batch_process', {
-      count: currentBatch.length.toString()
-    });
+    // Performance monitoring removed
 
     try {
       // Process batch
@@ -152,7 +150,6 @@ export class RequestBatcher {
       }
     } finally {
       this.isProcessing = false;
-      endTimer();
     }
   }
 
@@ -187,7 +184,7 @@ export class RequestBatcher {
     }
 
     // Reject all pending requests
-    for (const [, pending] of this.pendingRequests.entries()) {
+      for (const [, pending] of Array.from(this.pendingRequests.entries())) {
       pending.reject(new Error('RequestBatcher destroyed'));
     }
     this.pendingRequests.clear();

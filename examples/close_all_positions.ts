@@ -1,68 +1,74 @@
-// Close all positions by creating opposite market orders
-// This example shows how to close all open positions
+/**
+ * Example: Close All Positions
+ */
 
-import { SignerClient } from '../src/signer/wasm-signer-client';
-import * as dotenv from 'dotenv';
+import { SignerClient } from '../src';
+import dotenv from 'dotenv';
 
 dotenv.config();
 
-const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
-const API_KEY_PRIVATE_KEY = process.env['API_PRIVATE_KEY'];
-const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
-const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0', 10);
+async function closeAllPositions() {
+  const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "52548");
+  const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
-async function main(): Promise<void> {
-  if (!API_KEY_PRIVATE_KEY) {
-    console.error('API_PRIVATE_KEY environment variable is required');
-    return;
-  }
-
-  const client = new SignerClient({
+  const signerClient = new SignerClient({
     url: BASE_URL,
-    privateKey: API_KEY_PRIVATE_KEY,  
+    privateKey: API_PRIVATE_KEY,
     accountIndex: ACCOUNT_INDEX,
     apiKeyIndex: API_KEY_INDEX
   });
 
-  await client.initialize();
-  await (client as any).ensureWasmClient();
+  await signerClient.initialize();
+  await signerClient.ensureWasmClient();
 
-  const err = client.checkClient();
-  if (err) {
-    console.error('CheckClient error:', err);
-    return;
+  try {
+    console.log('🚀 Closing All Positions...\n');
+    
+    const marketsToClose = [0, 1, 2];
+    
+    for (const marketIndex of marketsToClose) {
+      console.log(`\n📋 Closing Market ${marketIndex}...`);
+      
+      const [tx, txHash, error] = await signerClient.createMarketOrder({
+        marketIndex,
+        clientOrderIndex: Date.now(),
+        baseAmount: 1000,
+        avgExecutionPrice: 450000, // $4500 in price units (scaled by 100)
+        isAsk: false,
+        reduceOnly: true
+      });
+
+      if (error) {
+        console.error(`❌ Market ${marketIndex} failed: ${error}`);
+        continue;
+      }
+
+      if (!txHash || txHash === '') {
+        console.error(`❌ No transaction hash returned for market ${marketIndex}`);
+        continue;
+      }
+
+      console.log(`✅ Market ${marketIndex} close request submitted: ${txHash.substring(0, 16)}...`);
+      
+      console.log(`⏳ Waiting for confirmation...`);
+      try {
+        await signerClient.waitForTransaction(txHash, 30000, 2000);
+        console.log(`✓ Market ${marketIndex} closed successfully`);
+      } catch (waitError) {
+        console.error(`❌ Market ${marketIndex} confirmation failed: ${waitError instanceof Error ? waitError.message : String(waitError)}`);
+      }
+    }
+    
+    console.log('\n🎉 All position closures complete!');
+  } catch (error) {
+    console.error(`❌ Error: ${error instanceof Error ? error.message : String(error)}`);
   }
-
-  console.log('🔄 Closing all positions...');
-
-  // Close all positions
-  const [closedTransactions, , errors] = await client.closeAllPositions();
-
-  console.log('\n📊 Results:');
-  console.log(`   Positions closed: ${closedTransactions.length}`);
-  console.log(`   Errors: ${errors.length}`);
-
-  if (errors.length > 0) {
-    console.log('\n❌ Errors encountered:');
-    errors.forEach((error, index) => {
-      console.log(`   ${index + 1}. ${error}`);
-    });
-  }
-
-  if (closedTransactions.length > 0) {
-    console.log('\n✅ Successfully closed positions:');
-    closedTransactions.forEach((tx, index) => {
-      console.log(`   ${index + 1}. Market ${tx.MarketIndex}: ${tx.IsAsk ? 'Sell' : 'Buy'} ${tx.BaseAmount} units`);
-    });
-  }
-
-  if (closedTransactions.length === 0 && errors.length === 0) {
-    console.log('ℹ️  No open positions found to close.');
-  }
-
-  await client.close();
 }
 
 if (require.main === module) {
-  main().catch(console.error);
+  closeAllPositions().catch(console.error);
 }
+
+export { closeAllPositions };
