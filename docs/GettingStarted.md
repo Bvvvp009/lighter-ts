@@ -1,262 +1,358 @@
-# Getting Started Guide
+# Getting Started with Lighter TypeScript SDK
 
-This guide will help you get up and running with the Lighter TypeScript SDK quickly.
+Complete guide for beginners to start trading on Lighter Protocol using TypeScript.
+
+## What is the Lighter TypeScript SDK?
+
+The SDK gives you everything you need to trade perpetual futures on Lighter Protocol from your TypeScript/JavaScript applications. It handles:
+- ✅ Order creation (Market, Limit, TWAP)
+- ✅ Stop-loss and take-profit orders
+- ✅ Position management
+- ✅ Transaction monitoring
+- ✅ Error handling with automatic retries
+- ✅ Account management
 
 ## Prerequisites
 
-- Node.js 16+ installed
-- TypeScript 4.5+ (if using TypeScript directly)
-- A Lighter account with some USDC deposited
+Before you start, you'll need:
+1. **Node.js 16+** installed
+2. **TypeScript 4.5+** (or JavaScript)
+3. **A Lighter account** with USDC deposited
+4. **Your API credentials** (generated in Lighter app)
 
 ## Installation
 
-### Using npm
-
 ```bash
 npm install lighter-ts-sdk
-```
-
-### Using yarn
-
-```bash
+# or
 yarn add lighter-ts-sdk
 ```
 
-## Quick Start
+## Your First Trade in 5 Minutes
 
-### 1. Basic API Usage
+### Step 1: Get Your Credentials
 
-```typescript
-import { ApiClient, AccountApi } from 'lighter-ts-sdk';
+You need three things from your Lighter account:
+- `ACCOUNT_INDEX` - Your account number
+- `API_KEY_INDEX` - Which API key to use (usually 0)
+- `API_PRIVATE_KEY` - Your API private key (get from Lighter app)
 
-async function main() {
-  const client = new ApiClient({ host: 'https://mainnet.zklighter.elliot.ai' });
-  const accountApi = new AccountApi(client);
-  
-  try {
-    const account = await accountApi.getAccount({ by: 'index', value: '123' });
-    console.log('Account:', account);
-  } catch (error) {
-    console.error('Error:', error.message);
-  } finally {
-    await client.close();
-  }
-}
+### Step 2: Create Environment File
 
-main().catch(console.error);
-```
-
-### 2. Trading with Standalone WASM Signer
-
-```typescript
-import { SignerClient } from 'lighter-ts-sdk';
-
-async function main() {
-  const client = new SignerClient({
-    url: 'https://mainnet.zklighter.elliot.ai',
-    privateKey: 'your-api-key-private-key',
-    accountIndex: 123,
-    apiKeyIndex: 0
-    // No wasmConfig needed - standalone signer auto-resolves paths
-  });
-
-  try {
-    await client.initialize();
-    await (client as any).ensureWasmClient();
-
-    // Create a market order
-    const [tx, txHash, err] = await client.createMarketOrder({
-      marketIndex: 0, // ETH/USDC
-      clientOrderIndex: Date.now(),
-      baseAmount: 10, // Base amount
-      avgExecutionPrice: 4500, // Max price in cents
-      isAsk: true // Sell order
-    });
-
-    if (err) {
-      console.error('Order failed:', err);
-      return;
-    }
-
-    console.log('Order created:', txHash);
-  } finally {
-    await client.close();
-  }
-}
-
-main().catch(console.error);
-```
-
-## Setup Process
-
-### Step 1: Get Your Account Information
-
-First, you need to obtain your account index and API key information. You can do this through the Lighter web app or by using the system setup example.
-
-### Step 2: Generate API Keys
-
-Use the system setup example to generate API keys:
+Create a `.env` file in your project:
 
 ```bash
-npx ts-node examples/system_setup.ts
-```
-
-This will output something like:
-```
-BASE_URL = 'https://mainnet.zklighter.elliot.ai'
-API_KEY_PRIVATE_KEY = '0x...' # Your generated API private key
-ACCOUNT_INDEX = 595
-API_KEY_INDEX = 1
-```
-
-### Step 3: Configure Your Environment
-
-Create a `.env` file in your project root:
-
-```env
+# Base URL for API
 BASE_URL=https://mainnet.zklighter.elliot.ai
-API_PRIVATE_KEY=0x... # Your generated API private key
-ACCOUNT_INDEX=595
-API_KEY_INDEX=1
+
+# Your credentials from Lighter app
+API_PRIVATE_KEY=0xabcdef123456789...
+ACCOUNT_INDEX=1000
+API_KEY_INDEX=0
 ```
 
-### Step 4: Start Trading
+### Step 3: Write Your First Trade
 
-Now you can use the SDK to create orders:
+Create `my-first-trade.ts`:
 
 ```typescript
-import { SignerClient } from 'lighter-ts-sdk';
+import { SignerClient, OrderType } from 'lighter-ts-sdk';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const client = new SignerClient({
-  url: process.env.BASE_URL!,
-  privateKey: process.env.API_PRIVATE_KEY!,
-  accountIndex: parseInt(process.env.ACCOUNT_INDEX!),
-  apiKeyIndex: parseInt(process.env.API_KEY_INDEX!)
-  // No wasmConfig needed - standalone signer auto-resolves paths
-});
+async function myFirstTrade() {
+  // Initialize client
+  const signerClient = new SignerClient({
+    url: process.env.BASE_URL!,
+    privateKey: process.env.API_PRIVATE_KEY!,
+    accountIndex: parseInt(process.env.ACCOUNT_INDEX!),
+    apiKeyIndex: parseInt(process.env.API_KEY_INDEX!)
+  });
 
-// Your trading logic here...
-```
+  await signerClient.initialize();
+  await signerClient.ensureWasmClient();
 
-## Common Patterns
+  try {
+    // Place a market order
+    const result = await signerClient.createUnifiedOrder({
+      marketIndex: 0,              // ETH market
+      clientOrderIndex: Date.now(),
+      baseAmount: 10000,          // 0.01 ETH (10000 / 1,000,000)
+      isAsk: false,               // BUY
+      orderType: OrderType.MARKET,
+      
+      // Automatic stop-loss at 5% loss
+      stopLoss: {
+        triggerPrice: 380000,     // $3800 (5% below $4000)
+        isLimit: false
+      },
+      
+      // Automatic take-profit at 5% gain
+      takeProfit: {
+        triggerPrice: 420000,     // $4200 (5% above $4000)
+        isLimit: false
+      }
+    });
 
-### Error Handling
+    // Check if order succeeded
+    if (!result.success) {
+      console.error('❌ Order failed:', result.mainOrder.error);
+      return;
+    }
 
-Always check for errors when calling SDK methods:
+    console.log('✅ Main order created!');
+    console.log('✅ Stop-loss created!');
+    console.log('✅ Take-profit created!');
+    
+    // Wait for confirmation
+    await signerClient.waitForTransaction(result.mainOrder.hash, 30000);
+    console.log('✅ Order confirmed on-chain!');
 
-```typescript
-const [tx, txHash, err] = await client.createOrder(params);
-if (err) {
-  console.error('Order creation failed:', err);
-  return;
+  } catch (error) {
+    console.error('Error:', error);
+  } finally {
+    await signerClient.close();
+  }
 }
-console.log('Order created successfully:', txHash);
+
+myFirstTrade();
 ```
 
-### Async/Await Pattern
-
-The SDK uses async/await throughout. Always use try/catch for error handling:
-
-```typescript
-try {
-  const account = await accountApi.getAccount({ by: 'index', value: '123' });
-  console.log('Account:', account);
-} catch (error) {
-  console.error('Failed to get account:', error.message);
-}
-```
-
-### Resource Cleanup
-
-Always close clients when done:
-
-```typescript
-try {
-  // Your code here
-} finally {
-  await client.close();
-}
-```
-
-## Examples
-
-The SDK includes comprehensive examples in the `examples/` directory:
-
-- `create_market_order.ts` - Basic market order creation
-- `create_cancel_order.ts` - Limit order creation and cancellation
-- `get_info.ts` - API information retrieval
-- `get_points.ts` - Referral points with auth tokens
-- `system_setup.ts` - Account setup and API key generation
-- `transfer_update_leverage.ts` - Account management operations
-- `ws.ts` - WebSocket real-time data
-
-Run any example with:
+### Step 4: Run It
 
 ```bash
-npx ts-node examples/[example-name].ts
+npx ts-node my-first-trade.ts
 ```
 
-## WebSocket Usage
+You'll see output like:
+```
+✅ Main order created!
+✅ Stop-loss created!
+✅ Take-profit created!
+⏳ Waiting for confirmation...
+✅ Order confirmed on-chain!
+```
 
-For real-time data, use the WebSocket client:
+## Understanding the Code
+
+### What Happens When You Run This?
+
+1. **Initialization**: Creates a connection to Lighter Protocol
+2. **Order Creation**: Creates your market order
+3. **SL/TP Setup**: Automatically creates stop-loss and take-profit orders
+4. **Batch Submission**: Sends all three orders together as one transaction
+5. **Confirmation**: Waits for the transaction to be confirmed on-chain
+
+### Breaking Down the Parameters
 
 ```typescript
-import { WsClient } from 'lighter-ts-sdk';
+marketIndex: 0              // Which market? 0 = ETH/USD
+baseAmount: 10000           // How much? 0.01 ETH
+isAsk: false               // Buy or sell? false = BUY, true = SELL
+orderType: OrderType.MARKET // What type? MARKET = execute immediately
+```
 
-const wsClient = new WsClient({
-  url: 'wss://mainnet.zklighter.elliot.ai/ws',
-  accountIndex: 123,
-  apiKeyIndex: 0,
-  privateKey: 'your-api-key-private-key'
-});
+### Understanding Units
 
-await wsClient.connect();
+Lighter uses fixed decimal scaling:
+- **Amounts**: 1 ETH = 1,000,000 units
+  - 10,000 = 0.01 ETH
+  - 100,000 = 0.1 ETH
+  - 1,000,000 = 1 ETH
+  
+- **Prices**: $1 = 100 units
+  - 400,000 = $4,000
+  - 390,000 = $3,900
+  - 410,000 = $4,100
 
-// Subscribe to order book updates
-wsClient.subscribeOrderBook(0, (data) => {
-  console.log('Order book update:', data);
-});
+### Understanding Stop-Loss and Take-Profit
 
-// Subscribe to account updates
-wsClient.subscribeAccount((data) => {
-  console.log('Account update:', data);
+When you set:
+```typescript
+stopLoss: { triggerPrice: 380000 }
+takeProfit: { triggerPrice: 420000 }
+```
+
+Here's what happens:
+- Your market order executes at ~$4000
+- If price drops to $3800 → Stop-loss triggers (closes position)
+- If price rises to $4200 → Take-profit triggers (closes position)
+
+**Both SL and TP are automatically set to "reduce-only"** - they only close positions, never open new ones.
+
+**Note**: For TWAP orders, which execute gradually over time, SL/TP cannot be created in the same batch. Create SL/TP separately after the TWAP begins executing.
+
+## Common Operations
+
+### Create a Limit Order
+
+Instead of executing immediately, wait for the right price:
+
+```typescript
+const result = await signerClient.createUnifiedOrder({
+  marketIndex: 0,
+  clientOrderIndex: Date.now(),
+  baseAmount: 10000,
+  price: 390000,           // LIMIT: Wait for $3900
+  isAsk: false,
+  orderType: OrderType.LIMIT,
+  orderExpiry: Date.now() + (60 * 60 * 1000) // Expires in 1 hour
 });
 ```
 
-## Troubleshooting
+**Difference from market order**:
+- Market: Executes immediately at market price
+- Limit: Executes only if price reaches your limit price
 
-### Common Issues
+### Cancel an Order
 
-1. **"WASM functions not properly registered"**
-   - The standalone signer auto-resolves WASM paths
-   - Ensure you're using the latest version of the SDK
+```typescript
+const [tx, hash, error] = await signerClient.cancelOrder({
+  marketIndex: 0,
+  orderIndex: 12345  // Your order's index
+});
 
-2. **"Invalid signature" errors**
-   - Verify your API key private key is correct
-   - Check that account index and API key index match your setup
+if (error) {
+  console.error('Cancel failed:', error);
+  return;
+}
 
-3. **"Account not found" errors**
-   - Ensure you have deposited USDC to create an account
-   - Verify your account index is correct
+await signerClient.waitForTransaction(hash);
+console.log('✅ Order cancelled');
+```
 
-4. **Network errors**
-   - Check your internet connection
-   - Verify the API URL is correct
-   - Ensure you're using the correct network (mainnet vs testnet)
+### Close a Position
 
-### Getting Help
+```typescript
+// Create a market order in opposite direction with reduceOnly
+const [tx, hash, error] = await signerClient.createMarketOrder({
+  marketIndex: 0,
+  clientOrderIndex: Date.now(),
+  baseAmount: 10000,      // Position size to close
+  avgExecutionPrice: 400000,
+  isAsk: false,           // Opposite of your position
+  reduceOnly: true        // IMPORTANT: Only closes, doesn't open
+});
 
-- Check the [API documentation](docs/)
-- Review the [examples](examples/)
-- Join our [Discord community](https://discord.gg/lighter)
-- Visit our [documentation site](https://docs.lighter.xyz)
+await signerClient.waitForTransaction(hash);
+console.log('✅ Position closed');
+```
+
+### Check Your Orders
+
+```typescript
+const apiClient = new ApiClient({ host: process.env.BASE_URL });
+const orderApi = new OrderApi(apiClient);
+
+// Get your active orders
+const orders = await orderApi.getAccountActiveOrders(
+  parseInt(process.env.ACCOUNT_INDEX!),
+  0  // Market 0
+);
+
+console.log(`You have ${orders.length} active orders:`);
+orders.forEach(order => {
+  console.log(`- Order ${order.id}: ${order.side} ${order.size} @ ${order.price}`);
+});
+```
+
+## Error Handling Best Practices
+
+### Always Check for Errors
+
+```typescript
+// Method 1: Check result object
+const result = await signerClient.createUnifiedOrder(params);
+if (!result.success) {
+  console.error('Failed:', result.mainOrder.error);
+  return;
+}
+
+// Method 2: Check error field
+const [tx, hash, error] = await signerClient.createOrder(params);
+if (error) {
+  console.error('Failed:', error);
+  return;
+}
+
+// Method 3: Try-catch for unexpected errors
+try {
+  await signerClient.waitForTransaction(hash);
+} catch (error) {
+  console.error('Transaction failed:', error.message);
+}
+```
+
+### Common Errors and How to Fix Them
+
+**"Invalid nonce"**
+- **Meaning**: Nonce cache is out of sync
+- **Fix**: SDK auto-retries once, if it persists, restart your app
+
+**"Transaction not found"**
+- **Meaning**: Transaction is still pending
+- **Fix**: Keep waiting (SDK polls automatically)
+
+**"Invalid reduce only direction"**
+- **Meaning**: Trying to create reduce-only order without position
+- **Fix**: For limit orders, don't create SL/TP until order fills
+
+**"Order expired"**
+- **Meaning**: Order didn't execute before expiry
+- **Fix**: Use longer expiry times or market orders
 
 ## Next Steps
 
-- Explore the [API documentation](docs/) for detailed method information
-- Check out the [examples](examples/) for more complex use cases
-- Learn about [WebSocket integration](docs/WsClient.md) for real-time data
-- Review the [type definitions](docs/types/) for TypeScript support
+### Try the Examples
+
+All examples are in the `examples/` directory:
+
+```bash
+# Start with these
+npx ts-node examples/create_market_order.ts
+npx ts-node examples/create_limit_order.ts
+
+# Then try these
+npx ts-node examples/cancel_order.ts
+npx ts-node examples/close_position.ts
+```
+
+### Read the Full Documentation
+
+- **README.md** - Overview and quick start
+- **examples/README.md** - Detailed examples guide
+- **docs/SignerClient.md** - Complete API reference
+- **docs/OrderApi.md** - Market data methods
+
+### Build Your Trading Bot
+
+Once you understand the basics:
+1. Read market data
+2. Analyze conditions
+3. Create orders
+4. Monitor positions
+5. Manage risk with SL/TP
+
+## Security Checklist
+
+Before going live:
+
+- [ ] Never commit `.env` files
+- [ ] Test with small amounts first
+- [ ] Use environment variables for all credentials
+- [ ] Handle all errors properly
+- [ ] Monitor all transactions
+- [ ] Close resources when done
+- [ ] Test thoroughly on testnet first
+
+## Getting Help
+
+- Check the examples in `examples/` directory
+- Read error messages carefully - they're informative
+- Review the API documentation in `docs/`
+- Test with the system setup example first
+
+## Happy Trading! 🚀
+
+You now have everything you need to start trading on Lighter Protocol. Start with the examples, experiment with the parameters, and build your own trading strategies!

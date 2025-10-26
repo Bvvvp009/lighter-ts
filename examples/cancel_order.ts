@@ -7,10 +7,6 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-function trimException(e: Error): string {
-  return e.message.trim().split('\n').pop() || 'Unknown error';
-}
-
 async function getAuthToken(signerClient: SignerClient, expiryInSeconds: number = 3600): Promise<string> {
   const auth = await signerClient.createAuthTokenWithExpiry(expiryInSeconds);
   return auth;
@@ -18,7 +14,7 @@ async function getAuthToken(signerClient: SignerClient, expiryInSeconds: number 
 
 async function cancelOrder() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "52548");
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   const MARKET_INDEX = parseInt(process.env['MARKET_INDEX'] || '0');
@@ -92,13 +88,13 @@ async function cancelOrder() {
       await signerClient.waitForTransaction(txHash, 30000, 2000);
       console.log('✅ Order canceled successfully');
     } catch (waitError) {
-      console.error(`❌ Cancel confirmation failed: ${trimException(waitError as Error)}`);
+      console.error(`❌ Cancel confirmation failed:`, waitError);
     }
 
     console.log('\n🎉 Order cancelation complete!');
     await apiClient.close();
   } catch (error) {
-    console.error(`❌ Error: ${trimException(error as Error)}`);
+    console.error(`❌ Error:`, error);
     await apiClient.close();
   }
 }

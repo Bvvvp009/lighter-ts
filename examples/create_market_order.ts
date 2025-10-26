@@ -18,7 +18,7 @@ async function getAuthToken(signerClient: SignerClient, expiryInSeconds: number 
 
 async function createMarketOrderExample() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "52548");
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   const MARKET_ID = parseInt(process.env['MARKET_ID'] || '0');
@@ -42,8 +42,8 @@ async function createMarketOrderExample() {
     const result = await signerClient.createUnifiedOrder({
       marketIndex: MARKET_ID,
       clientOrderIndex: CLIENT_ORDER_INDEX,
-      baseAmount: 10000, // 0.01 ETH
-      idealPrice: 394000, // Current market price
+      baseAmount: 10, // 0.01 ETH
+      idealPrice: 406773, // Current market price
       maxSlippage: 0.001, // 0.1% max slippage (default if not specified)
       isAsk: false, //BUY
       orderType: OrderType.MARKET,
@@ -52,7 +52,7 @@ async function createMarketOrderExample() {
         isLimit: false
       },
       takeProfit: {
-        triggerPrice: Math.round(400000),
+        triggerPrice: Math.round(430000),
         isLimit: false
       }
     });

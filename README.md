@@ -1,182 +1,404 @@
-# Lighter Protocol TypeScript SDK
+# Lighter Protocol TypeScript SDK (Unofficial)
 
-TypeScript SDK for Lighter Protocol - Trade perpetuals with efficiency and fairness.
+> **⚠️ Disclaimer**: This is an **unofficial** TypeScript SDK for Lighter Protocol, built by the community. It is not officially maintained by the Lighter Protocol team.
 
-## Installation
+A complete TypeScript SDK for Lighter Protocol - trade perpetual futures with built-in stop-loss and take-profit orders, position management, and comprehensive error handling.
 
-```sh
+## 📦 Installation
+
+```bash
+npm install lighter-ts-sdk
+# or
+yarn add lighter-ts-sdk
+```
+
+## 🚀 What Does This SDK Do?
+
+The Lighter TypeScript SDK provides everything you need to:
+- **Trade perpetual futures** on Lighter Protocol
+- **Create orders** (Market, Limit, TWAP) with automatic SL/TP
+- **Manage positions** (open, close, update leverage)
+- **Transfer funds** between accounts
+- **Monitor transactions** with built-in status tracking
+- **Handle errors** automatically with retry logic
+
+## 🎯 Getting Started
+
+### Step 1: Set Up Your Environment
+
+Create a `.env` file in your project root:
+
+```bash
+# Required credentials
+API_PRIVATE_KEY=your_private_key_here
+ACCOUNT_INDEX=0
+API_KEY_INDEX=0
+BASE_URL=https://mainnet.zklighter.elliot.ai
+
+# Optional: for specific examples
+MARKET_ID=0
+SUB_ACCOUNT_INDEX=1
+DEPOSIT_AMOUNT=1
+```
+
+### Step 2: Install the SDK
+
+```bash
 npm install lighter-ts-sdk
 ```
 
-## Quick Start
+### Step 3: Your First Trade
 
 ```typescript
-import { SignerClient, ApiClient } from 'lighter-ts-sdk';
+import { SignerClient, OrderType } from 'lighter-ts-sdk';
+import dotenv from 'dotenv';
 
-// Initialize client
-const signerClient = new SignerClient({
-  url: 'https://mainnet.zklighter.elliot.ai',
-  privateKey: 'your-private-key',
-  accountIndex: 0,
-  apiKeyIndex: 0
-});
+dotenv.config();
 
-await signerClient.initialize();
-```
-
-## Examples
-
-### Create Market Order
-
-```typescript
-import { SignerClient, getDefaultClients, OrderType } from 'lighter-ts-sdk';
-
-async function createMarketOrder() {
-  const { signerClient } = await getDefaultClients();
-  
-  const [orderInfo, txHash, error] = await signerClient.createMarketOrder({
-    marketIndex: 0,
-    clientOrderIndex: 12345,
-    baseAmount: 1000, // 0.1 ETH
-    avgExecutionPrice: 3000,
-    isAsk: false // Buy order
+async function placeOrder() {
+  // Initialize the client
+  const signerClient = new SignerClient({
+    url: process.env.BASE_URL!,
+    privateKey: process.env.API_PRIVATE_KEY!,
+    accountIndex: parseInt(process.env.ACCOUNT_INDEX!),
+    apiKeyIndex: parseInt(process.env.API_KEY_INDEX!)
   });
-  
-  if (error) {
-    console.error('Order failed:', error);
-    return;
-  }
-  
-  console.log('Order created:', txHash);
-}
 
-createMarketOrder().catch(console.error);
-```
+  // Initialize WASM signer (required)
+  await signerClient.initialize();
+  await signerClient.ensureWasmClient();
 
-### Create Limit Order with Stop-Loss
-
-```typescript
-import { SignerClient, getDefaultClients, OrderType } from 'lighter-ts-sdk';
-
-async function createLimitOrderWithSL() {
-  const { signerClient } = await getDefaultClients();
-  
+  // Create a market order with SL/TP
   const result = await signerClient.createUnifiedOrder({
-    marketIndex: 0,
-    clientOrderIndex: 12345,
-    baseAmount: 1000,
-    price: 3000,
-    isAsk: false,
-    orderType: OrderType.LIMIT,
+    marketIndex: 0,              // ETH market
+    clientOrderIndex: Date.now(), // Unique ID
+    baseAmount: 10000,           // 0.01 ETH (scaled: 1 ETH = 1,000,000)
+    isAsk: false,                // BUY (true = SELL)
+    orderType: OrderType.MARKET,
+    
+    // Slip page protection
+    idealPrice: 400000,           // Ideal price ($4000)
+    maxSlippage: 0.001,           // Max 0.1% slippage
+    
+    // Automatic stop-loss and take-profit
     stopLoss: {
-      triggerPrice: 2900,
-      isLimit: true
+      triggerPrice: 380000,       // Stop loss at $3800
+      isLimit: false              // Market SL
     },
     takeProfit: {
-      triggerPrice: 3100,
-      isLimit: true
+      triggerPrice: 420000,       // Take profit at $4200
+      isLimit: false              // Market TP
     }
   });
+
+  // Check if order succeeded
+  if (!result.success) {
+    console.error('❌ Order failed:', result.mainOrder.error);
+    return;
+  }
+
+  console.log('✅ Order created!');
+  console.log('Main order hash:', result.mainOrder.hash);
+  console.log('SL order hash:', result.stopLoss?.hash);
+  console.log('TP order hash:', result.takeProfit?.hash);
+
+  // Wait for transaction confirmation
+  await signerClient.waitForTransaction(result.mainOrder.hash, 30000);
   
-  console.log('Orders created:', result.hashes);
+  await signerClient.close();
 }
 
-createLimitOrderWithSL().catch(console.error);
+placeOrder().catch(console.error);
 ```
 
-## API Reference
+## 📚 Core Concepts
 
-### Core Methods
+### Understanding Price Units
 
-```typescript
-// Order Management
-await signerClient.createOrder(params)           // Create limit/market order
-await signerClient.createMarketOrder(params)     // Create market order
-await signerClient.createUnifiedOrder(params)    // Create order with SL/TP
-await signerClient.cancelOrder(params)           // Cancel specific order
-await signerClient.cancelAllOrders(0, 0)         // Cancel all orders
-
-// Account Management
-await signerClient.createSubAccount()            // Create subaccount
-await signerClient.getSubAccounts()              // Get subaccount list
-await signerClient.isSubAccount(index)           // Check if subaccount
-await signerClient.transfer(toAccount, amount)   // Transfer between accounts
-await signerClient.withdraw(amount)              // Withdraw to L1
-
-// Position Management
-await signerClient.closePosition(marketIndex)    // Close specific position
-await signerClient.closeAllPositions()           // Close all positions
-await signerClient.updateLeverage(market, mode, fraction) // Update leverage
-```
-
-### Configuration
+Lighter uses fixed decimal scaling:
+- **ETH amounts**: 1 ETH = 1,000,000 units
+- **Prices**: $1 = 100 units
 
 ```typescript
-interface SignerConfig {
-  url: string;           // Lighter Protocol API URL
-  privateKey: string;    // Private key for signing
-  accountIndex: number;  // Account index (0 for master)
-  apiKeyIndex: number;   // API key index
-}
+// To buy 0.01 ETH at $4000:
+baseAmount: 10000        // 0.01 ETH (10,000 / 1,000,000)
+price: 400000           // $4000 (400,000 / 100)
 ```
 
 ### Order Types
 
 ```typescript
-// Order Types
-orderType: OrderType.LIMIT    // 0
-orderType: OrderType.MARKET   // 1
-orderType: OrderType.TWAP     // 6
-
-// Time in Force
-timeInForce: TimeInForce.GOOD_TILL_TIME        // 1 (GTC)
-timeInForce: TimeInForce.IMMEDIATE_OR_CANCEL   // 0 (IOC)
-timeInForce: TimeInForce.POST_ONLY            // 2 (Post Only)
+OrderType.MARKET    // Executes immediately at market price
+OrderType.LIMIT     // Executes at your specified price
+OrderType.TWAP      // Executes gradually over time
 ```
 
-## Examples
-
-Run the examples in the `examples/` directory:
-
-```bash
-# Set environment variables
-export LIGHTER_URL="https://mainnet.zklighter.elliot.ai"
-export PRIVATE_KEY="your-private-key"
-export ACCOUNT_INDEX="0"
-export API_KEY_INDEX="0"
-
-# Run examples
-npm run example:market-order
-npm run example:limit-order
-npm run example:unified-order
-```
-
-## Environment Variables
-
-```bash
-LIGHTER_URL=https://mainnet.zklighter.elliot.ai
-PRIVATE_KEY=your-private-key
-ACCOUNT_INDEX=0
-API_KEY_INDEX=0
-```
-
-## Browser Support
-
-The SDK supports both Node.js and browser environments. For browser usage:
+### Direction (isAsk)
 
 ```typescript
-import { SignerClient } from 'lighter-ts-sdk';
+isAsk: false  // BUY - You're buying ETH
+isAsk: true   // SELL - You're selling ETH
+```
 
-const signerClient = new SignerClient({
-  url: 'https://mainnet.zklighter.elliot.ai',
-  privateKey: 'your-private-key',
-  accountIndex: 0,
-  apiKeyIndex: 0
+### Stop-Loss and Take-Profit
+
+SL/TP orders are **automatically reduce-only** - they only close positions:
+
+```typescript
+stopLoss: {
+  triggerPrice: 380000,  // When price hits this, close position
+  isLimit: false         // false = market SL, true = limit SL
+},
+takeProfit: {
+  triggerPrice: 420000,  // When price hits this, take profit
+  isLimit: false         // false = market TP, true = limit TP
+}
+```
+
+**Important**: SL/TP orders require an existing position. For Market orders, this works immediately. For Limit orders, SL/TP are created in the same batch.
+
+**Note for TWAP orders**: TWAP orders execute over time, creating positions gradually. SL/TP cannot be created in the same batch as TWAP orders. You should create SL/TP orders separately after the TWAP has started creating positions.
+
+## 🔧 Common Operations
+
+### Create a Market Order
+
+```typescript
+const result = await signerClient.createUnifiedOrder({
+  marketIndex: 0,
+  clientOrderIndex: Date.now(),
+  baseAmount: 10000,        // Amount (0.01 ETH)
+  idealPrice: 400000,       // Your target price ($4000)
+  maxSlippage: 0.001,       // 0.1% max slippage
+  isAsk: false,             // BUY
+  orderType: OrderType.MARKET
 });
 
-await signerClient.initialize();
-// Ready to use in browser
+if (!result.success) {
+  console.error('Failed:', result.mainOrder.error);
+  return;
+}
 ```
+
+### Create a Limit Order
+
+```typescript
+const result = await signerClient.createUnifiedOrder({
+  marketIndex: 0,
+  clientOrderIndex: Date.now(),
+  baseAmount: 10000,        // Amount (0.01 ETH)
+  price: 400000,            // Limit price ($4000)
+  isAsk: false,             // BUY
+  orderType: OrderType.LIMIT,
+  orderExpiry: Date.now() + (60 * 60 * 1000) // Expires in 1 hour
+});
+
+// Wait for it to fill
+if (result.success) {
+  await signerClient.waitForTransaction(result.mainOrder.hash);
+}
+```
+
+### Cancel an Order
+
+```typescript
+const [tx, hash, error] = await signerClient.cancelOrder({
+  marketIndex: 0,
+  orderIndex: 12345  // Your order's index
+});
+
+if (error) {
+  console.error('Cancel failed:', error);
+  return;
+}
+
+await signerClient.waitForTransaction(hash);
+console.log('✅ Order cancelled');
+```
+
+### Close a Position
+
+```typescript
+const [tx, hash, error] = await signerClient.createMarketOrder({
+  marketIndex: 0,
+  clientOrderIndex: Date.now(),
+  baseAmount: 10000,        // Position size to close
+  avgExecutionPrice: 400000,
+  isAsk: false,              // Opposite of position
+  reduceOnly: true          // IMPORTANT: Only closes, doesn't open new
+});
+
+if (error) {
+  console.error('Close failed:', error);
+  return;
+}
+
+await signerClient.waitForTransaction(hash);
+console.log('✅ Position closed');
+```
+
+### Check Order Status
+
+```typescript
+const status = await signerClient.getTransaction(txHash);
+console.log('Status:', status.status); // 0=pending, 1=queued, 2=committed, 3=executed
+```
+
+## 🛠️ API Reference
+
+### SignerClient Methods
+
+#### Order Management
+```typescript
+// Create a unified order (main order + SL/TP)
+createUnifiedOrder(params) -> Promise<UnifiedOrderResult>
+
+// Create a single order
+createOrder(params) -> Promise<[txInfo, txHash, error]>
+
+// Cancel a specific order
+cancelOrder(params) -> Promise<[txInfo, txHash, error]>
+
+// Cancel all orders
+cancelAllOrders(timeInForce, time) -> Promise<[txInfo, txHash, error]>
+```
+
+#### Position Management
+```typescript
+// Close specific position
+createMarketOrder({ reduceOnly: true }) -> Promise<[txInfo, txHash, error]>
+
+// Close all positions
+closeAllPositions() -> Promise<[txs[], responses[], errors[]]>
+```
+
+#### Transaction Monitoring
+```typescript
+// Get transaction details
+getTransaction(txHash) -> Promise<Transaction>
+
+// Wait for transaction (with timeout)
+waitForTransaction(txHash, maxWaitTime, pollInterval) -> Promise<Transaction>
+```
+
+### Order Parameters
+
+```typescript
+interface UnifiedOrderParams {
+  marketIndex: number;           // Market ID (0 = ETH)
+  clientOrderIndex: number;       // Unique ID (use Date.now())
+  baseAmount: number;             // Amount in units (1 ETH = 1,000,000)
+  isAsk: boolean;                 // true = SELL, false = BUY
+  orderType: OrderType;           // MARKET, LIMIT, or TWAP
+  
+  // For market orders
+  idealPrice?: number;            // Target price
+  maxSlippage?: number;           // Max slippage (e.g., 0.001 = 0.1%)
+  
+  // For limit orders
+  price?: number;                 // Limit price
+  
+  // Optional SL/TP (automatically reduce-only)
+  stopLoss?: {
+    triggerPrice: number;
+    isLimit?: boolean;
+  };
+  takeProfit?: {
+    triggerPrice: number;
+    isLimit?: boolean;
+  };
+  
+  // Optional
+  orderExpiry?: number;           // Expiry timestamp (milliseconds)
+}
+```
+
+## 💡 Tips for Beginners
+
+### 1. Always Use Environment Variables
+
+```typescript
+// ❌ DON'T hardcode credentials
+const privateKey = '0xabc123...';
+
+// ✅ DO use environment variables
+const privateKey = process.env.API_PRIVATE_KEY;
+```
+
+### 2. Handle Errors Properly
+
+```typescript
+try {
+  const result = await signerClient.createUnifiedOrder(params);
+  
+  if (!result.success) {
+    console.error('Order failed:', result.mainOrder.error);
+    return; // Exit early
+  }
+  
+  // Success path
+  console.log('Order created:', result.mainOrder.hash);
+} catch (error) {
+  console.error('Unexpected error:', error);
+}
+```
+
+### 3. Check Transaction Status
+
+```typescript
+// Wait for transaction to be confirmed
+try {
+  await signerClient.waitForTransaction(txHash, 30000, 2000);
+  console.log('✅ Transaction confirmed');
+} catch (error) {
+  console.error('❌ Transaction failed:', error.message);
+}
+```
+
+### 4. Close Resources
+
+```typescript
+try {
+  // ... use signerClient
+} finally {
+  await signerClient.close(); // Always close when done
+}
+```
+
+## 📖 Examples
+
+The `examples/` directory contains working examples for every feature:
+
+```bash
+# Run examples
+npx ts-node examples/create_market_order.ts   # Market order with SL/TP
+npx ts-node examples/create_limit_order.ts     # Limit order with SL/TP
+npx ts-node examples/cancel_order.ts           # Cancel orders
+npx ts-node examples/close_position.ts         # Close positions
+npx ts-node examples/deposit_to_subaccount.ts  # Fund transfers
+```
+
+## 🎓 Learning Path
+
+1. **Start Here**: `examples/create_market_order.ts` - Simplest order creation
+2. **Next**: `examples/create_limit_order.ts` - Learn about limit orders
+3. **Then**: `examples/cancel_order.ts` - Learn about order management
+4. **Advanced**: `examples/send_tx_batch.ts` - Batch transactions
+
+## 🔒 Security
+
+- ✅ Never commit `.env` files
+- ✅ Use environment variables for all credentials
+- ✅ Test with small amounts first
+- ✅ Monitor all transactions
+- ✅ Use proper error handling
+
+## 📞 Getting Help
+
+- Check the examples in `examples/` directory
+- Read error messages carefully - they're informative
+- Ensure environment variables are set correctly
+- Start with `examples/create_market_order.ts`
 
 ## License
 

@@ -7,14 +7,10 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-function trimException(e: Error): string {
-  return e.message.trim().split('\n').pop() || 'Unknown error';
-}
-
 async function createWithMultipleKeys() {
   const API_KEY_1 = process.env['API_KEY_1'] || '';
   const API_KEY_2 = process.env['API_KEY_2'] || '';
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "52548");
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
   const configurations = [
@@ -60,7 +56,7 @@ async function createWithMultipleKeys() {
         clientOrderIndex: Date.now(),
         baseAmount,
         price,
-        isAsk: false,
+        isAsk: false, // Buy
         orderType: OrderType.LIMIT
       });
 
@@ -85,7 +81,7 @@ async function createWithMultipleKeys() {
         await signerClient.waitForTransaction(result.mainOrder.hash, 30000, 2000);
         console.log(`✅ ${config.name} order confirmed`);
       } catch (waitError) {
-        console.error(`❌ ${config.name} confirmation failed: ${trimException(waitError as Error)}`);
+        console.error(`❌ ${config.name} confirmation failed:`, waitError);
       }
 
       await signerClient.close();
@@ -94,7 +90,7 @@ async function createWithMultipleKeys() {
     
     console.log(`\n🎉 All orders created successfully!\n`);
   } catch (error) {
-    console.error(`❌ Error: ${trimException(error as Error)}`);
+    console.error(`❌ Error:`, error);
   }
 }
 
