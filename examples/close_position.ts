@@ -11,7 +11,7 @@ async function closePosition() {
   console.log('🚀 Closing Position...\n');
 
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "52548");
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   
@@ -50,7 +50,7 @@ async function closePosition() {
     if (error) {
       console.error('❌ Failed to close position:', error);
       return;
-    }
+    } 
 
     if (!txHash || txHash === '') {
       console.error('❌ No transaction hash returned');

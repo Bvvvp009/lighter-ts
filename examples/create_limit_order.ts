@@ -13,7 +13,7 @@ function trimException(e: Error): string {
 
 async function createLimitOrderWithSLTP() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "100");
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "1");
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
@@ -38,16 +38,16 @@ async function createLimitOrderWithSLTP() {
     marketIndex: 0,
     clientOrderIndex: Date.now(),
     baseAmount: market.amountToUnits(0.01),
-    price: market.priceToUnits(4100),
-    isAsk: true, // SELL
+    price: market.priceToUnits(4050),
+    isAsk: false, // Buy
     orderType: OrderType.LIMIT,
     orderExpiry: Date.now() + (60 * 60 * 1000),
     stopLoss: {
-      triggerPrice: market.priceToUnits(4200),
+      triggerPrice: market.priceToUnits(4000),
       isLimit: false
     },
     takeProfit: {
-      triggerPrice: market.priceToUnits(3800),
+      triggerPrice: market.priceToUnits(4100),
       isLimit: false
     }
   };

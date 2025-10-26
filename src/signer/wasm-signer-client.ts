@@ -1164,8 +1164,12 @@ export class SignerClient {
       }
 
       // Check if SL/TP should be created (only if triggerPrice > 0)
-      const shouldCreateSL = params.stopLoss && params.stopLoss.triggerPrice > 0;
-      const shouldCreateTP = params.takeProfit && params.takeProfit.triggerPrice > 0;
+      // Note: TWAP orders execute over time, creating positions gradually
+      // SL/TP in the same batch would execute before positions exist
+      // For now, only create SL/TP for LIMIT and MARKET orders
+      const isTWAPOrder = params.orderType === OrderType.TWAP;
+      const shouldCreateSL = !isTWAPOrder && params.stopLoss && params.stopLoss.triggerPrice > 0;
+      const shouldCreateTP = !isTWAPOrder && params.takeProfit && params.takeProfit.triggerPrice > 0;
       
       // Get nonces for all orders in the batch
       const orderCount = 1 + (shouldCreateSL ? 1 : 0) + (shouldCreateTP ? 1 : 0);
@@ -1271,7 +1275,8 @@ export class SignerClient {
         const slIsAsk = !params.isAsk; // Opposite direction for SL
         
         // Use WASM signer directly for SL order
-        // SL/TP orders are ALWAYS reduce-only since they close positions created by the main order
+        // SL/TP orders MUST be reduce-only to close positions created by the main order
+        // When the parent order creates a position, SL/TP will trigger to close it
         const slOrderParams = {
           marketIndex: params.marketIndex,
           clientOrderIndex: params.clientOrderIndex + 1, // SL uses mainOrderIndex + 1
@@ -1280,7 +1285,7 @@ export class SignerClient {
           isAsk: slIsAsk ? 1 : 0,
           orderType: sl.isLimit ? SignerClient.ORDER_TYPE_STOP_LOSS_LIMIT : SignerClient.ORDER_TYPE_STOP_LOSS,
           timeInForce: sl.isLimit ? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
-          reduceOnly: 1, // SL orders MUST be reduce-only to close the position
+          reduceOnly: 1, // SL/TP are ALWAYS reduce-only to close the position
           triggerPrice: sl.triggerPrice,
           orderExpiry: Date.now() + (28 * 24 * 60 * 60 * 1000), // 28 days from now in milliseconds
           nonce: nonces[1]!
@@ -1303,7 +1308,8 @@ export class SignerClient {
         const tpIsAsk = !params.isAsk; // Opposite direction for TP
         
         // Use WASM signer directly for TP order
-        // SL/TP orders are ALWAYS reduce-only since they close positions created by the main order
+        // SL/TP orders MUST be reduce-only to close positions created by the main order
+        // When the parent order creates a position, SL/TP will trigger to close it
         const tpOrderParams = {
           marketIndex: params.marketIndex,
           clientOrderIndex: params.clientOrderIndex + (shouldCreateSL ? 2 : 1), // TP uses mainOrderIndex + 2 (or +1 if no SL)
@@ -1312,7 +1318,7 @@ export class SignerClient {
           isAsk: tpIsAsk ? 1 : 0,
           orderType: tp.isLimit ? SignerClient.ORDER_TYPE_TAKE_PROFIT_LIMIT : SignerClient.ORDER_TYPE_TAKE_PROFIT,
           timeInForce: tp.isLimit ? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
-          reduceOnly: 1, // TP orders MUST be reduce-only to close the position
+          reduceOnly: 1, // SL/TP are ALWAYS reduce-only to close the position
           triggerPrice: tp.triggerPrice,
           orderExpiry: Date.now() + (28 * 24 * 60 * 60 * 1000), // 28 days from now in milliseconds
           nonce: nonces[shouldCreateSL ? 2 : 1]!
@@ -1876,7 +1882,7 @@ export class SignerClient {
       // The response might be wrapped - extract the actual account
       let account;
       if ((response as any).accounts && Array.isArray((response as any).accounts)) {
-        // Response format: { accounts: [{ index: 52548, ... }] }
+        // Response format: { accounts: [{ index: 1000, ... }] }
         account = (response as any).accounts[0];
       } else if ((response as any).data) {
         account = (response as any).data;

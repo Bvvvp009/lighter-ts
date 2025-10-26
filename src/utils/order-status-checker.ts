@@ -1,8 +1,8 @@
 /**
  * Order Status Checker - Verifies actual order execution
  * 
- * Matches Python SDK pattern of checking order status after submission
- * rather than just checking transaction status
+ * Checks order status by querying active and inactive orders from the Order API
+ * Provides comprehensive status information with human-readable cancel reasons
  */
 
 import { OrderApi } from '../api/order-api';
@@ -61,16 +61,16 @@ export async function checkOrderStatus(
     const activeOrders = await orderApi.getAccountActiveOrders(accountIndex, marketId, auth);
     
     for (const order of activeOrders) {
-      const orderClientIndex = (order.client_order_id || order.id).toString();
+      const orderClientIndex = order.client_order_index?.toString() || order.client_order_id || order.id;
       const targetIndex = clientOrderIndex.toString();
       
       if (orderClientIndex === targetIndex || order.id === targetIndex) {
         return {
           found: true,
-          status: order.status,
+          status: order.status || 'active',
           reason: getCancelReason(order.status || 'active'),
-          remainingAmount: order.remaining_size,
-          filledAmount: order.filled_size,
+          remainingAmount: order.remaining_base_amount || order.remaining_size || '0',
+          filledAmount: order.filled_base_amount || order.filled_size || '0',
           order
         };
       }
@@ -84,16 +84,16 @@ export async function checkOrderStatus(
     const inactiveOrders = await orderApi.getAccountInactiveOrders(accountIndex, 20, auth, marketId);
     
     for (const order of inactiveOrders) {
-      const orderClientIndex = (order.client_order_id || order.id).toString();
+      const orderClientIndex = order.client_order_index?.toString() || order.client_order_id || order.id;
       const targetIndex = clientOrderIndex.toString();
       
       if (orderClientIndex === targetIndex || order.id === targetIndex) {
         return {
           found: true,
-          status: order.status,
+          status: order.status || 'unknown',
           reason: getCancelReason(order.status || 'unknown'),
-          filledAmount: order.filled_size,
-          remainingAmount: order.remaining_size,
+          filledAmount: order.filled_base_amount || order.filled_size || '0',
+          remainingAmount: order.remaining_base_amount || order.remaining_size || '0',
           order
         };
       }

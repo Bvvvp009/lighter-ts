@@ -1,8 +1,30 @@
 # Lighter TypeScript SDK Examples
 
-This directory contains professional, production-ready examples demonstrating all major features of the Lighter TypeScript SDK.
+Complete, working examples for trading on Lighter Protocol. Each example is production-ready with comprehensive error handling, status monitoring, and detailed logging.
 
-## 📋 Example Overview
+## 🎯 What's in This Directory?
+
+These examples show you how to use the Lighter TypeScript SDK to:
+- Place orders (Market, Limit, TWAP)
+- Set stop-loss and take-profit automatically
+- Cancel orders
+- Close positions
+- Transfer funds
+- Monitor transaction status
+
+All examples follow the same patterns, so once you understand one, you understand them all.
+
+**Example usage:**
+```typescript
+try {
+  await signerClient.createUnifiedOrder(params);
+} catch (error) {
+  console.error(`❌ Error: ${trimException(error as Error)}`);
+  // Clean, readable error message
+}
+```
+
+## �� Example Overview
 
 ### Core Trading Examples
 - **create_market_order.ts** - Create market orders with integrated SL/TP
@@ -41,8 +63,6 @@ npm install
 # Set up environment variables
 cp .env.example .env
 ```
-
-
 ### Environment Variables
 ```bash
 # Required
@@ -194,5 +214,4 @@ These examples are designed for production use with:
 - Professional logging
 - Security best practices
 - Performance optimizations
-
 Each example can be adapted for your specific use case while maintaining the professional standards demonstrated.

@@ -13,7 +13,7 @@ function trimException(e: Error): string {
 
 async function createTWAPOrderWithSLTP() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "100");
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
@@ -35,21 +35,22 @@ async function createTWAPOrderWithSLTP() {
   await market.initialize();
 
   const currentPrice = market.lastPrice || market.priceToUnits(3961.79);
+  const currentPriceInUnits = market.unitsToPrice(currentPrice);
 
   const twapOrderParams = {
     marketIndex: 0,
     clientOrderIndex: Date.now(),
     baseAmount: market.amountToUnits(0.01),
-    price: currentPrice,
+    price: currentPriceInUnits,
     isAsk: false,
     orderType: OrderType.TWAP,
     orderExpiry: Date.now() + (30 * 60 * 1000),
     stopLoss: {
-      triggerPrice: Math.round(currentPrice * 0.95),
+      triggerPrice: market.priceToUnits(currentPriceInUnits * 0.95),
       isLimit: false
     },
     takeProfit: {
-      triggerPrice: Math.round(currentPrice * 1.05),
+      triggerPrice: market.priceToUnits(currentPriceInUnits * 1.05),
       isLimit: false
     }
   };

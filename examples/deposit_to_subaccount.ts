@@ -8,13 +8,9 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-function trimException(e: Error): string {
-  return e.message.trim().split('\n').pop() || 'Unknown error';
-}
-
 async function depositToSubaccount() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "52548");
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
@@ -31,7 +27,7 @@ async function depositToSubaccount() {
   const apiClient = new ApiClient({ host: BASE_URL });
 
   const specifiedSubAccountIndex = parseInt(process.env['SUB_ACCOUNT_INDEX'] || '0');
-  const amount = parseFloat(process.env['DEPOSIT_AMOUNT'] || '1');
+  const amount = parseFloat(process.env['DEPOSIT_AMOUNT'] || '1'); 
 
   try {
     console.log('🚀 Depositing to Subaccount...\n');
@@ -90,13 +86,13 @@ async function depositToSubaccount() {
       await signerClient.waitForTransaction(txHash, 60000, 3000);
       console.log('✅ Deposit successful');
     } catch (waitError) {
-      console.error(`❌ Deposit confirmation failed: ${trimException(waitError as Error)}`);
+      console.error(`❌ Deposit confirmation failed:`, waitError);
     }
 
     console.log('\n🎉 Deposit complete!');
     await apiClient.close();
   } catch (error) {
-    console.error(`❌ Error: ${trimException(error as Error)}`);
+    console.error(`❌ Error:`, error);
     await apiClient.close();
   }
 }

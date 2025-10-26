@@ -3,14 +3,10 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-function trimException(e: Error): string {
-  return e.message.trim().split('\n').pop() || 'Unknown error';
-}
-
 async function main() {
   const BASE_URL = process.env.BASE_URL || "https://mainnet.zklighter.elliot.ai";
   const API_PRIVATE_KEY = process.env.API_PRIVATE_KEY || "";
-  const ACCOUNT_INDEX = parseInt(process.env.ACCOUNT_INDEX || "52548");
+  const ACCOUNT_INDEX = parseInt(process.env.ACCOUNT_INDEX || "1000");
   const API_KEY_INDEX = parseInt(process.env.API_KEY_INDEX || "4");
 
   const apiClient = new ApiClient({ host: BASE_URL });
@@ -28,7 +24,7 @@ async function main() {
     await signerClient.initialize();
     await signerClient.ensureWasmClient();
 
-    // Check client connection (like Python SDK)
+    // Check client connection
     const checkError = signerClient.checkClient();
     if (checkError) {
       console.error(`❌ CheckClient error: ${checkError}`);
@@ -43,7 +39,7 @@ async function main() {
     const nonces = await (signerClient as any).getNextNonces(2);
     console.log(`📋 Acquired nonces: ${nonces.join(', ')}\n`);
 
-    // Create batch transactions (like Python SDK)
+    // Create batch transactions
     const txTypes = [SignerClient.TX_TYPE_CREATE_ORDER, SignerClient.TX_TYPE_CREATE_ORDER];
     const txInfos: string[] = [];
 
@@ -71,7 +67,7 @@ async function main() {
       txInfos.push(firstTxInfo);
       console.log(`✅ First order signed successfully`);
     } catch (firstError) {
-      console.error(`❌ First order signing failed: ${trimException(firstError as Error)}`);
+      console.error(`❌ First order signing failed:`, firstError);
       await apiClient.close();
       return;
     }
@@ -96,7 +92,7 @@ async function main() {
       txInfos.push(secondTxInfo);
       console.log(`✅ Second order signed successfully`);
     } catch (secondError) {
-      console.error(`❌ Second order signing failed: ${trimException(secondError as Error)}`);
+      console.error(`❌ Second order signing failed:`, secondError);
       await apiClient.close();
       return;
     }
@@ -144,7 +140,7 @@ async function main() {
             console.log(`✅ Transaction ${i + 1} confirmed`);
             successCount++;
           } catch (waitError) {
-            console.error(`❌ Transaction ${i + 1} confirmation failed: ${trimException(waitError as Error)}`);
+            console.error(`❌ Transaction ${i + 1} confirmation failed:`, waitError);
             failureCount++;
           }
         }
@@ -157,12 +153,12 @@ async function main() {
       console.log('\n🎉 Batch transaction complete!');
       await apiClient.close();
     } catch (e) {
-      console.error(`❌ Error sending batch transaction: ${trimException(e as Error)}`);
+      console.error(`❌ Error sending batch transaction:`, e);
       await apiClient.close();
     }
 
   } catch (error) {
-    console.error(`❌ Error: ${trimException(error as Error)}`);
+    console.error(`❌ Error:`, error);
     await apiClient.close();
   }
 }

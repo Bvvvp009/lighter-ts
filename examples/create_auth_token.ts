@@ -11,9 +11,9 @@ dotenv.config();
 async function createAuthToken() {
   console.log('Creating Auth Token...');
 
-  // Use hardcoded values for testing (similar to Python SDK example)
+  // Use environment variables for configuration
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "52548");
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
