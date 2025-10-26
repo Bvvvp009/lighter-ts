@@ -3,7 +3,7 @@
  * Provides nonce management functionality that can be imported and used independently
  */
 
-import { NonceCache, NonceInfo } from './nonce-cache';
+import { NonceCache } from './nonce-cache';
 import { TransactionApi } from '../api/transaction-api';
 import { ApiClient } from '../api/api-client';
 
@@ -84,6 +84,32 @@ export class NonceManager {
    */
   isHealthy(): boolean {
     return this.nonceCache.isHealthy();
+  }
+
+  /**
+   * Acknowledge transaction failure and rollback nonce
+   * This prevents nonce gaps when transactions fail
+   */
+  acknowledgeFailure(apiKeyIndex: number): void {
+    this.nonceCache.acknowledgeFailure(apiKeyIndex);
+  }
+
+  /**
+   * Hard refresh nonce from API (used when invalid nonce error occurs)
+   */
+  async hardRefreshNonce(apiKeyIndex: number): Promise<void> {
+    await this.nonceCache.hardRefreshNonce(apiKeyIndex);
+  }
+
+  /**
+   * Check if error is nonce-related
+   */
+  isNonceError(error: any): boolean {
+    if (!error) return false;
+    const message = error.message || error.toString() || '';
+    return message.toLowerCase().includes('invalid nonce') || 
+           message.toLowerCase().includes('nonce') ||
+           (error.status === 400 && message.includes('nonce'));
   }
 
   /**

@@ -1,263 +1,198 @@
 # Lighter TypeScript SDK Examples
 
-This directory contains comprehensive examples demonstrating how to use the Lighter TypeScript SDK.
+This directory contains professional, production-ready examples demonstrating all major features of the Lighter TypeScript SDK.
 
-## Setup Instructions
+## 📋 Example Overview
 
-### Testnet Setup
-1. Go to https://testnet.app.lighter.xyz/ and connect a wallet to receive $500
-2. Run `system_setup.ts` with the correct ETH Private key configured
-   - Set an API key index which is not 0, so you won't override the one used by [app.lighter.xyz](https://app.lighter.xyz/)
-   - This will require you to enter your Ethereum private key
-   - The ETH private key will only be used in the TypeScript SDK to sign a message
-   - The ETH private key is not required in order to trade on the platform
-   - The ETH private key is not passed to the WASM binary
-   - Copy the output of the script and post it into `create_cancel_order.ts`
-   - The output should look like:
-```
-BASE_URL = 'https://testnet.zklighter.elliot.ai'
-API_KEY_PRIVATE_KEY = '0x...' # Your generated API private key
-ACCOUNT_INDEX = 595
-API_KEY_INDEX = 1
-```
-3. Start trading using:
-   - `create_cancel_order.ts` has an example which creates an order on testnet & cancels it
-   - You'll need to set up both your account index, API key index & API Key private key
-
-### Mainnet Setup
-1. Deposit money on Lighter to create an account first
-2. Change the URL to `mainnet.zklighter.elliot.ai`
-3. Repeat setup steps
-
-## Examples Overview
-
-### Basic Trading Examples
-
-#### [Create Market Order](create_market_order.ts)
-Demonstrates how to create a market order using the WASM signer.
-
-```bash
-npx ts-node examples/create_market_order.ts
-```
-
-#### [Create Limit Orders](create_limit_order.ts)
-Comprehensive example showing different types of limit orders including basic limit orders, IOC orders, and stop limit orders.
-
-```bash
-npx ts-node examples/create_limit_order.ts
-```
-
-#### [Create & Cancel Orders](create_cancel_order.ts)
-Shows how to create limit orders and cancel them.
-
-```bash
-npx ts-node examples/create_cancel_order.ts
-```
-
-#### [Create Market Order with Max Slippage](create_market_order_max_slippage.ts)
-Example of creating market orders with price protection.
-
-```bash
-npx ts-node examples/create_market_order_max_slippage.ts
-```
-
-#### [Create Stop Loss & Take Profit Orders](create_sl_tp.ts)
-Demonstrates advanced order types with trigger prices.
-
-```bash
-npx ts-node examples/create_sl_tp.ts
-```
-
-#### [Create Unified Order with SL/TP](create_unified_order_with_sl_tp.ts) ⭐ **NEW**
-**Revolutionary unified order creation with integrated SL/TP functionality!**
-
-This example demonstrates the new `createUnifiedOrder()` method that automatically handles:
-- Main order creation (limit, market, or TWAP)
-- Automatic SL/TP order creation and signing
-- Background batch transaction sending
-- Unified error handling and result reporting
-
-**Key Benefits:**
-- Single method call for complex order setups
-- Automatic SL/TP order creation and batching
-- Unified error handling and result reporting
-- Reduced complexity for developers
-- Atomic operations - all orders succeed or fail together
-
-```bash
-npx ts-node examples/create_unified_order_with_sl_tp.ts
-```
+### Core Trading Examples
+- **create_market_order.ts** - Create market orders with integrated SL/TP
+- **create_limit_order.ts** - Create limit orders with integrated SL/TP  
+- **create_twap_order.ts** - Create TWAP orders with integrated SL/TP
+- **cancel_order.ts** - Cancel specific orders
+- **cancel_all_orders.ts** - Cancel all open orders
+- **close_position.ts** - Close specific positions
+- **close_all_positions.ts** - Close all open positions
 
 ### Account Management Examples
+- **create_with_multiple_keys.ts** - Create orders using multiple API keys
+- **deposit_to_subaccount.ts** - Deposit funds to subaccounts
+- **deposit.ts** - Deposit funds to main account
+- **withdraw_to_l1.ts** - Withdraw funds to L1 (Ethereum mainnet)
 
-#### [System Setup](system_setup.ts)
-Complete setup process for creating API keys and configuring accounts.
-
-```bash
-npx ts-node examples/system_setup.ts
-```
-
-#### [Transfer & Update Leverage](transfer_update_leverage.ts)
-Shows how to transfer USDC between accounts and update leverage settings.
-
-```bash
-npx ts-node examples/transfer_update_leverage.ts
-```
-
-#### [Withdraw to Ethereum L1](withdraw.ts)
-Demonstrates how to withdraw USDC from Lighter L2 to Ethereum L1 (takes ~2 hours).
-
-```bash
-npx ts-node examples/withdraw.ts
-```
-
-#### [Check Transaction Status](check_transaction_status.ts)
-Demonstrates proper transaction status handling with detailed information about success/failure.
-
-```bash
-npx ts-node examples/check_transaction_status.ts
-```
-
-#### [Cancel All Orders](cancel_all_orders.ts)
-Cancel all open orders immediately.
-
-```bash
-npx ts-node examples/cancel_all_orders.ts
-```
-
-#### [Cancel Specific Order](cancel_order.ts)
-Cancel a specific order or the top order in a market. Supports canceling by order index or client order index.
-
-```bash
-# Cancel top order in market 0 (auto)
-npx ts-node examples/cancel_order.ts
-
-# Cancel specific order by index
-MARKET_INDEX=0 ORDER_INDEX=0 npx ts-node examples/cancel_order.ts
-
-# Cancel by client order index
-MARKET_INDEX=0 CLIENT_ORDER_INDEX=123456789 npx ts-node examples/cancel_order.ts
-```
-
-#### [Close All Positions](close_all_positions.ts)
-Close all open positions across all markets.
-
-```bash
-npx ts-node examples/close_all_positions.ts
-```
-
-#### [Close Specific Position](close_position.ts)
-Close a specific position or the top position in a market.
-
-```bash
-# Close top position in market 0 (auto)
-npx ts-node examples/close_position.ts
-
-# Close specific position by index
-MARKET_INDEX=0 POSITION_INDEX=0 npx ts-node examples/close_position.ts
-```
-
-#### [Create Orders with Multiple Keys](create_with_multiple_keys.ts)
-Demonstrates using multiple API keys for trading.
-
-```bash
-npx ts-node examples/create_with_multiple_keys.ts
-```
-
-### API Information Examples
-
-#### [Get Information](get_info.ts)
-Comprehensive example showing all available API endpoints.
-
-```bash
-npx ts-node examples/get_info.ts
-```
+### Data & System Examples
+- **market_data.ts** - Fetch market data, order books, trades, candlesticks
+- **system_setup.ts** - Complete system setup and health checks
+- **send_tx_batch.ts** - Send multiple transactions in batches
 
 ### WebSocket Examples
+- **ws.ts** - Basic WebSocket connection and data streaming
+- **ws_async.ts** - Async WebSocket operations with proper error handling
+- **ws_send_tx.ts** - Send transactions via WebSocket
+- **ws_send_batch_tx.ts** - Send batch transactions via WebSocket
+- **ws_ping_pong.ts** - Ping-pong mechanism to keep connections alive
 
-#### [WebSocket Sync](ws.ts)
-Real-time order book and account synchronization.
+## 🚀 Quick Start
 
+### Prerequisites
 ```bash
-npx ts-node examples/ws.ts
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp .env.example .env
 ```
 
-#### [WebSocket Async](ws_async.ts)
-Asynchronous WebSocket connection handling.
 
+### Environment Variables
 ```bash
-npx ts-node examples/ws_async.ts
+# Required
+LIGHTER_URL=https://mainnet.zklighter.elliot.ai
+PRIVATE_KEY=your_private_key_here
+ACCOUNT_INDEX=your_account_index
+API_KEY_INDEX=your_api_key_index
+
+# Optional (for specific examples)
+SUB_ACCOUNT_INDEX=1
+DEPOSIT_AMOUNT=0.1
+WITHDRAW_AMOUNT=0.1
+L1_ADDRESS=0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6
+ORDER_INDEX=12345
 ```
 
-#### [WebSocket Send Transaction](ws_send_tx.ts)
-Sending transactions through WebSocket connection.
-
+### Running Examples
 ```bash
-npx ts-node examples/ws_send_tx.ts
+# Run any example
+npx ts-node examples/create_market_order.ts
+
+# Run all examples (development)
+npm run examples
+
+# Run specific example category
+npx ts-node examples/create_market_order.ts
+npx ts-node examples/create_limit_order.ts
+npx ts-node examples/create_twap_order.ts
 ```
 
-#### [WebSocket Send Batch Transaction](ws_send_batch_tx.ts)
-Sending multiple transactions in a batch via WebSocket.
+## 🔧 Key Features
 
-```bash
-npx ts-node examples/ws_send_batch_tx.ts
+### WebSocket Connection Maintenance
+For long-lived WebSocket connections, use the ping-pong mechanism to prevent disconnections:
+
+```typescript
+// Basic ping-pong setup
+const pingInterval = setInterval(() => {
+  wsClient.send({ type: 'ping' });
+}, 30000); // Send ping every 30 seconds
+
+// Handle pong responses
+wsClient.onMessage = (message) => {
+  if (message.type === 'pong') {
+    console.log('Pong received - connection alive');
+  }
+};
 ```
 
-### Advanced Examples
+### Unified Order System
+All trading examples demonstrate the unified order system with integrated SL/TP:
 
-#### [Send Transaction Batch](send_tx_batch.ts)
-Batch transaction processing for improved efficiency.
-
-**Note:** For orders with SL/TP, consider using the new `createUnifiedOrder()` method which automatically handles SL/TP order creation and batch sending in the background.
-
-```bash
-npx ts-node examples/send_tx_batch.ts
+```typescript
+const orderParams: TransactionParams = {
+  marketIndex: 0,
+  clientOrderIndex: Date.now(),
+  baseAmount: 1000,
+  price: 4500,
+  isAsk: false,
+  orderType: OrderType.MARKET,
+  timeInForce: TimeInForce.IMMEDIATE_OR_CANCEL,
+  
+  // Integrated SL/TP
+  stopLoss: {
+    price: 4200, // Set your desired SL price
+    isLimit: true
+  },
+  takeProfit: {
+    price: 4800, // Set your desired TP price
+    isLimit: true
+  }
+};
 ```
 
-## Environment Variables
+### Transaction Status Monitoring
+All examples include comprehensive transaction status monitoring using the SignerClient's built-in method:
 
-Create a `.env` file in your project root:
-
-```env
-BASE_URL=https://mainnet.zklighter.elliot.ai
-PRIVATE_KEY=your-api-key-private-key
-ACCOUNT_INDEX=123
-API_KEY_INDEX=0
-ETH_PRIVATE_KEY=your-ethereum-private-key
+```typescript
+// Wait for transaction confirmation
+await signerClient.waitForTransaction(txHash, 30000, 2000);
 ```
 
-## Running Examples
+### Error Handling
+Professional error handling with detailed logging:
 
-All examples can be run using:
-
-```bash
-npx ts-node examples/[example-name].ts
+```typescript
+try {
+  const result = await signerClient.createUnifiedOrder(orderParams);
+  if (result.success) {
+    console.log('✅ Order created successfully!');
+  } else {
+    console.error('❌ Order failed:', result.mainOrder.error);
+  }
+} catch (error) {
+  console.error('❌ Error:', error);
+}
 ```
 
-Make sure you have:
-1. Installed dependencies: `npm install`
-2. Set up your `.env` file with correct credentials
-3. Built the WASM signer (if using signer examples)
+## 📊 Example Categories
 
-## Security Best Practices
+### 1. Trading Operations
+- Market, Limit, and TWAP orders with SL/TP
+- Order cancellation and position management
+- All examples include transaction monitoring
 
-**⚠️ IMPORTANT SECURITY NOTES:**
+### 2. Account Management
+- Multi-API key operations
+- Deposit and withdrawal operations
+- Subaccount management
 
-1. **Never commit `.env` file** - It contains your private keys
-2. **Never share console output** - May contain sensitive transaction data
-3. **Use environment variables** - Never hardcode private keys in code
-4. **Keep private keys secure** - Treat API private keys like passwords
-5. **Testnet first** - Always test with testnet before using mainnet
+### 3. Data & System
+- Market data fetching
+- System setup and health checks
+- Batch transactions and WebSocket operations
 
-## Error Handling
+## 🔒 Security Notes
 
-All examples include proper error handling and will display helpful error messages if something goes wrong. Common issues include:
+- Never commit private keys to version control
+- Use environment variables for sensitive data
+- Test with small amounts first
+- Monitor transaction status carefully
 
-- Invalid API credentials
-- Insufficient balance
-- Invalid order parameters
-- Network connectivity issues
+## 📈 Performance Tips
 
-## Support
+- Use batch transactions for multiple operations
+- Implement proper error handling and retry logic
+- Monitor WebSocket connections for real-time data
+- Use appropriate timeouts for different operations
 
-For questions about the examples or the SDK, please visit our [documentation](https://docs.lighter.xyz) or join our [Discord community](https://discord.gg/lighter).
+## 🆘 Troubleshooting
+
+### Common Issues
+1. **"go command not found"** - This is normal, the SDK handles WASM automatically
+2. **Order expiry errors** - Ensure proper timestamp format
+3. **WebSocket connection issues** - Check network connectivity and URL
+4. **Transaction failures** - Verify account balance and permissions
+
+### Getting Help
+- Check the main SDK documentation
+- Review error messages carefully
+- Ensure all environment variables are set correctly
+- Test with the system setup example first
+
+## 🎯 Production Usage
+
+These examples are designed for production use with:
+- Comprehensive error handling
+- Transaction status monitoring
+- Professional logging
+- Security best practices
+- Performance optimizations
+
+Each example can be adapted for your specific use case while maintaining the professional standards demonstrated.

@@ -1,67 +1,67 @@
-import { WsClient } from '../src/api/ws-client';
-import * as dotenv from 'dotenv';
+/**
+ * Example: Basic WebSocket Connection
+ * Demonstrates basic WebSocket connection and subscription to order book data
+ */
 
-dotenv.config();
+import { WsClient } from '../src';
 
-const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+async function basicWebSocketExample() {
+  console.log('🚀 Basic WebSocket Connection Example...\n');
 
-function onMessage(data: any): void {
-  console.log('WebSocket message received:', JSON.stringify(data, null, 2));
-}
-
-function onError(error: Error): void {
-  console.error('WebSocket error:', error);
-}
-
-function onOpen(): void {
-  console.log('WebSocket connected');
-}
-
-function onClose(): void {
-  console.log('WebSocket disconnected');
-}
-
-async function main(): Promise<void> {
-  const wsUrl = BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://');
-  console.log(`Connecting to WebSocket: ${wsUrl}`);
-  
-  const client = new WsClient({
-    url: wsUrl,
-    onMessage,
-    onError,
-    onOpen,
-    onClose,
+  // Initialize WebSocket client
+  const wsClient = new WsClient({
+    url: 'wss://mainnet.zklighter.elliot.ai/stream',
+    onOpen: () => console.log('✅ WebSocket connected'),
+    onMessage: (message) => {
+      console.log('📡 Received message:', JSON.stringify(message, null, 2));
+    },
+    onClose: () => console.log('🔌 WebSocket closed'),
+    onError: (error) => console.error('❌ WebSocket error:', error)
   });
 
   try {
-    await client.connect();
+    // Connect to WebSocket
+    await wsClient.connect();
     
-    // Subscribe to order book updates for market 0
-    client.subscribe({
-      channel: 'orderbook',
-      params: { marketIndex: 0 }
+    // Wait for connection to stabilize
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Subscribe to order book for ETH market (market 0)
+    wsClient.send({
+      type: 'subscribe',
+      channel: 'order_book/0'
     });
+    console.log('✅ Subscribed to order book for market 0 (ETH)');
+    
+    // Subscribe to market stats for ETH
+    wsClient.send({
+      type: 'subscribe',
+      channel: 'market_stats/0'
+    });
+    console.log('✅ Subscribed to market stats for market 0 (ETH)');
+    
+    // Subscribe to trades for ETH
+    wsClient.send({
+      type: 'subscribe',
+      channel: 'trade/0'
+    });
+    console.log('✅ Subscribed to trades for market 0 (ETH)');
 
-    // Subscribe to account updates for account 1
-    client.subscribe({
-      channel: 'account',
-      params: { accountIndex: 1 }
-    });
+    // Keep connection alive for 30 seconds
+    setTimeout(() => {
+      wsClient.disconnect();
+      console.log('\n🎉 WebSocket example completed!');
+    }, 30000);
 
-    // Keep the connection alive
-    console.log('WebSocket client running. Press Ctrl+C to exit.');
-    
-    // Keep the process alive
-    process.on('SIGINT', () => {
-      console.log('\nShutting down...');
-      client.disconnect();
-      process.exit(0);
-    });
-    
   } catch (error) {
-    console.error('Failed to connect:', error);
-    process.exit(1);
+    console.error('❌ Error:', error);
+    await wsClient.disconnect();
   }
 }
 
-main();
+// Run the example
+if (require.main === module) {
+  basicWebSocketExample().catch(console.error);
+}
+
+export { basicWebSocketExample };

@@ -12,28 +12,26 @@ export * from './price-utils';
 export * from './nonce-manager';
 export * from './nonce-cache';
 
-// Transaction Utilities
-export * from './transaction-utils';
-export * from './transaction-helper';
-
 // Exception Handling
 export * from './exceptions';
+
+// Order Status Checking (matches Python SDK pattern)
+export * from './order-status-checker';
+
+// Enhanced Error Reporting removed - using Python SDK style
 
 // Logger
 export * from './logger';
 
-// WASM Signer Utilities
-export * from './wasm-signer';
-export * from './node-wasm-signer';
-export * from './wasm-manager';
+// WASM Signer Utilities moved to signer/ folder
 
-// Performance Monitoring
-export * from './performance-monitor';
+// Performance & Optimization Utilities removed - not needed
 
 // Request Batching
 export * from './request-batcher';
 
-// Re-export commonly used types
-export type { TransactionResult } from './transaction-utils';
+// Client Factory removed - use direct client creation instead
+
+        // Re-export commonly used types
 export type { NonceManagerConfig } from './nonce-manager';
 export type { MarketConfig } from './price-utils';

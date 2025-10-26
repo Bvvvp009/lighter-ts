@@ -1,5 +1,4 @@
 // WASM manager for pre-initialization and singleton pattern
-import { NodeWasmSignerClient, createNodeWasmSignerClient } from './node-wasm-signer';
 import { WasmSignerClient, createWasmSignerClient } from './wasm-signer';
 
 export interface WasmConfig {
@@ -11,7 +10,7 @@ export type WasmClientType = 'browser' | 'node';
 
 export class WasmManager {
   private static instance: WasmManager | null = null;
-  private wasmClient: WasmSignerClient | NodeWasmSignerClient | null = null;
+  private wasmClient: WasmSignerClient | null = null;
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
   private config: WasmConfig | null = null;
@@ -50,7 +49,7 @@ export class WasmManager {
       if (clientType === 'browser' && typeof window !== 'undefined') {
         this.wasmClient = createWasmSignerClient(config);
       } else {
-        this.wasmClient = createNodeWasmSignerClient(config);
+        this.wasmClient = createWasmSignerClient(config);
       }
 
       // Initialize the WASM client
@@ -62,7 +61,7 @@ export class WasmManager {
     }
   }
 
-  getWasmClient(): WasmSignerClient | NodeWasmSignerClient {
+  getWasmClient(): WasmSignerClient {
     if (!this.isInitialized || !this.wasmClient) {
       throw new Error('WASM client not initialized. Call initialize() first.');
     }

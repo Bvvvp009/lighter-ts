@@ -112,7 +112,7 @@ export class NonceCache {
   getCacheStats(): Record<number, { count: number; oldest: number; newest: number }> {
     const stats: Record<number, { count: number; oldest: number; newest: number }> = {};
     
-    for (const [apiKeyIndex, nonces] of this.cache.entries()) {
+    for (const [apiKeyIndex, nonces] of Array.from(this.cache.entries())) {
       if (nonces.length > 0) {
         const timestamps = nonces.map(n => n.timestamp);
         stats[apiKeyIndex] = {
@@ -130,5 +130,34 @@ export class NonceCache {
   isHealthy(): boolean {
     const now = Date.now();
     return now - this.lastFetch < this.maxCacheAge * 2; // Allow some tolerance
+  }
+
+  /**
+   * Acknowledge failure and rollback nonce (like Python SDK)
+   */
+  acknowledgeFailure(apiKeyIndex: number): void {
+    const nonces = this.cache.get(apiKeyIndex);
+    if (nonces && nonces.length > 0) {
+      // Rollback the last used nonce by adding it back to the front
+      const lastNonce = nonces[0];
+      if (lastNonce) {
+        nonces.unshift({
+          nonce: lastNonce.nonce - 1,
+          timestamp: Date.now(),
+          apiKeyIndex
+        });
+        this.cache.set(apiKeyIndex, nonces);
+      }
+    }
+  }
+
+  /**
+   * Hard refresh nonce from API (used when invalid nonce error occurs)
+   */
+  async hardRefreshNonce(apiKeyIndex: number): Promise<void> {
+    // Clear current cache for this API key
+    this.cache.delete(apiKeyIndex);
+    // Fetch fresh nonce from API
+    await this.refreshNonces(apiKeyIndex);
   }
 }

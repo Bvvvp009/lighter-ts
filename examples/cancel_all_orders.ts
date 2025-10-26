@@ -1,79 +1,116 @@
-// Cancel all orders for an account
-// This example shows how to cancel all open orders
+/**
+ * Example: Cancel All Orders
+ */
 
-import { SignerClient } from '../src/signer/wasm-signer-client';
-import { ApiClient } from '../src/api/api-client';
-import { waitAndCheckTransaction, printTransactionResult } from '../src/utils/transaction-helper';
-import * as dotenv from 'dotenv';
+import { SignerClient, ApiClient, OrderApi } from '../src';
+import dotenv from 'dotenv';
 
 dotenv.config();
 
-const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
-const API_KEY_PRIVATE_KEY = process.env['API_PRIVATE_KEY'];
-const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
-const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0', 10);
+function trimException(e: Error): string {
+  return e.message.trim().split('\n').pop() || 'Unknown error';
+}
 
-async function main(): Promise<void> {
-  if (!API_KEY_PRIVATE_KEY) {
-    console.error('API_KEY_PRIVATE_KEY environment variable is required');
-    return;
-  }
+async function getAuthToken(signerClient: SignerClient, expiryInSeconds: number = 3600): Promise<string> {
+  const auth = await signerClient.createAuthTokenWithExpiry(expiryInSeconds);
+  return auth;
+}
 
-  const client = new SignerClient({
+async function cancelAllOrders() {
+  const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "52548");
+  const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+
+  const signerClient = new SignerClient({
     url: BASE_URL,
-    privateKey: API_KEY_PRIVATE_KEY,
+    privateKey: API_PRIVATE_KEY,
     accountIndex: ACCOUNT_INDEX,
     apiKeyIndex: API_KEY_INDEX
   });
 
-  await client.initialize();
-  await (client as any).ensureWasmClient();
+  await signerClient.initialize();
+  await signerClient.ensureWasmClient();
 
-  const err = client.checkClient();
-  if (err) {
-    console.error('CheckClient error:', err);
-    return;
-  }
+  const apiClient = new ApiClient({ host: BASE_URL });
+  const orderApi = new OrderApi(apiClient);
 
-  // Cancel all orders
-  // timeInForce: 0 = immediate, 1 = scheduled, 2 = abort
-  // time: timestamp for scheduled cancellation (0 for immediate)
-  const [tx, apiResponse, cancelErr] = await client.cancelAllOrders(
-    SignerClient.CANCEL_ALL_TIF_IMMEDIATE, // Immediate cancellation
-    0 // No scheduled time
-  );
-
-  console.log('Cancel All Orders:', { tx, apiResponse, err: cancelErr });
-  
-  if (cancelErr) {
-    console.log('❌ Cancel all orders error:', cancelErr);
-  } else {
-    console.log('✅ All orders cancelled successfully!');
-    console.log('📋 Transaction Details:');
-    console.log(`   Time In Force: ${tx.TimeInForce}`);
-    console.log(`   Time: ${tx.Time}`);
-    console.log(`   Nonce: ${tx.Nonce}`);
-    console.log(`   API Response: ${JSON.stringify(apiResponse)}`);
-
-    // Wait for cancellation transaction confirmation if we have a hash
-    if (apiResponse && apiResponse.hash) {
-      console.log('');
-      const apiClient = new ApiClient({ host: BASE_URL });
-      const result = await waitAndCheckTransaction(apiClient, apiResponse.hash);
-      printTransactionResult('Cancel All Orders', apiResponse.hash, result);
-      await apiClient.close();
-      
-      if (result.success) {
-        console.log('\n🎉 All orders successfully canceled!');
-      } else if (result.error) {
-        console.log(`\n❌ Cancellation failed: ${result.error}`);
+  try {
+    console.log('🚀 Canceling All Orders...\n');
+    
+    // Get auth token
+    const auth = await getAuthToken(signerClient, 3600);
+    
+    // Fetch all active orders across all markets
+    console.log(`📋 Fetching all active orders...`);
+    
+    // Try to fetch orders for market 0 (ETH/USD) first
+    // In production, you would iterate through all known markets
+    const marketsToCheck = [0, 1, 2, 3, 4, 5]; // Common market indices
+    
+    let allOrders: any[] = [];
+    
+    for (const marketId of marketsToCheck) {
+      try {
+        const activeOrders = await orderApi.getAccountActiveOrders(ACCOUNT_INDEX, marketId, auth);
+        const orders = Array.isArray(activeOrders) ? activeOrders : (activeOrders as any).orders || [];
+        allOrders = allOrders.concat(orders);
+      } catch (error) {
+        // Skip markets that fail or don't have orders
+        continue;
       }
     }
-  }
+    
+    if (allOrders.length === 0) {
+      console.log('⚠️ No active orders found');
+      await apiClient.close();
+      return;
+    }
+    
+    console.log(`\n📋 Found ${allOrders.length} active order(s) to cancel:`);
+    allOrders.forEach((order: any, index: number) => {
+      console.log(`   ${index + 1}. Market ${order.market_id || order.marketId}: ${order.side} ${order.type} - Size: ${order.size || order.base_amount} - Price: ${order.price}`);
+    });
+    console.log();
+    
+    console.log(`📋 Cancel All Parameters:`);
+    console.log(`   Time In Force: 0 (IMMEDIATE)`);
+    console.log(`   Time: 0\n`);
+    
+    const [tx, txHash, error] = await signerClient.cancelAllOrders(0, 0);
 
-  await client.close();
+    if (error) {
+      console.error(`❌ Cancel all orders failed: ${error}`);
+      await apiClient.close();
+      return;
+    }
+
+    if (!txHash || txHash === '') {
+      console.error('❌ No transaction hash returned');
+      await apiClient.close();
+      return;
+    }
+
+    console.log(`✅ Cancel all request submitted: ${txHash.substring(0, 16)}...`);
+    
+    console.log(`⏳ Waiting for confirmation...`);
+    try {
+      await signerClient.waitForTransaction(txHash, 30000, 2000);
+      console.log('✅ All orders canceled successfully');
+    } catch (waitError) {
+      console.error(`❌ Cancel all confirmation failed: ${trimException(waitError as Error)}`);
+    }
+
+    console.log('\n🎉 All orders cancelation complete!');
+    await apiClient.close();
+  } catch (error) {
+    console.error(`❌ Error: ${trimException(error as Error)}`);
+    await apiClient.close();
+  }
 }
 
 if (require.main === module) {
-  main().catch(console.error);
+  cancelAllOrders().catch(console.error);
 }
+
+export { cancelAllOrders };

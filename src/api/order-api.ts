@@ -1,5 +1,5 @@
 import { ApiClient } from './api-client';
-import { OrderBookParams, TradeParams, CreateOrderParams, CancelOrderParams, PaginationParams } from '../types';
+import { OrderBookParams, TradeParams, PaginationParams } from '../types';
 
 export interface OrderBook {
   market_id: number;
@@ -19,6 +19,49 @@ export interface OrderBookDetail {
   bids: PriceLevel[];
   asks: PriceLevel[];
   last_update_id: string;
+}
+
+export interface OrderBookDetailsResponse {
+  code: number;
+  order_book_details: OrderBookDetailItem[];
+}
+
+export interface OrderBookDetailItem {
+  symbol: string;
+  market_id: number;
+  status: string;
+  taker_fee: string;
+  maker_fee: string;
+  liquidation_fee: string;
+  min_base_amount: string;
+  min_quote_amount: string;
+  order_quote_limit: string;
+  supported_size_decimals: number;
+  supported_price_decimals: number;
+  supported_quote_decimals: number;
+  size_decimals: number;
+  price_decimals: number;
+  quote_multiplier: number;
+  default_initial_margin_fraction: number;
+  min_initial_margin_fraction: number;
+  maintenance_margin_fraction: number;
+  closeout_margin_fraction: number;
+  last_trade_price: number;
+  daily_trades_count: number;
+  daily_base_token_volume: number;
+  daily_quote_token_volume: number;
+  daily_price_low: number;
+  daily_price_high: number;
+  daily_price_change: number;
+  open_interest: number;
+  daily_chart: Record<string, any>;
+  market_config: {
+    market_margin_mode: number;
+    insurance_fund_account_index: number;
+    liquidation_mode: number;
+    force_reduce_only: boolean;
+    trading_hours: string;
+  };
 }
 
 export interface OrderBookOrders {
@@ -54,6 +97,24 @@ export interface Trade {
   maker_order_id: string;
 }
 
+// API-specific order interfaces
+export interface CreateOrderParams {
+  market_id: number;
+  side: 'buy' | 'sell';
+  type: 'limit' | 'market';
+  size: string;
+  price?: string;
+  reduce_only?: boolean;
+  post_only?: boolean;
+  time_in_force?: 'GTC' | 'IOC' | 'FOK';
+  client_order_id?: string;
+}
+
+export interface CancelOrderParams {
+  market_id: number;
+  order_id: string;
+}
+
 export interface ExchangeStats {
   total_volume_24h: string;
   total_trades_24h: number;
@@ -86,6 +147,13 @@ export class OrderApi {
     return response.data;
   }
 
+  public async getOrderBookDetailsRaw(marketId: number): Promise<OrderBookDetailsResponse> {
+    const response = await this.client.get<OrderBookDetailsResponse>('/api/v1/orderBookDetails', {
+      market_id: marketId,
+    });
+    return response.data;
+  }
+
   public async getOrderBookOrders(params: OrderBookParams): Promise<OrderBookOrders> {
     const response = await this.client.get<OrderBookOrders>('/api/v1/orderBookOrders', {
       market_id: params.market_id,
@@ -112,18 +180,21 @@ export class OrderApi {
     return response.data;
   }
 
-  public async getAccountActiveOrders(accountIndex: number, params?: PaginationParams): Promise<Order[]> {
+  public async getAccountActiveOrders(accountIndex: number, marketId: number, auth?: string): Promise<Order[]> {
     const response = await this.client.get<Order[]>('/api/v1/accountActiveOrders', {
       account_index: accountIndex,
-      ...params,
+      market_id: marketId,
+      ...(auth && { auth })
     });
     return response.data;
   }
 
-  public async getAccountInactiveOrders(accountIndex: number, params?: PaginationParams): Promise<Order[]> {
+  public async getAccountInactiveOrders(accountIndex: number, limit: number = 20, auth?: string, marketId?: number): Promise<Order[]> {
     const response = await this.client.get<Order[]>('/api/v1/accountInactiveOrders', {
       account_index: accountIndex,
-      ...params,
+      limit,
+      ...(marketId !== undefined && { market_id: marketId }),
+      ...(auth && { auth })
     });
     return response.data;
   }
