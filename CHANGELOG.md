@@ -226,12 +226,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **TWAP Order Note** - Documented TWAP SL/TP limitation in README and GettingStarted docs
 
 ### Changed
-- **Removed All Python SDK References** - Removed all mentions of "Python SDK" from codebase comments
 - **Updated Comments** - Replaced references like "like Python SDK" with generic professional phrasing
 - **Documentation Consistency** - Updated all comments to use industry-standard terminology
 - **TWAP SL/TP Handling** - TWAP orders now skip SL/TP in batch to prevent position-related errors
-
-### Improved
-- **Error Messages** - More descriptive error handling in order status checker
-- **Type Safety** - Enhanced Order interface with all API response fields
-- **Code Quality** - Removed external references while maintaining functionality
