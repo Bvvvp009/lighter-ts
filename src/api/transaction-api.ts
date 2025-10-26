@@ -155,7 +155,6 @@ export class TransactionApi {
     return response.data;
   }
 
-  // New: multipart with explicit indices, mirroring python usage on some endpoints
   public async sendTxWithIndices(txType: number, txInfo: string, accountIndex: number, apiKeyIndex: number): Promise<TxHash> {
     const params = new URLSearchParams();
     params.append('tx_type', txType.toString());
@@ -186,9 +185,8 @@ export class TransactionApi {
   }
 
   public async sendTransactionBatch(params: SendTransactionBatchParams): Promise<TxHashes> {
-    // Use x-www-form-urlencoded to match Python SDK behavior
     if (params.tx_types && params.tx_infos) {
-      // Python SDK style: tx_types and tx_infos as JSON strings
+
       const urlParams = new URLSearchParams();
       urlParams.append('tx_types', params.tx_types);
       urlParams.append('tx_infos', params.tx_infos);

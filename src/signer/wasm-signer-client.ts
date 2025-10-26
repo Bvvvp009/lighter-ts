@@ -163,7 +163,6 @@ export class SignerClient {
   // ============================================================================
   // CONSTANTS
   // ============================================================================
-  // Constants from Python SDK
   static readonly ORDER_TYPE_LIMIT = 0;
   static readonly ORDER_TYPE_MARKET = 1;
   static readonly ORDER_TIME_IN_FORCE_GOOD_TILL_TIME = 1;
@@ -245,7 +244,7 @@ export class SignerClient {
       apiKeyIndex: config.apiKeyIndex
     });
     
-    // Initialize logging based on Python SDK patterns
+    // Initialize logging with appropriate patterns
     if (config.logLevel !== undefined) {
       logger.setLevel(config.logLevel);
     }
@@ -306,7 +305,7 @@ export class SignerClient {
       this.orderBatcher = new RequestBatcher(
         async (requests) => {
           // Batch processor implementation
-          const results = [];
+          const results: any[] = [];
           for (const request of requests) {
             try {
               let result;
@@ -363,7 +362,6 @@ export class SignerClient {
 
   /**
    * Process transaction with automatic retry and nonce recovery
-   * Similar to Python SDK's process_api_key_and_nonce decorator
    */
   private async processTransactionWithRetry<T>(
     operation: () => Promise<T>,
@@ -417,7 +415,7 @@ export class SignerClient {
   }
 
   /**
-   * Hard refresh nonce from API (like Python SDK)
+   * Hard refresh nonce from API
    */
   private async hardRefreshNonce(): Promise<void> {
     if (this.nonceManager) {
@@ -429,7 +427,7 @@ export class SignerClient {
   }
 
   /**
-   * Acknowledge transaction failure (like Python SDK)
+   * Acknowledge transaction failure
    */
   private acknowledgeFailure(): void {
     if (this.nonceManager) {
@@ -641,7 +639,7 @@ export class SignerClient {
     // Handle order expiry
     let orderExpiry = params.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY;
     
-    // CRITICAL: Python SDK uses -1 for DEFAULT_28_DAY_ORDER_EXPIRY
+    // CRITICAL: -1 represents DEFAULT_28_DAY_ORDER_EXPIRY
     // The server-side converts -1 to proper 28-day timestamp
     // WASM/Go validation requires -1 to be converted to actual timestamp CLIENT-SIDE
     if (orderExpiry === undefined || orderExpiry === -1 || orderExpiry === SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY) {
@@ -677,7 +675,7 @@ export class SignerClient {
     };
 
     const txInfoStr = await (this.wallet as WasmSignerClient).signCreateOrder(wasmParams);
-    // Send exactly what WASM produced, using urlencoded form like Python/Go
+    // Send exactly what WASM produced, using urlencoded form
     const txHash = await this.transactionApi.sendTxWithIndices(
       SignerClient.TX_TYPE_CREATE_ORDER,
       txInfoStr,
@@ -685,9 +683,9 @@ export class SignerClient {
       this.config.apiKeyIndex
     );
     
-    // Check for immediate errors in the response (like Python SDK)
+    // Check for immediate errors in the response
     if (txHash.code && txHash.code !== 200) {
-      this.acknowledgeFailure(); // Like Python SDK line 99
+      this.acknowledgeFailure();
       return [null, '', txHash.message || 'Transaction failed'];
     }
     
@@ -872,7 +870,7 @@ export class SignerClient {
           txInfoStr
         );
         
-        // Check for immediate errors in the response (like Python SDK)
+        // Check for immediate errors in the response
         if (txHash.code && txHash.code !== 200) {
           this.acknowledgeFailure();
           return [null, '', txHash.message || 'Transaction failed'];
@@ -1095,7 +1093,7 @@ export class SignerClient {
   /**
    * Create a unified order with optional stop-loss and take-profit orders
    * Signs all orders individually then sends as batch transaction
-   * Includes error handling like Python SDK (acknowledgeFailure on code !== 200)
+   * Includes comprehensive error handling (acknowledgeFailure on code !== 200)
    * 
    * @param params - Unified order parameters
    * @returns Promise resolving to unified order result
@@ -1337,7 +1335,7 @@ export class SignerClient {
         tx_infos: JSON.stringify(txInfos)
       });
 
-      // Check for immediate errors in the batch response (like Python SDK)
+      // Check for immediate errors in the batch response
       if (batchResult.code && batchResult.code !== 200) {
         this.acknowledgeFailure();
         return {
@@ -1389,7 +1387,7 @@ export class SignerClient {
       return result;
 
     } catch (error) {
-      // Acknowledge failure to prevent nonce leak (like Python SDK)
+      // Acknowledge failure to prevent nonce leak
       this.acknowledgeFailure();
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -1454,7 +1452,7 @@ export class SignerClient {
           this.config.apiKeyIndex
         );
         
-        // Check for immediate errors in the response (like Python SDK)
+        // Check for immediate errors in the response
         if (txHash.code && txHash.code !== 200) {
           this.acknowledgeFailure();
           return [null, '', txHash.message || 'Transaction failed'];
@@ -1500,7 +1498,7 @@ export class SignerClient {
           this.config.apiKeyIndex
         );
         
-        // Check for immediate errors in the response (like Python SDK)
+        // Check for immediate errors in the response
         if (txHash.code && txHash.code !== 200) {
           this.acknowledgeFailure();
           return [null, '', txHash.message || 'Transaction failed'];
@@ -1617,7 +1615,7 @@ export class SignerClient {
   // ============================================================================
   // TRANSACTION METHODS
   // ============================================================================
-  // Simple transaction monitoring like Python SDK
+  // Simple transaction monitoring
   async getTransaction(txHash: string): Promise<Transaction> {
     return await this.transactionApi.getTransaction({ by: 'hash', value: txHash });
   }
@@ -1661,10 +1659,10 @@ export class SignerClient {
       }
     };
 
-    // Enhanced error detection (like Python SDK)
+    // Enhanced error detection
     const getErrorInfo = (transaction: Transaction): string => {
       try {
-        // 1. Check API response code first (most reliable - like Python SDK)
+        // 1. Check API response code first (most reliable)
         if (transaction.code && transaction.code !== 200) {
           if (transaction.message) {
             return transaction.message;

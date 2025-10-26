@@ -73,7 +73,7 @@ export class ConfigurationException extends LighterException {
   }
 }
 
-// Transaction-specific exceptions based on Python SDK patterns
+// Transaction-specific exceptions for comprehensive error handling
 export class TransactionException extends LighterException {
   public txType: string;
   public txInfo?: any;

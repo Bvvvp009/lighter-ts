@@ -210,29 +210,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adding SL and Tp to transaction type instead of sending separately send with order
 - Additional WebSocket subscriptions 
 
-## [1.0.6] - 2024-12-XX
+## [1.0.6] - 2025-01-21
+
+### Fixed
+- **Order Status Checking** - Fixed `TypeError: activeOrders is not iterable` by correctly extracting `orders` array from API responses
+- **API Response Parsing** - Updated `getAccountActiveOrders()` and `getAccountInactiveOrders()` to extract `orders` field from response
+- **Order Matching** - Fixed order lookup to use `client_order_index` field correctly
+- **TWAP SL/TP Orders** - Prevented invalid reduce-only direction errors by excluding SL/TP from TWAP batches
+- **Field Mapping** - Updated Order interface to match actual API response fields (`filled_base_amount`, `remaining_base_amount`, etc.)
 
 ### Added
-- **Unified Order Interface** - Revolutionary new `createUnifiedOrder()` method that integrates SL/TP functionality
-- **Automatic SL/TP Handling** - Background batch sending of stop-loss and take-profit orders
-- **Unified Order Parameters** - Single interface for limit, market, and TWAP orders with optional SL/TP
-- **Atomic Order Operations** - All orders (main + SL/TP) succeed or fail together
-- **Enhanced Error Handling** - Unified error reporting for complex order setups
-- **New Example** - `create_unified_order_with_sl_tp.ts` demonstrating the new functionality
+- **MarketHelper Documentation** - Complete documentation for `docs/MarketHelper.md`
+- **Utilities Documentation** - Complete documentation for `docs/Utilities.md` covering order status checking
+- **createUnifiedOrder Documentation** - Added comprehensive documentation in `docs/SignerClient.md`
+- **TWAP Order Note** - Documented TWAP SL/TP limitation in README and GettingStarted docs
 
-### Enhanced
-- **Batch Transaction Processing** - Improved efficiency for multiple order creation
-- **Developer Experience** - Simplified API for complex trading strategies
-- **Order Management** - Reduced complexity for SL/TP order creation
+### Changed
+- **Removed All Python SDK References** - Removed all mentions of "Python SDK" from codebase comments
+- **Updated Comments** - Replaced references like "like Python SDK" with generic professional phrasing
+- **Documentation Consistency** - Updated all comments to use industry-standard terminology
+- **TWAP SL/TP Handling** - TWAP orders now skip SL/TP in batch to prevent position-related errors
 
-### Technical Details
-- `UnifiedOrderParams` interface supports all order types with optional SL/TP parameters
-- `UnifiedOrderResult` provides comprehensive result reporting
-- Automatic nonce management and sequential transaction signing
-- Background batch sending using existing `sendTransactionBatch()` infrastructure
-- Maintains backward compatibility with existing order creation methods 
-- Enhanced error recovery
-- Enhanced documentation
-- Unit tests
-- Integration tests
-- CI/CD pipeline
+### Improved
+- **Error Messages** - More descriptive error handling in order status checker
+- **Type Safety** - Enhanced Order interface with all API response fields
+- **Code Quality** - Removed external references while maintaining functionality
