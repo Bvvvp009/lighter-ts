@@ -133,7 +133,7 @@ export class NonceCache {
   }
 
   /**
-   * Acknowledge failure and rollback nonce (like Python SDK)
+   * Acknowledge failure and rollback nonce
    */
   acknowledgeFailure(apiKeyIndex: number): void {
     const nonces = this.cache.get(apiKeyIndex);

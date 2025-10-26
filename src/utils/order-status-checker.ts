@@ -43,7 +43,7 @@ export function getCancelReason(status: string): string {
 
 /**
  * Check order status by querying Order API
- * Matches Python SDK's comprehensive order status checking
+ * Comprehensive order status checking with detailed information
  */
 export async function checkOrderStatus(
   orderApi: OrderApi,

@@ -65,7 +65,7 @@ export interface Transaction {
   executed_at?: number;
   verified_at?: number;
   parent_hash?: string;
-  // Enhanced error fields (matching Python SDK EnrichedTx)
+  // Enhanced error fields for detailed transaction tracking
   code?: number;
   message?: string;
 }

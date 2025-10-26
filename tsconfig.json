@@ -39,11 +39,8 @@
   "exclude": [
     "node_modules",
     "dist",
-    "temp-lighter-go",
-    "lighter-python",
     "**/*.test.ts",
     "**/*.spec.ts",
-    "**/index_backup.ts"
   ],
   "ts-node": {
     "esm": false,

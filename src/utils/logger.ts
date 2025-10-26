@@ -1,4 +1,4 @@
-// Logger utility based on Python SDK patterns
+// Logger utility with comprehensive logging patterns
 export enum LogLevel {
   DEBUG = 0,
   INFO = 1,
@@ -63,7 +63,7 @@ export class Logger {
 
     this.logs.push(entry);
 
-    // Console output based on Python SDK patterns
+    // Console output with structured logging
     const contextStr = context ? ` ${JSON.stringify(context, null, 2)}` : '';
     
     switch (level) {
@@ -94,7 +94,7 @@ export class Logger {
     this.logs = [];
   }
 
-  // Python SDK style logging methods
+  // Standard logging methods
   public logApiCall(method: string, url: string, params?: any): void {
     this.debug(`API Call: ${method} ${url}`, { params });
   }

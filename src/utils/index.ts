@@ -15,10 +15,10 @@ export * from './nonce-cache';
 // Exception Handling
 export * from './exceptions';
 
-// Order Status Checking (matches Python SDK pattern)
+// Order Status Checking utilities
 export * from './order-status-checker';
 
-// Enhanced Error Reporting removed - using Python SDK style
+// Enhanced Error Reporting features available
 
 // Logger
 export * from './logger';
