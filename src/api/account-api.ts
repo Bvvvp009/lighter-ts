@@ -150,4 +150,17 @@ export class AccountApi {
     });
     return response.data;
   }
+
+  public async changeAccountTier(accountIndex: number, newTier: string, auth: string): Promise<any> {
+    // Use form data as the API expects multipart/form-data
+    const params = new URLSearchParams();
+    params.append('account_index', accountIndex.toString());
+    params.append('new_tier', newTier);
+    params.append('auth', auth);
+
+    const response = await this.client.post('/api/v1/changeAccountTier', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+    return response.data;
+  }
 }

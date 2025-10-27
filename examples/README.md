@@ -40,6 +40,8 @@ try {
 - **deposit_to_subaccount.ts** - Deposit funds to subaccounts
 - **deposit.ts** - Deposit funds to main account
 - **withdraw_to_l1.ts** - Withdraw funds to L1 (Ethereum mainnet)
+- **update_leverage.ts** - Update leverage and margin mode (CROSS/ISOLATED) for markets
+- **change_account_tier.ts** - Upgrade to premium tier or revert to standard tier
 
 ### Data & System Examples
 - **market_data.ts** - Fetch market data, order books, trades, candlesticks
@@ -172,6 +174,8 @@ try {
 - Multi-API key operations
 - Deposit and withdrawal operations
 - Subaccount management
+- Leverage and margin mode updates
+- Account tier management (premium/standard)
 
 ### 3. Data & System
 - Market data fetching
