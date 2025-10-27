@@ -70,7 +70,7 @@ async function main() {
     
     const [isolatedLeverageInfo, isolatedTxHash, isolatedError] = await signerClient.updateLeverage(
       MARKET_INDEX,
-      SignerClient.CROSS_MARGIN_MODE,
+      SignerClient.ISOLATED_MARGIN_MODE,
       20  // 20x leverage
     );
 
