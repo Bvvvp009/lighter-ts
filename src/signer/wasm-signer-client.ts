@@ -1512,6 +1512,64 @@ export class SignerClient {
     });
   }
 
+  /**
+   * Update leverage for a specific market
+   * @param marketIndex - Market index to update leverage for
+   * @param marginMode - Margin mode: 0 for CROSS, 1 for ISOLATED
+   * @param leverage - Desired leverage (e.g., 3 for 3x)
+   * @param nonce - Optional nonce (will be fetched automatically if not provided)
+   * @returns Promise resolving to [leverageInfo, transactionHash, error]
+   */
+  async updateLeverage(
+    marketIndex: number,
+    marginMode: number,
+    leverage: number,
+    nonce: number = -1
+  ): Promise<[any, string, string | null]> {
+    return await this.processTransactionWithRetry(async () => {
+      try {
+        // Get next nonce if not provided
+        const nextNonce = (nonce === -1) ? 
+          await this.getNextNonce() :
+          { nonce };
+
+        // Convert leverage to IMF (Initial Margin Fraction)
+        // IMF = 10,000 / leverage (e.g., 3x leverage = 10,000 / 3 = 3333)
+        const imf = Math.floor(10_000 / leverage);
+
+        // Use WASM signer
+        const txInfo = await (this.wallet as WasmSignerClient).signUpdateLeverage({
+          marketIndex,
+          fraction: imf,
+          marginMode,
+          nonce: nextNonce.nonce
+        });
+
+        if (txInfo.error) {
+          return [null, '', txInfo.error];
+        }
+
+        const txHash = await this.transactionApi.sendTxWithIndices(
+          SignerClient.TX_TYPE_UPDATE_LEVERAGE,
+          txInfo.txInfo,
+          this.config.accountIndex,
+          this.config.apiKeyIndex
+        );
+        
+        // Check for immediate errors in the response
+        if (txHash.code && txHash.code !== 200) {
+          this.acknowledgeFailure();
+          return [null, '', txHash.message || 'Transaction failed'];
+        }
+        
+        return [JSON.parse(txInfo.txInfo), txHash.tx_hash || txHash.hash || '', null];
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return [null, '', errorMessage];
+      }
+    });
+  }
+
   // ============================================================================
   // BRIDGE METHODS
   // ============================================================================
