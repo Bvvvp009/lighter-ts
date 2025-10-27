@@ -265,7 +265,7 @@ func SignTransfer(clientIndex, accountIndex, toAccount, asset, amount string) (t
 }
 
 //export SignUpdateLeverage
-func SignUpdateLeverage(clientIndex, accountIndex, market, leverage string) (txInfo string, err string) {
+func SignUpdateLeverage(clientIndex, accountIndex, market, fraction, marginMode, nonce string) (txInfo string, err string) {
 	var goErr error
 	var txInfoStr string
 
@@ -288,16 +288,21 @@ func SignUpdateLeverage(clientIndex, accountIndex, market, leverage string) (txI
 		return "", wrapErr(fmt.Errorf("invalid market index: %s", market))
 	}
 	
-	leverageInt, goErr := strconv.ParseInt(leverage, 10, 64)
+	fractionInt, goErr := strconv.ParseUint(fraction, 10, 16)
 	if goErr != nil {
-		return "", wrapErr(fmt.Errorf("invalid leverage: %s", leverage))
+		return "", wrapErr(fmt.Errorf("invalid fraction: %s", fraction))
+	}
+
+	marginModeInt, goErr := strconv.ParseUint(marginMode, 10, 8)
+	if goErr != nil {
+		return "", wrapErr(fmt.Errorf("invalid margin mode: %s", marginMode))
 	}
 
 	// Create update leverage request
 	updateLeverageReq := &types.UpdateLeverageTxReq{
 		MarketIndex:           uint8(marketIdx),
-		InitialMarginFraction: uint16(leverageInt),
-		MarginMode:            0, // Default margin mode
+		InitialMarginFraction: uint16(fractionInt),
+		MarginMode:            uint8(marginModeInt),
 	}
 
 	// Get the transaction
