@@ -63,11 +63,15 @@ async function main() {
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Example 2: Update to Isolated Margin with 5x leverage
-    console.log('\n📈 Example 2: Setting ISOLATED margin mode with 5x leverage');
+    console.log('\n📈 Example 2: Setting ISOLATED margin mode with 20x leverage');
+    console.log(`Market Index: ${MARKET_INDEX}`);
+    console.log(`Margin Mode: ${SignerClient.ISOLATED_MARGIN_MODE} (1 = ISOLATED, 0 = CROSS)`);
+    console.log(`Leverage: 20x (IMF: ${Math.floor(10000 / 20)})`);
+    
     const [isolatedLeverageInfo, isolatedTxHash, isolatedError] = await signerClient.updateLeverage(
       MARKET_INDEX,
-      SignerClient.ISOLATED_MARGIN_MODE,
-      5  // 5x leverage
+      SignerClient.CROSS_MARGIN_MODE,
+      20  // 20x leverage
     );
 
     if (isolatedError) {
