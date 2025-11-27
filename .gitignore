@@ -135,3 +135,7 @@ volume_check/*
 volume_check/.DS_Store
 volume_check
 market_data.json
+
+# Other SDKs (not part of this TypeScript SDK)
+lighter-python/
+upstream-go/

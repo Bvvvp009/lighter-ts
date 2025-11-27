@@ -5,6 +5,54 @@ All notable changes to the Lighter TypeScript SDK will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2025-11-27
+
+### Added
+- **Spot Market Support** - Full support for spot trading markets with dedicated examples
+  - `create_spot_limit_order.ts` - Create limit orders on spot markets
+  - `create_market_spot_orders.ts` - Create market orders on spot markets (ETH, SOL)
+  - `create_spot_twap_order.ts` - Create TWAP orders on spot markets
+  - `cancel_spot_order.ts` - Cancel spot market orders
+  - Spot market indices: 2048 (ETH SPOT), 2049 (BTC SPOT), 2051 (SOL SPOT)
+- **Grouped Orders (OTOCO)** - Support for One-Triggers-Other (OTO) and One-Cancels-Other (OCO) order types
+  - `createGroupedOrders()` method for creating OTOCO grouped orders
+  - Example in `multi_client_advanced.ts` demonstrating grouped order creation
+- **Additional API Methods** - Expanded API coverage
+  - Enhanced `modifyOrder()` for order modifications
+  - Public pool operations (create, update, mint, burn shares)
+  - Subaccount management and operations
+  - Account tier management (premium/standard)
+  - Margin and leverage management improvements
+- **Comprehensive Documentation** - Extensive documentation updates
+  - Complete API reference documentation
+  - Migration guide for version upgrades
+  - Enhanced Getting Started guide
+  - Detailed examples documentation
+  - Spot market examples README
+
+### Changed
+- **Market Index Support** - Extended from `uint8` to `uint16` to support larger market indices (spot markets)
+
+### Fixed
+- **Position Detection** - Improved position fetching with retry logic for API synchronization
+- **Nonce Management** - Enhanced nonce handling to prevent "invalid nonce" errors
+- **Linter Errors** - Fixed undefined variables and type issues
+
+### Improved
+- **Examples Quality** - All examples now use environment variables, improved error handling
+- **Error Messages** - More descriptive error messages throughout the SDK
+- **Type Safety** - Enhanced TypeScript types for better developer experience
+
+## [1.0.6] - 2025-01-XX
+
+### Changed
+- **Documentation** - Fixed repository URL placeholder in README
+- **Examples** - Removed dangerous default private key values
+
+### Fixed
+- **Linter Errors** - Fixed undefined `poolIndex` variable in `public_pool_operations.ts`
+- **Spot Examples** - Fixed references to non-existent files in spot README
+
 ## [1.0.5] - 2025-10-13
 
 ### Added
@@ -226,6 +274,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **TWAP Order Note** - Documented TWAP SL/TP limitation in README and GettingStarted docs
 
 ### Changed
-- **Updated Comments** - Replaced references like "like Python SDK" with generic professional phrasing
 - **Documentation Consistency** - Updated all comments to use industry-standard terminology
 - **TWAP SL/TP Handling** - TWAP orders now skip SL/TP in batch to prevent position-related errors

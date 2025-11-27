@@ -1,12 +1,15 @@
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 import { SignerClient } from '../src';
 
 dotenv.config();
 
-const BASE_URL = process.env.BASE_URL || 'https://api-testnet.lighter.xyz';
-const PRIVATE_KEY = process.env.API_PRIVATE_KEY || '';
-const ACCOUNT_INDEX = parseInt(process.env.ACCOUNT_INDEX || '10');
-const API_KEY_INDEX = parseInt(process.env.API_KEY_INDEX || '10');
+  const PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
+  if (!PRIVATE_KEY) {
+    throw new Error('API_PRIVATE_KEY environment variable is required');
+  }
+  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
+  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
+  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
 
 // Market ID for ETH/USDC (example)
 const MARKET_INDEX = 0;
@@ -56,7 +59,6 @@ async function main() {
     } else {
       console.log(`✅ CROSS margin set successfully!`);
       console.log(`📝 Transaction Hash: ${crossTxHash}`);
-      console.log(`📊 Leverage Info:`, JSON.stringify(crossLeverageInfo, null, 2));
     }
 
     // Wait a bit before next update
@@ -79,15 +81,14 @@ async function main() {
     } else {
       console.log(`✅ ISOLATED margin set successfully!`);
       console.log(`📝 Transaction Hash: ${isolatedTxHash}`);
-      console.log(`📊 Leverage Info:`, JSON.stringify(isolatedLeverageInfo, null, 2));
     }
 
     // Example 3: Revert back to Cross Margin with 2x leverage
     console.log('\n📈 Example 3: Reverting to CROSS margin mode with 2x leverage');
     const [revertInfo, revertTxHash, revertError] = await signerClient.updateLeverage(
       MARKET_INDEX,
-      SignerClient.CROSS_MARGIN_MODE,
-      2  // 2x leverage
+      SignerClient.ISOLATED_MARGIN_MODE,
+      10  // 2x leverage
     );
 
     if (revertError) {
@@ -95,7 +96,6 @@ async function main() {
     } else {
       console.log(`✅ Reverted to CROSS margin successfully!`);
       console.log(`📝 Transaction Hash: ${revertTxHash}`);
-      console.log(`📊 Leverage Info:`, JSON.stringify(revertInfo, null, 2));
     }
 
     console.log('\n✅ Leverage update examples completed!');

@@ -69,6 +69,15 @@ export class ApiClient {
       const message = data?.message || error.message || 'API Error';
       const code = data?.code;
 
+      // Debug logging for API errors
+      if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
+        console.error('❌ API Error Response:');
+        console.error('   Status:', status);
+        console.error('   Code:', code);
+        console.error('   Message:', message);
+        console.error('   Data:', JSON.stringify(data, null, 2));
+      }
+
       switch (status) {
         case 400:
           return new BadRequestException(message, code);
@@ -91,9 +100,16 @@ export class ApiClient {
     }
 
     if (error.request) {
+      if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
+        console.error('❌ Network Error: No response received');
+        console.error('   Request:', error.request);
+      }
       return new ApiException('Network error: No response received', 0);
     }
 
+    if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
+      console.error('❌ Unknown Error:', error);
+    }
     return new ApiException(error.message || 'Unknown error', 0);
   }
 

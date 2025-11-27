@@ -43,6 +43,7 @@ export interface SendTransactionParams {
   transaction: string;
   account_index: number;
   api_key_index: number;
+  price_protection?: boolean;
 }
 
 export interface SendTransactionBatchParams {

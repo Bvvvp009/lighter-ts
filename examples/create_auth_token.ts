@@ -4,7 +4,7 @@
  */
 
 import { SignerClient } from '../src';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -35,12 +35,12 @@ async function createAuthToken() {
   try {
     // Create short-lived auth token (default ~10 minutes)
     const authToken = await signerClient.createAuthToken();
-    console.log(`Auth token created: ${authToken.substring(0, 50)}...`);
+    console.log(`Auth token created: ${authToken}`);
     
-    // Create custom duration token (1 hour)
-    const oneHourInSeconds = 60 * 60;
+    // Create custom duration token (maximum 8 hour)
+    const oneHourInSeconds = 8 *60 * 60;
     const longToken = await signerClient.createAuthTokenWithExpiry(oneHourInSeconds);
-    console.log(`1-hour token created: ${longToken.substring(0, 50)}...`);
+    console.log(`8-hour token created: ${longToken}`);
 
     console.log('Auth tokens created successfully');
 

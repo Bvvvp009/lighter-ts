@@ -1,59 +1,48 @@
-/**
- * Main types export file
- * Re-exports all types from organized modules
- */
+import type { components, paths, operations } from './generated/openapi';
+import type {
+  ZkLighterInfo,
+  ReqGetAccount,
+  ReqGetCandlesticks,
+  ReqGetOrderBookDetails,
+  ReqGetOrderBookOrders,
+  ReqGetRecentTrades,
+  ReqGetTrades,
+  ReqGetTx,
+  ReqGetBlock,
+  ReqGetBlockTxs,
+  ReqGetRangeWithCursor,
+  ReqGetRangeWithIndex,
+  ReqGetRangeWithIndexSortable
+} from './api';
 
-// Re-export all types from organized modules
+/**
+ * Primary type exports
+ */
 export * from './config';
 export * from './api';
 export * from './trading';
 export * from './transaction';
 
-// Additional types that don't fit into other categories
-export interface RootInfo {
-  version: string;
-  chain_id: string;
-  block_height: number;
-  contract_address?: string;
-}
+/**
+ * Strongly typed OpenAPI primitives for consumers that need full spec access.
+ */
+export type OpenApiComponents = components;
+export type OpenApiPaths = paths;
+export type OpenApiOperations = operations;
 
-export interface Funding {
-  timestamp: number;
-  funding_rate: string;
-  funding_index: string;
-}
-
-export interface CursorParams {
-  cursor?: string;
-  limit?: number;
-}
-
-export interface AccountParams {
-  by: 'index' | 'l1_address';
-  value: string;
-}
-
-export interface CandlestickParams {
-  market_id: number;
-  resolution: string;
-  start_timestamp?: number;
-  end_timestamp?: number;
-  count_back?: number;
-}
-
-export interface OrderBookParams {
-  market_id: number;
-  depth?: number;
-}
-
-export interface TradeParams {
-  market_id: number;
-  limit?: number;
-  sort?: 'asc' | 'desc';
-}
-
-// Legacy transaction params for API compatibility
-export interface TransactionParams {
-  by: 'sequence_index' | 'hash' | 'l1_tx_hash';
-  value: string;
-}
+/**
+ * Convenience aliases that align legacy SDK names with OpenAPI generated types.
+ */
+export type RootInfo = ZkLighterInfo;
+export type AccountParams = ReqGetAccount;
+export type CandlestickParams = ReqGetCandlesticks;
+export type OrderBookParams = ReqGetOrderBookDetails;
+export type OrderDepthParams = ReqGetOrderBookOrders;
+export type TradeParams = ReqGetRecentTrades;
+export type TradesQueryParams = ReqGetTrades;
+export type TransactionParams = ReqGetTx;
+export type BlockParams = ReqGetBlock;
+export type BlockTransactionsParams = ReqGetBlockTxs;
+export type CursorParams = ReqGetRangeWithCursor;
+export type IndexPaginationParams = ReqGetRangeWithIndex;
+export type SortableIndexPaginationParams = ReqGetRangeWithIndexSortable;

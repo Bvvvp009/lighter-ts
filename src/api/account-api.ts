@@ -85,6 +85,30 @@ export interface PublicPoolShare {
   value: string;
 }
 
+export interface FeeBucket {
+  account_index: number;
+  fee_bucket: string;
+  fee_bucket_tier?: string;
+  [key: string]: any; // Allow for additional fields
+}
+
+export interface PnLEntry {
+  account_index: number;
+  market_id?: number;
+  timestamp: number;
+  realized_pnl: string;
+  unrealized_pnl?: string;
+  total_pnl?: string;
+  [key: string]: any; // Allow for additional fields
+}
+
+export interface PnLResponse {
+  entries?: PnLEntry[];
+  total_realized_pnl?: string;
+  total_unrealized_pnl?: string;
+  [key: string]: any; // Allow for additional fields
+}
+
 export class AccountApi {
   private client: ApiClient;
 
@@ -120,8 +144,8 @@ export class AccountApi {
     return response.data;
   }
 
-  public async getFeeBucket(accountIndex: number): Promise<any> {
-    const response = await this.client.get('/api/v1/feeBucket', {
+  public async getFeeBucket(accountIndex: number): Promise<FeeBucket> {
+    const response = await this.client.get<FeeBucket>('/api/v1/feeBucket', {
       account_index: accountIndex,
     });
     return response.data;
@@ -134,8 +158,8 @@ export class AccountApi {
     return response.data;
   }
 
-  public async getPnL(accountIndex: number, params?: { start_time?: number; end_time?: number }): Promise<any> {
-    const response = await this.client.get('/api/v1/pnl', {
+  public async getPnL(accountIndex: number, params?: { start_time?: number; end_time?: number }): Promise<PnLResponse> {
+    const response = await this.client.get<PnLResponse>('/api/v1/pnl', {
       account_index: accountIndex,
       ...params,
     });
