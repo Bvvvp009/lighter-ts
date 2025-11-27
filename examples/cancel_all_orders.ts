@@ -3,11 +3,11 @@
  */
 
 import { SignerClient, ApiClient, OrderApi } from '../src';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-async function getAuthToken(signerClient: SignerClient, expiryInSeconds: number = 3600): Promise<string> {
+async function getAuthToken(signerClient: SignerClient, expiryInSeconds: number = 8 * 60 * 60): Promise<string> {
   const auth = await signerClient.createAuthTokenWithExpiry(expiryInSeconds);
   return auth;
 }
@@ -35,7 +35,7 @@ async function cancelAllOrders() {
     console.log('🚀 Canceling All Orders...\n');
     
     // Get auth token
-    const auth = await getAuthToken(signerClient, 3600);
+    const auth = await getAuthToken(signerClient, 8 * 60 * 60);
     
     // Fetch all active orders across all markets
     console.log(`📋 Fetching all active orders...`);

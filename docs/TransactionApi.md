@@ -37,6 +37,20 @@ const tx = await transactionApi.getTransaction({
 });
 ```
 
+### getTransactionFromL1TxHash(l1TxHash: string)
+
+Gets a transaction from an L1 transaction hash.
+
+**Parameters:**
+- `l1TxHash: string` - L1 transaction hash
+
+**Returns:** `Promise<Transaction>` - Transaction information
+
+**Example:**
+```typescript
+const tx = await transactionApi.getTransactionFromL1TxHash('0xabcdef1234567890...');
+```
+
 ### getTransactions(params?: PaginationParams)
 
 Gets a list of transactions with pagination.
@@ -54,6 +68,51 @@ const transactions = await transactionApi.getTransactions({
   index: 0 
 });
 console.log(`Found ${transactions.length} transactions`);
+```
+
+### getBlock(params: BlockParams)
+
+Gets block information.
+
+**Parameters:**
+- `by: 'height' | 'hash'` - Search by block height or hash
+- `value: string` - The block height or hash value
+
+**Returns:** `Promise<Block>` - Block information
+
+**Example:**
+```typescript
+const block = await transactionApi.getBlock({
+  by: 'height',
+  value: '100'
+});
+```
+
+### getBlocks(params?: PaginationParams)
+
+Gets a list of blocks.
+
+**Parameters:**
+- `limit?: number` - Maximum number of blocks to return
+- `index?: number` - Starting index for pagination
+
+**Returns:** `Promise<Block[]>` - Array of blocks
+
+**Example:**
+```typescript
+const blocks = await transactionApi.getBlocks({ limit: 20 });
+```
+
+### getCurrentHeight()
+
+Gets the current block height.
+
+**Returns:** `Promise<{ height: number }>` - Current block height
+
+**Example:**
+```typescript
+const { height } = await transactionApi.getCurrentHeight();
+console.log('Current height:', height);
 ```
 
 ### getBlockTransactions(params: BlockParams & PaginationParams)
@@ -97,6 +156,70 @@ const accountTxs = await transactionApi.getAccountTransactions(123, {
 console.log(`Found ${accountTxs.length} transactions for account 123`);
 ```
 
+### getAccountPendingTransactions(accountIndex: number, params?: PaginationParams)
+
+Gets pending transactions for a specific account.
+
+**Parameters:**
+- `accountIndex: number` - Account index
+- `limit?: number` - Maximum number of transactions to return
+- `index?: number` - Starting index for pagination
+
+**Returns:** `Promise<Transaction[]>` - Array of pending transactions
+
+**Example:**
+```typescript
+const pendingTxs = await transactionApi.getAccountPendingTransactions(123);
+console.log(`Found ${pendingTxs.length} pending transactions`);
+```
+
+### getPendingTransactions(params?: PaginationParams)
+
+Gets all pending transactions.
+
+**Parameters:**
+- `limit?: number` - Maximum number of transactions to return
+- `index?: number` - Starting index for pagination
+
+**Returns:** `Promise<Transaction[]>` - Array of pending transactions
+
+**Example:**
+```typescript
+const pendingTxs = await transactionApi.getPendingTransactions({ limit: 50 });
+```
+
+### getDepositHistory(accountIndex: number, params?: PaginationParams)
+
+Gets deposit history for an account.
+
+**Parameters:**
+- `accountIndex: number` - Account index
+- `limit?: number` - Maximum number of entries to return
+- `index?: number` - Starting index for pagination
+
+**Returns:** `Promise<any>` - Deposit history
+
+**Example:**
+```typescript
+const deposits = await transactionApi.getDepositHistory(123);
+```
+
+### getWithdrawHistory(accountIndex: number, params?: PaginationParams)
+
+Gets withdraw history for an account.
+
+**Parameters:**
+- `accountIndex: number` - Account index
+- `limit?: number` - Maximum number of entries to return
+- `index?: number` - Starting index for pagination
+
+**Returns:** `Promise<any>` - Withdraw history
+
+**Example:**
+```typescript
+const withdraws = await transactionApi.getWithdrawHistory(123);
+```
+
 ### getNextNonce(accountIndex: number, apiKeyIndex: number)
 
 Gets the next nonce for an account and API key combination.
@@ -113,13 +236,14 @@ const nextNonce = await transactionApi.getNextNonce(123, 0);
 console.log('Next nonce:', nextNonce.nonce);
 ```
 
-### sendTx(txType: number, txInfo: string)
+### sendTx(txType: number, txInfo: string, priceProtection?: boolean)
 
 Sends a transaction to the network.
 
 **Parameters:**
 - `txType: number` - Transaction type (use `SignerClient.TX_TYPE_*` constants)
 - `txInfo: string` - Transaction information as JSON string
+- `priceProtection?: boolean` - Enable price protection (default: true)
 
 **Returns:** `Promise<TxHash>` - Transaction hash
 
@@ -127,12 +251,13 @@ Sends a transaction to the network.
 ```typescript
 const txHash = await transactionApi.sendTx(
   SignerClient.TX_TYPE_CREATE_ORDER,
-  JSON.stringify(orderData)
+  JSON.stringify(orderData),
+  true
 );
-console.log('Transaction sent:', txHash.hash);
+console.log('Transaction sent:', txHash.hash || txHash.tx_hash);
 ```
 
-### sendTxWithIndices(txType: number, txInfo: string, accountIndex: number, apiKeyIndex: number)
+### sendTxWithIndices(txType: number, txInfo: string, accountIndex: number, apiKeyIndex: number, priceProtection?: boolean)
 
 Sends a transaction with account and API key indices.
 
@@ -141,6 +266,7 @@ Sends a transaction with account and API key indices.
 - `txInfo: string` - Transaction information as JSON string
 - `accountIndex: number` - Account index
 - `apiKeyIndex: number` - API key index
+- `priceProtection?: boolean` - Enable price protection (default: true)
 
 **Returns:** `Promise<TxHash>` - Transaction hash
 
@@ -150,28 +276,64 @@ const txHash = await transactionApi.sendTxWithIndices(
   SignerClient.TX_TYPE_CREATE_ORDER,
   JSON.stringify(orderData),
   123,
-  0
+  0,
+  true
 );
-console.log('Transaction sent:', txHash.hash);
+console.log('Transaction sent:', txHash.hash || txHash.tx_hash);
 ```
 
-### sendTxBatch(txHashes: string[])
+### sendTxJson(txType: number, txInfo: string, accountIndex: number, apiKeyIndex: number, priceProtection?: boolean)
+
+Sends a transaction using JSON format (alternative to form-encoded).
+
+**Parameters:**
+- `txType: number` - Transaction type
+- `txInfo: string` - Transaction information as JSON string
+- `accountIndex: number` - Account index
+- `apiKeyIndex: number` - API key index
+- `priceProtection?: boolean` - Enable price protection (default: true)
+
+**Returns:** `Promise<TxHash>` - Transaction hash
+
+**Example:**
+```typescript
+const txHash = await transactionApi.sendTxJson(
+  SignerClient.TX_TYPE_CREATE_ORDER,
+  JSON.stringify(orderData),
+  123,
+  0
+);
+```
+
+### sendTxBatch(params: SendTransactionBatchParams)
 
 Sends multiple transactions in a batch.
 
 **Parameters:**
-- `txHashes: string[]` - Array of transaction hashes
+- `params: SendTransactionBatchParams` - Batch transaction parameters
+  - Either `tx_types: string` and `tx_infos: string` (comma-separated)
+  - Or `account_index: number`, `api_key_index: number`, and `transactions: Array<{tx_type: number, tx_info: string}>`
 
 **Returns:** `Promise<TxHashes>` - Batch transaction hashes
 
 **Example:**
 ```typescript
-const batchHashes = await transactionApi.sendTxBatch([
-  '0xhash1...',
-  '0xhash2...',
-  '0xhash3...'
-]);
-console.log('Batch sent:', batchHashes.hashes);
+// Using tx_types and tx_infos (comma-separated strings)
+const batchHashes = await transactionApi.sendTxBatch({
+  tx_types: '14,15',
+  tx_infos: 'txInfo1,txInfo2'
+});
+
+// Using transactions array
+const batchHashes = await transactionApi.sendTxBatch({
+  account_index: 123,
+  api_key_index: 0,
+  transactions: [
+    { tx_type: 14, tx_info: 'txInfo1' },
+    { tx_type: 15, tx_info: 'txInfo2' }
+  ]
+});
+console.log('Batch sent:', batchHashes.hashes || batchHashes.tx_hash);
 ```
 
 ## Types

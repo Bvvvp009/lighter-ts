@@ -23,8 +23,7 @@ async function fetchMarketData() {
     console.log('📊 Fetching Order Book Details...');
     try {
       const orderBookDetails = await orderApi.getOrderBookDetails({
-        market_id: 0,
-        depth: 10
+        market_id: 0
       });
       console.log('✅ Order Book Details fetched successfully!');
       console.log(`   Market ID: ${orderBookDetails.market_id}`);
@@ -90,7 +89,7 @@ async function fetchMarketData() {
 
     // Output as JSON
     console.log('\n📊 Market Data JSON:');
-    console.log(JSON.stringify(markets, null, 2));
+    console.log(`✅ Found ${markets.length} markets`);
 
     // 5. WebSocket Real-time Data
     console.log('\n🔌 Connecting to WebSocket for real-time data...');
@@ -98,7 +97,7 @@ async function fetchMarketData() {
       url: 'wss://mainnet.zklighter.elliot.ai/stream',
       onOpen: () => console.log('✅ WebSocket connected'),
       onMessage: (message) => {
-        console.log('📡 Received WebSocket message:', JSON.stringify(message, null, 2));
+        console.log('📡 WebSocket message received');
       },
       onClose: () => console.log('🔌 WebSocket closed'),
       onError: (error) => console.error('❌ WebSocket error:', error)
@@ -145,7 +144,7 @@ async function fetchMarketData() {
 
 async function getMarketData(marketId: number, orderApi: OrderApi): Promise<any> {
   try {
-    const details = await orderApi.getOrderBookDetails({ market_id: marketId, depth: 1 }) as any;
+    const details = await orderApi.getOrderBookDetails({ market_id: marketId }) as any;
     
     if (details.order_book_details && details.order_book_details.length > 0) {
       const marketInfo = details.order_book_details[0];

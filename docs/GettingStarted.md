@@ -4,7 +4,10 @@ Complete guide for beginners to start trading on Lighter Protocol using TypeScri
 
 ## What is the Lighter TypeScript SDK?
 
-The SDK gives you everything you need to trade perpetual futures on Lighter Protocol from your TypeScript/JavaScript applications. It handles:
+The SDK gives you everything you need to trade perpetual futures on Lighter Protocol from your TypeScript/JavaScript applications. It uses the **official lighter-go WASM signer** from [elliottech/lighter-go](https://github.com/elliottech/lighter-go) for all cryptographic operations.
+
+**Key Features:**
+- ✅ Uses official lighter-go signer (reference implementation)
 - ✅ Order creation (Market, Limit, TWAP)
 - ✅ Stop-loss and take-profit orders
 - ✅ Position management

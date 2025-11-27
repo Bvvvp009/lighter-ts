@@ -168,7 +168,6 @@ export class OrderApi {
   public async getOrderBookDetails(params: OrderBookParams): Promise<OrderBookDetail> {
     const response = await this.client.get<OrderBookDetail>('/api/v1/orderBookDetails', {
       market_id: params.market_id,
-      depth: params.depth,
     });
     return response.data;
   }
@@ -183,7 +182,6 @@ export class OrderApi {
   public async getOrderBookOrders(params: OrderBookParams): Promise<OrderBookOrders> {
     const response = await this.client.get<OrderBookOrders>('/api/v1/orderBookOrders', {
       market_id: params.market_id,
-      depth: params.depth,
     });
     return response.data;
   }
@@ -201,7 +199,6 @@ export class OrderApi {
       market_id: params.market_id,
       limit: params.limit,
       index: params.index,
-      sort: params.sort,
     });
     return response.data;
   }

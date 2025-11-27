@@ -4,6 +4,17 @@
 
 A complete TypeScript SDK for Lighter Protocol - trade perpetual futures with built-in stop-loss and take-profit orders, position management, and comprehensive error handling.
 
+## 🔐 Signer Integration
+
+This SDK uses the **official lighter-go WASM signer** from [elliottech/lighter-go](https://github.com/elliottech/lighter-go) for all cryptographic operations. The WASM signer is automatically compiled from the GitHub repository during the build process.
+
+**Key Features:**
+- ✅ Uses official lighter-go signer (reference implementation)
+- ✅ Automatic error recovery and nonce management
+- ✅ Support for all transaction types
+- ✅ Multiple API key support
+- ✅ Production-ready and battle-tested
+
 ## 📦 Installation
 
 ```bash
@@ -392,6 +403,66 @@ npx ts-node examples/deposit_to_subaccount.ts  # Fund transfers
 - ✅ Test with small amounts first
 - ✅ Monitor all transactions
 - ✅ Use proper error handling
+
+## 🔧 Building from Source
+
+If you want to build the SDK from source or rebuild the WASM signer:
+
+```bash
+# Clone the repository
+git clone https://github.com/bvvvp009/lighter-ts.git
+cd lighter-ts
+
+# Install dependencies
+npm install
+
+# Build WASM signer from lighter-go GitHub repo
+npm run build:wasm
+
+# Build TypeScript
+npm run build
+```
+
+**Note**: The build script automatically clones/updates the lighter-go repository from GitHub and compiles the WASM signer. No local lighter-go folder is required.
+
+## 🔄 Migration from Previous Versions
+
+If you're upgrading from an older version that used `temp-lighter-go`:
+
+### What Changed
+
+- ✅ **Signer**: Now uses official `lighter-go` from GitHub instead of local `temp-lighter-go`
+- ✅ **Build Process**: WASM is compiled directly from GitHub repo
+- ✅ **Functions**: All transaction types now supported via lighter-go
+- ✅ **Error Handling**: Improved error recovery and nonce management
+
+### Breaking Changes
+
+**None!** The API remains the same. The only change is internal - the SDK now uses the official lighter-go signer.
+
+### Removed Functions
+
+These functions were never officially supported and have been removed:
+- `getPublicKey()` - Use `generateAPIKey()` instead (returns both keys)
+- `switchAPIKey()` - Use `createClient()` with different `apiKeyIndex` values instead
+
+### Migration Steps
+
+1. **Update your code** (if using removed functions):
+   ```typescript
+   // Old (removed)
+   const publicKey = await client.getPublicKey(privateKey);
+   
+   // New (use generateAPIKey)
+   const { privateKey, publicKey } = await client.generateAPIKey();
+   ```
+
+2. **Rebuild WASM** (if building from source):
+   ```bash
+   npm run build:wasm
+   ```
+
+3. **Test your integration** - All existing code should work without changes.
 
 ## 📞 Getting Help
 

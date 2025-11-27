@@ -1,8 +1,11 @@
 /**
- * Example: Create TWAP Order with SL/TP
+ * Example: Create ETH SPOT TWAP Order
+ * MarketIndex: 2048
+ * NOTE: Spot markets are currently testnet-only
+ * NOTE: Market indices: 2048 (ETH SPOT), 2049 (Prove SPOT), 2050 (Zk SPOT)
  */
 
-import { SignerClient, OrderType, ApiClient, OrderApi, MarketHelper } from '../src';
+import { SignerClient, OrderType, ApiClient, OrderApi, MarketHelper } from '../../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -11,13 +14,11 @@ function trimException(e: Error): string {
   return e.message.trim().split('\n').pop() || 'Unknown error';
 }
 
-async function createTWAPOrderWithSLTP() {
+async function createEthSpotTWAPOrder() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  if (!API_PRIVATE_KEY) {
-    throw new Error('API_PRIVATE_KEY environment variable is required');
-  }
-  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
-  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
+  const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "1");
+  // Spot markets are testnet-only for now
   const BASE_URL = 'https://testnet.zklighter.elliot.ai';
 
   const signerClient = new SignerClient({
@@ -33,47 +34,43 @@ async function createTWAPOrderWithSLTP() {
   await signerClient.initialize();
   await signerClient.ensureWasmClient();
 
-  // Initialize market helper once
-  const market = new MarketHelper(0, orderApi);
+  // Initialize market helper for ETH SPOT (MarketIndex 2048)
+  const market = new MarketHelper(2048, orderApi);
   await market.initialize();
 
-  const currentPrice = market.lastPrice || market.priceToUnits(3961.79);
+  console.log(`📊 ETH SPOT Market: ${market.marketName}`);
+  console.log(`   Last Price: ${market.formatPrice(market.lastPrice)}`);
+
+  const currentPrice = market.lastPrice || market.priceToUnits(3000);
   const currentPriceInUnits = market.unitsToPrice(currentPrice);
 
   const twapOrderParams = {
-    marketIndex: 0,
+    marketIndex: 2048, // ETH SPOT
     clientOrderIndex: Date.now(),
-    baseAmount: market.amountToUnits(0.01),
+    baseAmount: market.amountToUnits(0.01), // Adjust amount as needed
     price: currentPriceInUnits,
-    isAsk: false,
+    isAsk: false, // Buy order
     orderType: OrderType.TWAP,
-    orderExpiry: Date.now() + (30 * 60 * 1000),
-    stopLoss: {
-      triggerPrice: market.priceToUnits(currentPriceInUnits * 0.95),
-      isLimit: false
-    },
-    takeProfit: {
-      triggerPrice: market.priceToUnits(currentPriceInUnits * 1.05),
-      isLimit: false
-    }
+    timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+    orderExpiry: Date.now() + (30 * 60 * 1000), // 30 minutes
   };
 
   try {
     const result = await signerClient.createUnifiedOrder(twapOrderParams);
 
     if (result.success) {
-      console.log(`✓ TWAP order created: ${result.mainOrder.hash.substring(0, 16)}...`);
+      console.log(`✓ ETH SPOT TWAP order created: ${result.mainOrder.hash.substring(0, 16)}...`);
       console.log(`  Duration: 30 minutes`);
       
       // Wait for main order
       try {
         await signerClient.waitForTransaction(result.mainOrder.hash, 30000, 2000);
-        console.log('✓ TWAP order placed');
+        console.log('✓ ETH SPOT TWAP order placed');
       } catch (error) {
         console.error(`❌ TWAP order failed: ${trimException(error as Error)}`);
       }
       
-      // Wait for SL/TP orders
+      // Wait for SL/TP orders if any
       if (result.batchResult.hashes.length > 0) {
         console.log(`✓ ${result.batchResult.hashes.length} SL/TP order(s) pending`);
         for (const hash of result.batchResult.hashes) {
@@ -91,11 +88,15 @@ async function createTWAPOrderWithSLTP() {
     }
   } catch (error) {
     console.error(`❌ Error: ${trimException(error as Error)}`);
+  } finally {
+    await signerClient.close();
+    await apiClient.close();
   }
 }
 
 if (require.main === module) {
-  createTWAPOrderWithSLTP().catch(console.error);
+  createEthSpotTWAPOrder().catch(console.error);
 }
 
-export { createTWAPOrderWithSLTP };
+export { createEthSpotTWAPOrder };
+

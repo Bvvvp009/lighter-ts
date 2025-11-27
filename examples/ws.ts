@@ -13,7 +13,7 @@ async function basicWebSocketExample() {
     url: 'wss://mainnet.zklighter.elliot.ai/stream',
     onOpen: () => console.log('✅ WebSocket connected'),
     onMessage: (message) => {
-      console.log('📡 Received message:', JSON.stringify(message, null, 2));
+      console.log('📡 Message received');
     },
     onClose: () => console.log('🔌 WebSocket closed'),
     onError: (error) => console.error('❌ WebSocket error:', error)

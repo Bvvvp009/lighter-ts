@@ -24,19 +24,36 @@ export { L1BridgeClient } from './bridge/l1-bridge-client';
 
 // Signer Client
 export { SignerClient } from './signer/wasm-signer-client';
-export type { SignerConfig } from './signer/wasm-signer-client';
+export type { 
+  SignerConfig,
+  CreateOrderParams as SignerCreateOrderParams,
+  CreateMarketOrderParams,
+  CancelOrderParams as SignerCancelOrderParams,
+  ChangeApiKeyParams
+} from './signer/wasm-signer-client';
 
 // Note: Signer Server Client removed - using local WASM signer instead
 
 // WASM Signer Classes
-export { WasmSignerClient, createWasmSignerClient } from './signer/wasm-signer';
+export { WasmSignerClient, createWasmSignerClient, WasmManager } from './signer/wasm-signer';
 export type { 
   WasmSignerConfig, 
+  WasmConfig,
+  WasmClientType,
   CreateClientParams,
   CreateOrderParams,
   CancelOrderParams,
   CancelAllOrdersParams,
   UpdateLeverageParams,
+  ModifyOrderParams,
+  UpdateMarginParams,
+  CreateSubAccountParams,
+  CreatePublicPoolParams,
+  UpdatePublicPoolParams,
+  MintSharesParams,
+  BurnSharesParams,
+  CreateGroupedOrderParams,
+  CreateGroupedOrdersParams,
   WasmSignerResponse,
   ApiKeyPair
 } from './signer/wasm-signer';
@@ -58,6 +75,15 @@ export type { OrderStatusResult } from './utils/order-status-checker';
 
 // WebSocket Client
 export { WsClient } from './api/ws-client';
+export { WebSocketOrderClient } from './api/ws-order-client';
+export type {
+  LighterWsSendTx,
+  LighterWsSendBatchTx,
+  LighterWsTransaction,
+  WsOrderRequest,
+  WsOrderResponse,
+  WsConnectionConfig
+} from './api/ws-order-client';
 
 // Exception Classes
 export {
@@ -82,6 +108,9 @@ export type {
   ApiKey,
   PublicPool,
   PublicPoolShare,
+  FeeBucket,
+  PnLEntry,
+  PnLResponse,
   Trade
 } from './api/account-api';
 
@@ -103,19 +132,21 @@ export type {
   Block,
   NextNonce,
   TxHash,
-  TxHashes
+  TxHashes,
+  DepositHistory,
+  DepositHistoryItem,
+  WithdrawHistory,
+  WithdrawHistoryItem
 } from './api/transaction-api';
 
 // Types from BridgeApi
 export type {
   FastBridgeInfo,
-  BridgeSupportedNetwork,
+  BridgeSupportedNetwork
+} from './api/bridge-api';
+export type {
   TransferParams,
   WithdrawParams,
-  DepositHistory,
-  DepositHistoryItem,
-  WithdrawHistory,
-  WithdrawHistoryItem,
   L1DepositParams,
   L1DepositResult,
   L1BridgeConfig

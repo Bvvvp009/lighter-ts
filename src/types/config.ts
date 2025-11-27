@@ -77,5 +77,6 @@ export interface ApiKeyConfig {
 export interface ChangeApiKeyParams {
   ethPrivateKey: string;
   newPubkey: string;
+  newPrivateKey: string; // Private key corresponding to newPubkey
   newApiKeyIndex?: number;
 }

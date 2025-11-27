@@ -57,6 +57,48 @@ export interface TxHashes {
   predicted_execution_time_ms?: number;
 }
 
+export interface DepositHistoryItem {
+  id?: string;
+  account_index: number;
+  l1_address: string;
+  l2_address?: string;
+  amount: string;
+  tx_hash?: string;
+  l1_tx_hash?: string;
+  status: string;
+  timestamp: number;
+  created_at?: string;
+  [key: string]: any; // Allow for additional fields
+}
+
+export interface DepositHistory {
+  entries?: DepositHistoryItem[];
+  cursor?: string;
+  has_more?: boolean;
+  [key: string]: any; // Allow for additional fields
+}
+
+export interface WithdrawHistoryItem {
+  id?: string;
+  account_index: number;
+  l1_address: string;
+  l2_address?: string;
+  amount: string;
+  tx_hash?: string;
+  l1_tx_hash?: string;
+  status: string;
+  timestamp: number;
+  created_at?: string;
+  [key: string]: any; // Allow for additional fields
+}
+
+export interface WithdrawHistory {
+  entries?: WithdrawHistoryItem[];
+  cursor?: string;
+  has_more?: boolean;
+  [key: string]: any; // Allow for additional fields
+}
+
 export class TransactionApi {
   private client: ApiClient;
 
@@ -83,10 +125,27 @@ export class TransactionApi {
   }
 
   public async getTransaction(params: TransactionParams): Promise<Transaction> {
+    // Debug logging
+    if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
+      console.log('🔍 Querying transaction:', params.by, params.value);
+    }
+    
     const response = await this.client.get<Transaction>('/api/v1/tx', {
       by: params.by,
       value: params.value,
     });
+    
+    // Debug logging
+    if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
+      console.log('📥 Transaction query response:', {
+        found: !!response.data,
+        hash: response.data?.hash?.substring(0, 32),
+        status: response.data?.status,
+        code: response.data?.code,
+        message: response.data?.message
+      });
+    }
+    
     return response.data;
   }
 
@@ -139,15 +198,17 @@ export class TransactionApi {
       account_index: params.account_index,
       api_key_index: params.api_key_index,
       transaction: params.transaction,
+      ...(params.price_protection !== undefined ? { price_protection: params.price_protection } : {}),
     });
     return response.data;
   }
 
-  public async sendTx(txType: number, txInfo: string): Promise<TxHash> {
+  public async sendTx(txType: number, txInfo: string, priceProtection: boolean = true): Promise<TxHash> {
     // Use x-www-form-urlencoded to match Go client behavior
     const params = new URLSearchParams();
     params.append('tx_type', txType.toString());
     params.append('tx_info', txInfo);
+    params.append('price_protection', priceProtection ? 'true' : 'false');
 
     const response = await this.client.post<TxHash>('/api/v1/sendTx', params, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -155,28 +216,60 @@ export class TransactionApi {
     return response.data;
   }
 
-  public async sendTxWithIndices(txType: number, txInfo: string, accountIndex: number, apiKeyIndex: number): Promise<TxHash> {
+  public async sendTxWithIndices(
+    txType: number,
+    txInfo: string,
+    accountIndex: number,
+    apiKeyIndex: number,
+    priceProtection: boolean = true
+  ): Promise<TxHash> {
     const params = new URLSearchParams();
     params.append('tx_type', txType.toString());
     params.append('tx_info', txInfo);
     params.append('account_index', accountIndex.toString());
     params.append('api_key_index', apiKeyIndex.toString());
+    params.append('price_protection', priceProtection ? 'true' : 'false');
+
+    // Debug logging
+    if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
+      try {
+        const txInfoParsed = JSON.parse(txInfo);
+        console.log('🔍 Sending transaction details:');
+        console.log('   TxType:', txType);
+        console.log('   MarketIndex:', txInfoParsed.MarketIndex);
+        console.log('   AccountIndex:', accountIndex);
+        console.log('   ApiKeyIndex:', apiKeyIndex);
+        console.log('   TxInfo length:', txInfo.length);
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
 
     const response = await this.client.post<TxHash>('/api/v1/sendTx', params, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
     
+    // Debug logging
+    if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
+    }
     
     return response.data;
   }
 
   // JSON variant
-  public async sendTxJson(txType: number, txInfo: string, accountIndex: number, apiKeyIndex: number): Promise<TxHash> {
+  public async sendTxJson(
+    txType: number,
+    txInfo: string,
+    accountIndex: number,
+    apiKeyIndex: number,
+    priceProtection: boolean = true
+  ): Promise<TxHash> {
     const payload = {
       tx_type: txType,
       tx_info: txInfo,
       account_index: accountIndex,
       api_key_index: apiKeyIndex,
+      price_protection: priceProtection,
     } as any;
     const response = await this.client.post<TxHash>('/api/v1/sendTx', payload, {
       headers: { 'Content-Type': 'application/json' },
@@ -215,16 +308,16 @@ export class TransactionApi {
     return response.data;
   }
 
-  public async getDepositHistory(accountIndex: number, params?: PaginationParams): Promise<any> {
-    const response = await this.client.get('/api/v1/deposit/history', {
+  public async getDepositHistory(accountIndex: number, params?: PaginationParams): Promise<DepositHistory> {
+    const response = await this.client.get<DepositHistory>('/api/v1/deposit/history', {
       account_index: accountIndex,
       ...params,
     });
     return response.data;
   }
 
-  public async getWithdrawHistory(accountIndex: number, params?: PaginationParams): Promise<any> {
-    const response = await this.client.get('/api/v1/withdraw/history', {
+  public async getWithdrawHistory(accountIndex: number, params?: PaginationParams): Promise<WithdrawHistory> {
+    const response = await this.client.get<WithdrawHistory>('/api/v1/withdraw/history', {
       account_index: accountIndex,
       ...params,
     });

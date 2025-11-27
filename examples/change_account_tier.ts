@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 import { SignerClient, ApiClient, AccountApi } from '../src';
 
 dotenv.config();
@@ -48,7 +48,6 @@ async function main() {
         authToken
       );
       console.log(`✅ Successfully upgraded to PREMIUM tier!`);
-      console.log(`📊 Result:`, JSON.stringify(upgradeResult, null, 2));
     } catch (error) {
       console.error(`❌ Error upgrading to premium: ${error}`);
       // This might fail if already premium or not eligible
@@ -66,7 +65,6 @@ async function main() {
         authToken
       );
       console.log(`✅ Successfully reverted to STANDARD tier!`);
-      console.log(`📊 Result:`, JSON.stringify(revertResult, null, 2));
     } catch (error) {
       console.error(`❌ Error reverting to standard: ${error}`);
     }

@@ -88,12 +88,11 @@ export class WsClient {
       throw new Error('WebSocket is not connected');
     }
 
+    // Use the same format as send() method for consistency
     const message = {
-      method: 'subscribe',
-      params: {
-        channel: subscription.channel,
-        ...subscription.params,
-      },
+      type: 'subscribe',
+      channel: subscription.channel,
+      ...subscription.params,
     };
 
     this.ws.send(JSON.stringify(message));
@@ -105,11 +104,10 @@ export class WsClient {
       throw new Error('WebSocket is not connected');
     }
 
+    // Use the same format as send() method for consistency
     const message = {
-      method: 'unsubscribe',
-      params: {
-        channel,
-      },
+      type: 'unsubscribe',
+      channel,
     };
 
     this.ws.send(JSON.stringify(message));

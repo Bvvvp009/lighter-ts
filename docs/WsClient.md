@@ -1,23 +1,24 @@
 # WsClient
 
-The `WsClient` class provides real-time WebSocket connectivity for order book updates, account changes, and other live data from the Lighter Protocol.
+The `WsClient` class provides real-time WebSocket connectivity for order book updates, trades, market stats, and other live data from the Lighter Protocol.
 
 ## Constructor
 
 ```typescript
-new WsClient(config: WsConfig)
+new WsClient(config: WebSocketConfig)
 ```
 
-### WsConfig
+### WebSocketConfig
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `url` | `string` | Yes | WebSocket URL (e.g., `wss://mainnet.zklighter.elliot.ai/ws`) |
-| `accountIndex` | `number` | Yes | Your account index |
-| `apiKeyIndex` | `number` | Yes | Your API key index |
-| `privateKey` | `string` | Yes | Your API key private key |
+| `url` | `string` | Yes | WebSocket URL (e.g., `wss://mainnet.zklighter.elliot.ai/stream`) |
+| `onOpen` | `() => void` | No | Callback when connection opens |
+| `onMessage` | `(message: any) => void` | No | Callback for incoming messages |
+| `onClose` | `() => void` | No | Callback when connection closes |
+| `onError` | `(error: Error) => void` | No | Callback for connection errors |
 | `reconnectInterval` | `number` | No | Reconnection interval in ms (default: 5000) |
-| `maxReconnectAttempts` | `number` | No | Maximum reconnection attempts (default: 10) |
+| `maxReconnectAttempts` | `number` | No | Maximum reconnection attempts (default: 5) |
 
 ## Methods
 
@@ -29,247 +30,301 @@ Establishes a WebSocket connection to the Lighter server.
 await wsClient.connect();
 ```
 
+**Returns:** `Promise<void>`
+
 ### disconnect()
 
 Closes the WebSocket connection.
 
 ```typescript
-await wsClient.disconnect();
+wsClient.disconnect();
 ```
 
-### subscribeOrderBook(marketIndex: number, callback: (data: OrderBookData) => void)
+### send(message: any)
 
-Subscribes to order book updates for a specific market.
+Sends a message through the WebSocket connection.
+
+```typescript
+wsClient.send({
+  type: 'subscribe',
+  channel: 'order_book/0'
+});
+```
 
 **Parameters:**
-- `marketIndex: number` - Market index (0 for ETH/USDC)
-- `callback: (data: OrderBookData) => void` - Callback function for order book updates
+- `message: any` - Message object to send (will be JSON stringified)
 
-**Example:**
+### subscribe(subscription: WebSocketSubscription)
+
+Subscribes to a channel with optional parameters.
+
 ```typescript
-wsClient.subscribeOrderBook(0, (data) => {
-  console.log('ETH/USDC Order Book Update:', data);
-  console.log('Best Bid:', data.bestBid);
-  console.log('Best Ask:', data.bestAsk);
+wsClient.subscribe({
+  channel: 'order_book/0',
+  params: {},
+  callback: (data) => {
+    console.log('Order book update:', data);
+  }
 });
 ```
-
-### subscribeAccount(callback: (data: AccountData) => void)
-
-Subscribes to account updates.
 
 **Parameters:**
-- `callback: (data: AccountData) => void` - Callback function for account updates
+- `subscription: WebSocketSubscription` - Subscription configuration
+  - `channel: string` - Channel name (e.g., `order_book/0`, `trade/0`, `market_stats/0`)
+  - `params: Record<string, any>` - Optional channel parameters
+  - `callback?: (data: any) => void` - Optional callback for this subscription
 
-**Example:**
+### unsubscribe(channel: string)
+
+Unsubscribes from a channel.
+
 ```typescript
-wsClient.subscribeAccount((data) => {
-  console.log('Account Update:', data);
-  console.log('Balance:', data.balance);
-  console.log('Positions:', data.positions);
-});
+wsClient.unsubscribe('order_book/0');
 ```
-
-### subscribeTrades(marketIndex: number, callback: (data: TradeData) => void)
-
-Subscribes to trade updates for a specific market.
 
 **Parameters:**
-- `marketIndex: number` - Market index
-- `callback: (data: TradeData) => void` - Callback function for trade updates
+- `channel: string` - Channel name to unsubscribe from
 
-**Example:**
-```typescript
-wsClient.subscribeTrades(0, (data) => {
-  console.log('New Trade:', data);
-  console.log('Price:', data.price);
-  console.log('Size:', data.size);
-});
-```
+### isConnectedToWebSocket()
 
-### sendTransaction(txType: number, txInfo: string)
-
-Sends a transaction through the WebSocket connection.
-
-**Parameters:**
-- `txType: number` - Transaction type (use `SignerClient.TX_TYPE_*` constants)
-- `txInfo: string` - Transaction information as JSON string
-
-**Returns:** `Promise<string>` - Transaction hash
-
-**Example:**
-```typescript
-const txHash = await wsClient.sendTransaction(
-  SignerClient.TX_TYPE_CREATE_ORDER,
-  JSON.stringify(orderData)
-);
-console.log('Transaction sent:', txHash);
-```
-
-## Event Handling
-
-The WebSocket client emits events for connection status:
+Checks if the WebSocket is currently connected.
 
 ```typescript
-wsClient.on('connected', () => {
-  console.log('WebSocket connected');
-});
-
-wsClient.on('disconnected', () => {
-  console.log('WebSocket disconnected');
-});
-
-wsClient.on('error', (error) => {
-  console.error('WebSocket error:', error);
-});
-
-wsClient.on('reconnecting', (attempt) => {
-  console.log(`Reconnecting... attempt ${attempt}`);
-});
+const connected = wsClient.isConnectedToWebSocket();
 ```
 
-## Types
+**Returns:** `boolean`
 
-### OrderBookData
+### getSubscriptions()
+
+Gets all active subscriptions.
 
 ```typescript
-interface OrderBookData {
-  marketIndex: number;
-  bids: PriceLevel[];
-  asks: PriceLevel[];
-  bestBid: string;
-  bestAsk: string;
-  timestamp: number;
-}
+const subscriptions = wsClient.getSubscriptions();
 ```
 
-### AccountData
+**Returns:** `WebSocketSubscription[]`
 
-```typescript
-interface AccountData {
-  accountIndex: number;
-  balance: string;
-  positions: AccountPosition[];
-  orders: Order[];
-  timestamp: number;
-}
-```
+## Available Channels
 
-### TradeData
+### Order Book
+- **Channel:** `order_book/{marketIndex}`
+- **Example:** `order_book/0` (ETH/USDC market)
+- **Updates:** Real-time order book changes
 
-```typescript
-interface TradeData {
-  tradeId: string;
-  marketIndex: number;
-  price: string;
-  size: string;
-  side: 'buy' | 'sell';
-  timestamp: number;
-}
-```
+### Trades
+- **Channel:** `trade/{marketIndex}`
+- **Example:** `trade/0` (ETH/USDC market)
+- **Updates:** New trades as they occur
 
-### PriceLevel
-
-```typescript
-interface PriceLevel {
-  price: string;
-  size: string;
-}
-```
+### Market Stats
+- **Channel:** `market_stats/{marketIndex}`
+- **Example:** `market_stats/0` (ETH/USDC market)
+- **Updates:** Market statistics (funding rate, open interest, etc.)
 
 ## Complete Example
 
 ```typescript
-import { WsClient, SignerClient } from 'lighter-ts-sdk';
+import { WsClient } from 'lighter-ts-sdk';
 
 async function main() {
   const wsClient = new WsClient({
-    url: 'wss://mainnet.zklighter.elliot.ai/ws',
-    accountIndex: 123,
-    apiKeyIndex: 0,
-    privateKey: 'your-api-key-private-key',
+    url: 'wss://mainnet.zklighter.elliot.ai/stream',
+    onOpen: () => {
+      console.log('✅ WebSocket connected');
+    },
+    onMessage: (message) => {
+      console.log('📡 Received:', message);
+    },
+    onClose: () => {
+      console.log('🔌 WebSocket closed');
+    },
+    onError: (error) => {
+      console.error('❌ WebSocket error:', error);
+    },
     reconnectInterval: 5000,
     maxReconnectAttempts: 10
-  });
-
-  // Set up event handlers
-  wsClient.on('connected', () => {
-    console.log('WebSocket connected');
-  });
-
-  wsClient.on('disconnected', () => {
-    console.log('WebSocket disconnected');
-  });
-
-  wsClient.on('error', (error) => {
-    console.error('WebSocket error:', error);
   });
 
   try {
     // Connect to WebSocket
     await wsClient.connect();
+    
+    // Wait for connection to stabilize
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Subscribe to order book updates
-    wsClient.subscribeOrderBook(0, (data) => {
-      console.log('ETH/USDC Order Book:');
-      console.log(`Best Bid: ${data.bestBid}`);
-      console.log(`Best Ask: ${data.bestAsk}`);
-      console.log(`Bid Depth: ${data.bids.length} levels`);
-      console.log(`Ask Depth: ${data.asks.length} levels`);
+    // Subscribe to order book for ETH market (market 0)
+    wsClient.send({
+      type: 'subscribe',
+      channel: 'order_book/0'
     });
-
-    // Subscribe to account updates
-    wsClient.subscribeAccount((data) => {
-      console.log('Account Update:');
-      console.log(`Balance: ${data.balance} USDC`);
-      console.log(`Positions: ${data.positions.length}`);
-      console.log(`Open Orders: ${data.orders.length}`);
+    console.log('✅ Subscribed to order book for market 0 (ETH)');
+    
+    // Subscribe to market stats
+    wsClient.send({
+      type: 'subscribe',
+      channel: 'market_stats/0'
     });
-
-    // Subscribe to trade updates
-    wsClient.subscribeTrades(0, (data) => {
-      console.log(`New Trade: ${data.size} @ ${data.price} (${data.side})`);
+    console.log('✅ Subscribed to market stats for market 0 (ETH)');
+    
+    // Subscribe to trades
+    wsClient.send({
+      type: 'subscribe',
+      channel: 'trade/0'
     });
+    console.log('✅ Subscribed to trades for market 0 (ETH)');
 
-    // Keep the connection alive
+    // Keep connection alive
     await new Promise(() => {}); // Keep running
 
   } catch (error) {
     console.error('Error:', error.message);
   } finally {
-    await wsClient.disconnect();
+    wsClient.disconnect();
   }
 }
 
 main().catch(console.error);
 ```
 
+## Message Format
+
+### Subscribe Message
+```typescript
+{
+  type: 'subscribe',
+  channel: 'order_book/0'
+}
+```
+
+### Unsubscribe Message
+```typescript
+{
+  type: 'unsubscribe',
+  channel: 'order_book/0'
+}
+```
+
+### Ping Message (for keepalive)
+```typescript
+{
+  type: 'ping'
+}
+```
+
+## Received Message Formats
+
+### Order Book Update
+```typescript
+{
+  channel: 'order_book:0',
+  offset: 12345,
+  order_book: {
+    code: 0,
+    asks: [{ price: "4000.00", size: "1.5" }],
+    bids: [{ price: "3999.50", size: "2.0" }],
+    offset: 12345,
+    nonce: 1234567890
+  },
+  timestamp: 1234567890123,
+  type: 'update/order_book'
+}
+```
+
+### Trade Update
+```typescript
+{
+  channel: 'trade:0',
+  nonce: 1234567890,
+  trades: [{
+    trade_id: 12345,
+    tx_hash: '0x...',
+    type: 'trade',
+    market_id: 0,
+    size: "0.5",
+    price: "4000.00",
+    usd_amount: "2000.00",
+    // ... more fields
+  }],
+  type: 'update/trade'
+}
+```
+
+### Market Stats Update
+```typescript
+{
+  channel: 'market_stats:0',
+  market_stats: {
+    market_id: 0,
+    index_price: "4000.00",
+    mark_price: "4000.50",
+    open_interest: "1000000.00",
+    current_funding_rate: "0.0001",
+    // ... more fields
+  },
+  type: 'update/market_stats'
+}
+```
+
 ## Error Handling
 
-The WebSocket client includes automatic reconnection and error handling:
+The WebSocket client includes automatic reconnection:
 
 ```typescript
-wsClient.on('error', (error) => {
-  console.error('WebSocket error:', error);
-  // The client will automatically attempt to reconnect
-});
-
-wsClient.on('reconnecting', (attempt) => {
-  console.log(`Reconnection attempt ${attempt}/${wsClient.maxReconnectAttempts}`);
+const wsClient = new WsClient({
+  url: 'wss://mainnet.zklighter.elliot.ai/stream',
+  onError: (error) => {
+    console.error('WebSocket error:', error);
+    // The client will automatically attempt to reconnect
+  },
+  maxReconnectAttempts: 10,
+  reconnectInterval: 5000
 });
 ```
 
 ## Best Practices
 
-1. **Always handle connection events** - Monitor connection status
-2. **Use appropriate callbacks** - Keep callback functions lightweight
-3. **Handle errors gracefully** - The client will auto-reconnect, but you should handle errors
+1. **Always handle callbacks** - Set up `onOpen`, `onMessage`, `onClose`, and `onError` callbacks
+2. **Wait for connection** - Wait a moment after `connect()` before subscribing
+3. **Handle reconnection** - The client auto-reconnects, but monitor `onError` for issues
 4. **Clean up resources** - Always call `disconnect()` when done
 5. **Monitor performance** - WebSocket connections can generate high-frequency updates
+6. **Use ping for keepalive** - Send periodic ping messages to keep connection alive
+
+## Ping-Pong Keepalive Example
+
+```typescript
+const wsClient = new WsClient({
+  url: 'wss://mainnet.zklighter.elliot.ai/stream',
+  onMessage: (message) => {
+    if (message.type === 'pong') {
+      console.log('✅ Pong received - connection alive');
+    }
+  }
+});
+
+await wsClient.connect();
+
+// Send ping every 30 seconds
+const pingInterval = setInterval(() => {
+  wsClient.send({ type: 'ping' });
+}, 30000);
+
+// Clean up on disconnect
+wsClient.onClose = () => {
+  clearInterval(pingInterval);
+};
+```
 
 ## Limitations
 
 - WebSocket connections are not persistent across browser refreshes
 - Rate limiting may apply to high-frequency subscriptions
 - Some data may be delayed during high network congestion
-- Connection will be lost if the server restarts
+- Connection will be lost if the server restarts (auto-reconnects)
+
+## See Also
+
+- `examples/ws.ts` - Basic WebSocket connection example
+- `examples/ws_ping_pong.ts` - Ping-pong keepalive example
+- `examples/market_data.ts` - Market data streaming example

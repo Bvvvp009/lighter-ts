@@ -1,6 +1,15 @@
 # SignerClient
 
-The `SignerClient` is the main class for interacting with the Lighter Protocol. It provides high-level methods for creating orders, managing accounts, and performing transactions using a WASM-based signer.
+The `SignerClient` is the main class for interacting with the Lighter Protocol. It provides high-level methods for creating orders, managing accounts, and performing transactions using the **official lighter-go WASM signer**.
+
+## Signer Integration
+
+This SDK uses the **official lighter-go WASM signer** from [elliottech/lighter-go](https://github.com/elliottech/lighter-go) for all cryptographic operations. The signer provides:
+
+- ✅ All transaction types (orders, transfers, leverage updates, etc.)
+- ✅ Automatic error recovery and nonce management
+- ✅ Support for multiple API keys and accounts
+- ✅ Production-ready cryptographic operations
 
 ## Constructor
 
@@ -149,6 +158,197 @@ Transfers USDC between accounts.
 const [tx, txHash, err] = await client.transfer(456, 1000000); // Transfer 100 USDC (in cents)
 ```
 
+### modifyOrder(marketIndex, orderIndex, baseAmount, price, triggerPrice, nonce?)
+
+Modifies an existing order's parameters without canceling it.
+
+**Parameters:**
+- `marketIndex: number` - Market index
+- `orderIndex: number` - Order index to modify
+- `baseAmount: number` - New base amount
+- `price: number` - New price
+- `triggerPrice: number` - New trigger price (0 for non-conditional orders)
+- `nonce?: number` - Optional nonce (auto-fetched if not provided)
+
+**Returns:** `Promise<[any, string, string | null]>` - `[orderInfo, txHash, error]`
+
+**Example:**
+```typescript
+const [orderInfo, txHash, err] = await client.modifyOrder(
+  0,        // marketIndex
+  12345,    // orderIndex
+  1000000,  // baseAmount
+  300000,   // price
+  0         // triggerPrice
+);
+```
+
+### createSubAccount(nonce?)
+
+Creates a sub account from the master account.
+
+**Parameters:**
+- `nonce?: number` - Optional nonce (auto-fetched if not provided)
+
+**Returns:** `Promise<[any, string, string | null]>` - `[subAccountInfo, txHash, error]`
+
+**Example:**
+```typescript
+const [subAccountInfo, txHash, err] = await client.createSubAccount();
+```
+
+### createPublicPool(operatorFee, initialTotalShares, minOperatorShareRate, nonce?)
+
+Creates a public pool for liquidity provision.
+
+**Parameters:**
+- `operatorFee: number` - Operator fee in basis points (e.g., 100 = 1%)
+- `initialTotalShares: number` - Initial total shares
+- `minOperatorShareRate: number` - Minimum operator share rate in basis points
+- `nonce?: number` - Optional nonce (auto-fetched if not provided)
+
+**Returns:** `Promise<[any, string, string | null]>` - `[poolInfo, txHash, error]`
+
+**Example:**
+```typescript
+const [poolInfo, txHash, err] = await client.createPublicPool(
+  100,      // operatorFee: 1%
+  1000000,  // initialTotalShares
+  5000      // minOperatorShareRate: 50%
+);
+```
+
+### updatePublicPool(publicPoolIndex, status, operatorFee, minOperatorShareRate, nonce?)
+
+Updates an existing public pool's parameters.
+
+**Parameters:**
+- `publicPoolIndex: number` - Public pool index
+- `status: number` - Pool status
+- `operatorFee: number` - Operator fee in basis points
+- `minOperatorShareRate: number` - Minimum operator share rate in basis points
+- `nonce?: number` - Optional nonce (auto-fetched if not provided)
+
+**Returns:** `Promise<[any, string, string | null]>` - `[poolInfo, txHash, error]`
+
+**Example:**
+```typescript
+const [poolInfo, txHash, err] = await client.updatePublicPool(
+  0,    // publicPoolIndex
+  1,    // status: 1 = active
+  150,  // operatorFee: 1.5%
+  6000  // minOperatorShareRate: 60%
+);
+```
+
+### mintShares(publicPoolIndex, shareAmount, nonce?)
+
+Mints shares in a public pool.
+
+**Parameters:**
+- `publicPoolIndex: number` - Public pool index
+- `shareAmount: number` - Amount of shares to mint
+- `nonce?: number` - Optional nonce (auto-fetched if not provided)
+
+**Returns:** `Promise<[any, string, string | null]>` - `[mintInfo, txHash, error]`
+
+**Example:**
+```typescript
+const [mintInfo, txHash, err] = await client.mintShares(
+  0,      // publicPoolIndex
+  10000   // shareAmount
+);
+```
+
+### burnShares(publicPoolIndex, shareAmount, nonce?)
+
+Burns shares in a public pool.
+
+**Parameters:**
+- `publicPoolIndex: number` - Public pool index
+- `shareAmount: number` - Amount of shares to burn
+- `nonce?: number` - Optional nonce (auto-fetched if not provided)
+
+**Returns:** `Promise<[any, string, string | null]>` - `[burnInfo, txHash, error]`
+
+**Example:**
+```typescript
+const [burnInfo, txHash, err] = await client.burnShares(
+  0,      // publicPoolIndex
+  5000    // shareAmount
+);
+```
+
+### updateMargin(marketIndex, usdcAmount, direction, nonce?)
+
+Updates margin for a position (add or remove).
+
+**Parameters:**
+- `marketIndex: number` - Market index
+- `usdcAmount: number` - USDC amount in USDC units (will be scaled internally)
+- `direction: number` - 0 to add margin, 1 to remove margin
+- `nonce?: number` - Optional nonce (auto-fetched if not provided)
+
+**Returns:** `Promise<[any, string, string | null]>` - `[marginInfo, txHash, error]`
+
+**Example:**
+```typescript
+// Add margin
+const [marginInfo, txHash, err] = await client.updateMargin(
+  0,    // marketIndex
+  100,  // usdcAmount: 100 USDC
+  0     // direction: 0 = add
+);
+
+// Remove margin
+const [marginInfo2, txHash2, err2] = await client.updateMargin(
+  0,   // marketIndex
+  50,  // usdcAmount: 50 USDC
+  1    // direction: 1 = remove
+);
+```
+
+### createGroupedOrders(groupingType, orders, nonce?)
+
+Creates grouped orders (OTO/OCO/OTOCO).
+
+**Parameters:**
+- `groupingType: number` - 1=OTO, 2=OCO, 3=OTOCO
+- `orders: Array<OrderParams>` - Array of order parameters
+- `nonce?: number` - Optional nonce (auto-fetched if not provided)
+
+**Returns:** `Promise<[any, string, string | null]>` - `[groupedOrdersInfo, txHash, error]`
+
+**Example:**
+```typescript
+// OTO (One Triggers Other)
+const [ordersInfo, txHash, err] = await client.createGroupedOrders(
+  1, // groupingType: OTO
+  [
+    {
+      marketIndex: 0,
+      clientOrderIndex: Date.now(),
+      baseAmount: 1000000,
+      price: 300000,
+      isAsk: false,
+      orderType: OrderType.LIMIT,
+      timeInForce: TimeInForce.GOOD_TILL_TIME,
+      orderExpiry: Date.now() + (28 * 24 * 60 * 60 * 1000)
+    },
+    {
+      marketIndex: 0,
+      clientOrderIndex: Date.now() + 1,
+      baseAmount: 1000000,
+      price: 290000,
+      isAsk: false,
+      orderType: OrderType.LIMIT,
+      timeInForce: TimeInForce.GOOD_TILL_TIME,
+      orderExpiry: Date.now() + (28 * 24 * 60 * 60 * 1000)
+    }
+  ]
+);
+```
+
 ### updateLeverage(marketIndex: number, marginMode: number, initialMarginFraction: number)
 
 Updates leverage settings for a market.
@@ -282,17 +482,27 @@ const result = await signerClient.createUnifiedOrder({
 
 **Note for TWAP Orders**: TWAP orders execute over time. SL/TP cannot be created in the same batch with TWAP orders. Create SL/TP separately after the TWAP begins executing.
 
-### checkClient()
+### checkClient(useWasmCheck?: boolean)
 
-Checks if the client is properly configured and connected.
+Checks if the client is properly configured. Optionally validates API key with server using WASM signer.
 
-**Returns:** `string | null` - Error message if check fails, null if successful
+**Parameters:**
+- `useWasmCheck?: boolean` - If true, calls WASM CheckClient to verify API key matches server (default: false)
+
+**Returns:** `Promise<string | null>` - Error message if check fails, null if successful
 
 **Example:**
 ```typescript
-const error = client.checkClient();
+// Basic validation only
+const error = await client.checkClient();
 if (error) {
   console.error('Client check failed:', error);
+}
+
+// With WASM API key validation
+const error = await client.checkClient(true);
+if (error) {
+  console.error('API key validation failed:', error);
 }
 ```
 
@@ -325,11 +535,21 @@ await client.close();
 - `ISOLATED_MARGIN_MODE = 1` - Isolated margin mode
 
 ### Transaction Types
-- `TX_TYPE_CREATE_ORDER = 1` - Create order transaction
-- `TX_TYPE_CANCEL_ORDER = 2` - Cancel order transaction
-- `TX_TYPE_CANCEL_ALL_ORDERS = 3` - Cancel all orders transaction
-- `TX_TYPE_TRANSFER = 4` - Transfer transaction
+- `TX_TYPE_CHANGE_PUB_KEY = 8` - Change public key transaction
+- `TX_TYPE_CREATE_SUB_ACCOUNT = 9` - Create sub account transaction
+- `TX_TYPE_CREATE_PUBLIC_POOL = 10` - Create public pool transaction
+- `TX_TYPE_UPDATE_PUBLIC_POOL = 11` - Update public pool transaction
+- `TX_TYPE_TRANSFER = 12` - Transfer transaction
+- `TX_TYPE_WITHDRAW = 13` - Withdraw transaction
+- `TX_TYPE_CREATE_ORDER = 14` - Create order transaction
+- `TX_TYPE_CANCEL_ORDER = 15` - Cancel order transaction
+- `TX_TYPE_CANCEL_ALL_ORDERS = 16` - Cancel all orders transaction
+- `TX_TYPE_MODIFY_ORDER = 17` - Modify order transaction
+- `TX_TYPE_MINT_SHARES = 18` - Mint shares transaction
+- `TX_TYPE_BURN_SHARES = 19` - Burn shares transaction
 - `TX_TYPE_UPDATE_LEVERAGE = 20` - Update leverage transaction
+- `TX_TYPE_CREATE_GROUPED_ORDERS = 28` - Create grouped orders transaction
+- `TX_TYPE_UPDATE_MARGIN = 29` - Update margin transaction
 
 ### Other Constants
 - `NIL_TRIGGER_PRICE = 0` - No trigger price

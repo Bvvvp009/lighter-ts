@@ -37,11 +37,17 @@ try {
 
 ### Account Management Examples
 - **create_with_multiple_keys.ts** - Create orders using multiple API keys
+- **multi_client_advanced.ts** - Advanced multi-client operations (all new methods with multiple clients)
+- **create_subaccount.ts** - Create a sub account from master account
 - **deposit_to_subaccount.ts** - Deposit funds to subaccounts
 - **deposit.ts** - Deposit funds to main account
 - **withdraw_to_l1.ts** - Withdraw funds to L1 (Ethereum mainnet)
 - **update_leverage.ts** - Update leverage and margin mode (CROSS/ISOLATED) for markets
+- **update_margin.ts** - Add or remove margin from positions
 - **change_account_tier.ts** - Upgrade to premium tier or revert to standard tier
+- **public_pool_operations.ts** - Create, update, mint, and burn shares in public pools
+- **modify_order.ts** - Modify existing orders without canceling
+- **create_grouped_orders.ts** - Create OTO/OCO/OTOCO grouped orders
 
 ### Data & System Examples
 - **market_data.ts** - Fetch market data, order books, trades, candlesticks

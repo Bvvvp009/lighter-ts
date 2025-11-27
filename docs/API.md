@@ -2,6 +2,9 @@
 
 This section contains detailed documentation for all API classes, methods, and types in the Lighter TypeScript SDK.
 
+> **📖 New to the SDK?** Start with [Getting Started](GettingStarted.md)  
+> **🔄 Upgrading?** Check the [Migration Guide](MigrationGuide.md)
+
 ## Core Classes
 
 ### [SignerClient](SignerClient.md)
@@ -55,20 +58,19 @@ Transaction management and history.
 - `sendTx()` - Send transaction
 - `sendTxBatch()` - Send batch transactions
 
-### [BlockApi](BlockApi.md)
-Block information and data.
+### BlockApi
+Block information and data. Note: BlockApi methods are available through TransactionApi.
 
 **Methods:**
 - `getBlock()` - Get block information
 - `getBlocks()` - Get block list
 - `getCurrentHeight()` - Get current block height
 
-### [RootApi](RootApi.md)
+### RootApi
 System information and status.
 
 **Methods:**
 - `getInfo()` - Get system information
-- `getStatus()` - Get system status
 
 ## Type Definitions
 
@@ -138,11 +140,21 @@ Trade information structure.
 - `ISOLATED_MARGIN_MODE = 1` - Isolated margin
 
 ### Transaction Types
-- `TX_TYPE_CREATE_ORDER = 1` - Create order
-- `TX_TYPE_CANCEL_ORDER = 2` - Cancel order
-- `TX_TYPE_CANCEL_ALL_ORDERS = 3` - Cancel all orders
-- `TX_TYPE_TRANSFER = 4` - Transfer
+- `TX_TYPE_CHANGE_PUB_KEY = 8` - Change public key
+- `TX_TYPE_CREATE_SUB_ACCOUNT = 9` - Create sub account
+- `TX_TYPE_CREATE_PUBLIC_POOL = 10` - Create public pool
+- `TX_TYPE_UPDATE_PUBLIC_POOL = 11` - Update public pool
+- `TX_TYPE_TRANSFER = 12` - Transfer
+- `TX_TYPE_WITHDRAW = 13` - Withdraw
+- `TX_TYPE_CREATE_ORDER = 14` - Create order
+- `TX_TYPE_CANCEL_ORDER = 15` - Cancel order
+- `TX_TYPE_CANCEL_ALL_ORDERS = 16` - Cancel all orders
+- `TX_TYPE_MODIFY_ORDER = 17` - Modify order
+- `TX_TYPE_MINT_SHARES = 18` - Mint shares
+- `TX_TYPE_BURN_SHARES = 19` - Burn shares
 - `TX_TYPE_UPDATE_LEVERAGE = 20` - Update leverage
+- `TX_TYPE_CREATE_GROUPED_ORDERS = 28` - Create grouped orders
+- `TX_TYPE_UPDATE_MARGIN = 29` - Update margin
 
 ## Error Handling
 
