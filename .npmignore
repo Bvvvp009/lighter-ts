@@ -21,6 +21,7 @@ tests/
 *.test.ts
 *.spec.ts
 jest.config.js
+examples/test_*.ts
 
 # Build artifacts
 node_modules/
