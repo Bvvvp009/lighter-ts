@@ -87,8 +87,11 @@ async function testWebSocketConnection(proxyConfig: ProxyConfig, proxyIndex: num
   let messageCount = 0;
   let subscribed = false;
   
+  const baseUrl = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const wsUrl = process.env['WS_URL'] || baseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/stream';
+
   const wsClient = new WsClient({
-    url: 'wss://mainnet.zklighter.elliot.ai/stream',
+    url: wsUrl,
     proxy: proxyConfig,
     maxReconnectAttempts: 0,
     onOpen: () => {
@@ -159,9 +162,11 @@ async function testSendOrderViaProxy(proxyConfig: ProxyConfig, proxyIndex: numbe
     proxy: proxyConfig, // HTTP requests use proxy
   });
 
+  const wsUrl = process.env['WS_URL'] || baseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/stream';
+
   // Try /stream endpoint (same as subscriptions) - some deployments use /stream for both
   const wsOrderClient = new WebSocketOrderClient({
-    url: 'wss://mainnet.zklighter.elliot.ai/stream', // Use full WS URL with /stream
+    url: wsUrl, // Use full WS URL with /stream
     endpointPath: '', // Already full URL
     proxy: proxyConfig, // WebSocket connection uses proxy
   });

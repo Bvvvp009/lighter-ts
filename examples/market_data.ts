@@ -93,8 +93,10 @@ async function fetchMarketData() {
 
     // 5. WebSocket Real-time Data
     console.log('\n🔌 Connecting to WebSocket for real-time data...');
+    const baseUrl = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+    const wsUrl = process.env['WS_URL'] || baseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/stream';
     const wsClient = new WsClient({
-      url: 'wss://mainnet.zklighter.elliot.ai/stream',
+      url: wsUrl,
       onOpen: () => console.log('✅ WebSocket connected'),
       onMessage: (message) => {
         console.log('📡 WebSocket message received');

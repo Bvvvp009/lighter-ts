@@ -4,6 +4,9 @@
  */
 
 import { WsClient } from '../src';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 async function asyncWebSocketExample() {
   console.log('🚀 Async WebSocket Operations Example...\n');
@@ -12,8 +15,10 @@ async function asyncWebSocketExample() {
   let lastOrderBookUpdate: any = null;
 
   // Initialize WebSocket client with reconnection settings
+  const baseUrl = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const wsUrl = process.env['WS_URL'] || baseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/stream';
   const wsClient = new WsClient({
-    url: 'wss://mainnet.zklighter.elliot.ai/stream',
+    url: wsUrl,
     reconnectInterval: 5000,
     maxReconnectAttempts: 3,
     onOpen: () => {
