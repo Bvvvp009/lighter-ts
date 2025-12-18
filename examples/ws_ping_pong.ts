@@ -5,6 +5,9 @@
  */
 
 import { WsClient } from '../src';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 async function webSocketPingPongExample() {
   console.log('🚀 WebSocket Ping-Pong Connection Maintenance Example...\n');
@@ -16,8 +19,10 @@ async function webSocketPingPongExample() {
   let isAlive = true;
 
   // Initialize WebSocket client with ping-pong handling
+  const baseUrl = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const wsUrl = process.env['WS_URL'] || baseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/stream';
   const wsClient = new WsClient({
-    url: 'wss://mainnet.zklighter.elliot.ai/stream',
+    url: wsUrl,
     reconnectInterval: 5000,
     maxReconnectAttempts: 3,
     onOpen: () => {
@@ -133,7 +138,7 @@ async function webSocketPingPongExample() {
       
       await wsClient.disconnect();
       console.log('🎉 Ping-Pong WebSocket example completed!');
-    }, 300000); // 5 minutes
+    }, 3000000); // 30 minutes
 
   } catch (error) {
     console.error('❌ Error:', error);
@@ -153,8 +158,10 @@ async function advancedPingPongExample() {
   let missedPongs = 0;
   const maxMissedPongs = 3;
 
+  const baseUrl = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const wsUrl = process.env['WS_URL'] || baseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/stream';
   const wsClient = new WsClient({
-    url: 'wss://mainnet.zklighter.elliot.ai/stream',
+    url: wsUrl,
     onOpen: () => {
       console.log('✅ Advanced WebSocket connected');
       customPingCount = 0;
