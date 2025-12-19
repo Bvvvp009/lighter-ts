@@ -3,6 +3,17 @@
  * Types for SDK configuration and settings
  */
 
+// Proxy Configuration
+export interface ProxyConfig {
+  host: string;
+  port: number;
+  protocol?: 'http' | 'https' | 'socks4' | 'socks5';
+  auth?: {
+    username: string;
+    password: string;
+  };
+}
+
 // Main Configuration
 export interface Configuration {
   host: string;
@@ -10,6 +21,7 @@ export interface Configuration {
   secretKey?: string;
   timeout?: number;
   userAgent?: string;
+  proxy?: ProxyConfig;
 }
 
 // API Response Types
@@ -37,6 +49,7 @@ export interface WebSocketConfig {
   url: string;
   reconnectInterval?: number;
   maxReconnectAttempts?: number;
+  proxy?: ProxyConfig;
   onOpen?: () => void;
   onMessage?: (message: any) => void;
   onClose?: () => void;

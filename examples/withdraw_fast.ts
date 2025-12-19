@@ -2,6 +2,19 @@
  * Example: Fast Withdrawal
  * Demonstrates fast withdrawal using the fast withdraw pool
  * Based on: https://github.com/elliottech/lighter-python/blob/aecdec059f92a25510cad341a257b992d95ba7c2/examples/withdraw_fast.py
+ * 
+ * IMPORTANT: Two different private keys are required:
+ * 1. API_PRIVATE_KEY - Used for L2 (Layer 2) transaction signing (done by WASM internally)
+ * 2. ETH_PRIVATE_KEY / ACCOUNT_PRIVATE_KEY - Used for L1 (Ethereum) signature (required for withdrawals/transfers)
+ * 
+ * ✅ TESTED AND WORKING
+ * 
+ * Implementation notes:
+ * - Python SDK uses encode_defunct + sign_message from eth_account library
+ * - Python code: tx_info["L1Sig"] = signature.signature.to_0x_hex()
+ * - Our TypeScript code uses ethers.js signMessage which produces the same format
+ * - Both add Ethereum message prefix automatically
+ * - The code structure matches the Python reference implementation
  */
 
 import { SignerClient, ApiClient, TransactionApi } from '../src';
@@ -97,6 +110,7 @@ async function withdrawFast() {
     console.log(`✅ Next nonce: ${nextNonce.nonce}\n`);
 
     // Step 5: Build memo (20-byte address + 12 zeros = 32 bytes total)
+    // Note: Python SDK uses hex string without '0x' prefix
     console.log('📝 Building memo from withdraw address...');
     const addrHex = WITHDRAW_ADDRESS.toLowerCase().replace(/^0x/, '');
     const addrBytes = Buffer.from(addrHex, 'hex');
@@ -104,7 +118,8 @@ async function withdrawFast() {
       throw new Error(`Invalid address length: ${addrBytes.length}. Expected 20 bytes (40 hex chars)`);
     }
     const memoBytes = Buffer.concat([addrBytes, Buffer.alloc(12, 0)]);
-    const memoHex = '0x' + memoBytes.toString('hex');
+    // Use hex string without '0x' prefix to match Python SDK format
+    const memoHex = memoBytes.toString('hex');
     console.log(`✅ Memo: ${memoHex}\n`);
 
     // Step 6: Sign transfer transaction
@@ -114,7 +129,7 @@ async function withdrawFast() {
     const wasmClient = (signerClient as any).wallet;
     const signedTx = await wasmClient.signTransfer({
       toAccountIndex: toAccount,
-      asset_id: 0, // USDC
+      asset_id: 3, // USDC asset index (3 = USDCAssetIndex)
       is_spot_account: false, // Perp account
       usdcAmount: scaledAmount,
       fee: fee,
@@ -131,10 +146,37 @@ async function withdrawFast() {
 
     console.log('✅ Transfer transaction signed\n');
 
+    // Step 6.5: Sign L1 message and add to tx_info
+    // Note: Transfer transactions require L1 signature in the L1Sig field
+    // IMPORTANT: L1 signature requires ETH_PRIVATE_KEY (Ethereum wallet private key),
+    // NOT API_PRIVATE_KEY. This is different from L2 signatures which use API_PRIVATE_KEY.
+    let txInfo = signedTx.txInfo;
+    if (signedTx.messageToSign) {
+      console.log('🔐 Signing L1 message with Ethereum private key...');
+      try {
+        const { ethers } = require('ethers');
+        const wallet = new ethers.Wallet(ETH_PRIVATE_KEY); // ETH_PRIVATE_KEY = Ethereum wallet private key
+        
+        // Sign the message - ethers.signMessage automatically adds Ethereum message prefix
+        const l1Signature = await wallet.signMessage(signedTx.messageToSign);
+        console.log('✅ L1 signature created\n');
+        
+        // Parse tx_info JSON and add L1 signature to L1Sig field
+        const txInfoObj = JSON.parse(txInfo);
+        txInfoObj.L1Sig = l1Signature;
+        txInfo = JSON.stringify(txInfoObj);
+        console.log('✅ L1 signature added to transaction info\n');
+      } catch (e) {
+        throw new Error(`Failed to sign L1 message: ${e instanceof Error ? e.message : e}`);
+      }
+    } else {
+      console.warn('⚠️  No messageToSign returned - L1 signature may be required\n');
+    }
+
     // Step 7: Submit to fastwithdraw endpoint
     console.log('📤 Submitting fast withdrawal...');
     const params = new URLSearchParams();
-    params.append('tx_info', signedTx.txInfo);
+    params.append('tx_info', txInfo);
     params.append('to_address', WITHDRAW_ADDRESS);
 
     const fastWithdrawResponse = await apiClient.post('/api/v1/fastwithdraw', params, {

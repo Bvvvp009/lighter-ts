@@ -61,6 +61,8 @@ export interface CancelAllOrdersParams {
 export interface TransferParams {
   toAccountIndex: number;
   usdcAmount: number;
+  asset_id?: number; // Asset ID (required for spot transfers)
+  is_spot_account?: boolean; // true for spot account, false/undefined for perp account (only used for USDC transfers)
   fee: number;
   memo: string;
   ethPrivateKey: string;
@@ -80,6 +82,8 @@ export interface UpdateLeverageParams {
 
 export interface WithdrawParams {
   usdcAmount: number;
+  assetIndex?: number; // Asset index (default: 3 for USDCAssetIndex)
+  routeType?: number; // Route type: 0 = Perps, 1 = Spot (default: 0)
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -735,12 +739,40 @@ export class WasmSignerClient {
   async signTransfer(params: TransferParams): Promise<WasmTxResponse> {
     await this.ensureInitialized();
     
+    // Map TransferParams to WASM SignTransfer signature:
+    // toAccount, usdcAmount, fee, memo, nonce, apiKeyIndex, accountIndex (7 args)
+    // Note: New API simplified - removed assetIndex, fromRouteType, toRouteType
+    // Memo must be exactly 32 bytes (raw bytes, no hex encoding)
+    const nonce = params.nonce ?? -1;
+    
+    // Ensure memo is exactly 32 bytes
+    let memoBytes: string;
+    if (typeof params.memo === 'string') {
+      const memoStr = params.memo;
+      if (memoStr.length !== 32) {
+        return { 
+          txType: 0, 
+          txInfo: '', 
+          txHash: '', 
+          error: `memo expected to be 32 bytes long, got ${memoStr.length}` 
+        };
+      }
+      memoBytes = memoStr;
+    } else {
+      return { 
+        txType: 0, 
+        txInfo: '', 
+        txHash: '', 
+        error: 'memo must be a string of exactly 32 bytes' 
+      };
+    }
+    
     const result = this.wasmModule.signTransfer(
-      params.toAccountIndex,
-      params.usdcAmount,
-      params.fee,
-      params.memo,
-      params.nonce,
+      params.toAccountIndex,  // toAccount
+      params.usdcAmount,      // usdcAmount
+      params.fee,             // fee
+      memoBytes,              // memo (32 bytes)
+      nonce,                  // nonce (-1 for auto-fetch)
       params.apiKeyIndex,
       params.accountIndex
     );
@@ -764,9 +796,14 @@ export class WasmSignerClient {
   async signWithdraw(params: WithdrawParams): Promise<WasmTxResponse> {
     await this.ensureInitialized();
     
+    // Map WithdrawParams to WASM SignWithdraw signature:
+    // usdcAmount, nonce, apiKeyIndex, accountIndex (4 args)
+    // Note: New API simplified - removed assetIndex and routeType
+    const nonce = params.nonce ?? -1;
+    
     const result = this.wasmModule.signWithdraw(
-      params.usdcAmount,
-      params.nonce,
+      params.usdcAmount,  // usdcAmount
+      nonce,              // nonce (-1 for auto-fetch)
       params.apiKeyIndex,
       params.accountIndex
     );

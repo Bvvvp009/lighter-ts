@@ -1,4 +1,4 @@
-import { Configuration } from '../types';
+import { Configuration, ProxyConfig } from '../types';
 
 export class Config {
   private static instance: Config;
@@ -43,6 +43,10 @@ export class Config {
 
   public getUserAgent(): string {
     return this.config.userAgent || 'Lighter-TypeScript-SDK/1.0.0';
+  }
+
+  public getProxy(): ProxyConfig | undefined {
+    return this.config.proxy;
   }
 
   public setApiKey(apiKey: string): void {

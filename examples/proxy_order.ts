@@ -1,8 +1,8 @@
 /**
- * Test: Send Real Order via WebSocket using Proxy
+ * Example: Send Order via Proxy
  * 
- * This script tests sending an actual order through WebSocket using proxy
- * with real credentials.
+ * Demonstrates sending orders through HTTP API and WebSocket using proxy configuration.
+ * Supports both authenticated and unauthenticated proxies.
  */
 
 import { WsClient, WebSocketOrderClient, ApiClient, SignerClient, TransactionApi, MarketHelper, OrderType } from '../src';
@@ -11,65 +11,32 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-// Get credentials from environment variables
+// Configuration from environment variables
 const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || '';
 const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '4', 10);
-const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '665', 10);
+const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
 
-if (!API_PRIVATE_KEY) {
-  throw new Error('API_PRIVATE_KEY must be set in .env file');
-}
-
-// Default test proxies - can be overridden via PROXY_HOSTS environment variable (comma-separated "host:port" pairs)
-// Example: PROXY_HOSTS="142.111.48.253:7030,31.59.20.176:6754"
-// NOTE: These are example/test proxies. In production, always use your own proxy servers via PROXY_HOSTS env var.
-const DEFAULT_PROXIES = [
-  { host: '142.111.48.253', port: 7030 },
-  { host: '31.59.20.176', port: 6754 },
-  { host: '23.95.150.145', port: 6114 },
-  { host: '198.23.239.134', port: 6540 },
-  { host: '107.172.163.27', port: 6543 },
-  { host: '198.105.121.200', port: 6462 },
-  { host: '64.137.96.74', port: 6641 },
-  { host: '84.247.60.125', port: 6095 },
-  { host: '216.10.27.159', port: 6837 },
-  { host: '142.111.67.146', port: 5611 },
-];
-
-// Parse proxies from environment or use defaults
-function getProxies() {
-  const proxyHosts = process.env['PROXY_HOSTS'];
-  if (proxyHosts) {
-    return proxyHosts.split(',').map(proxy => {
-      const trimmed = proxy.trim();
-      const parts = trimmed.split(':');
-      if (parts.length !== 2) {
-        throw new Error(`Invalid proxy format: ${trimmed}. Expected "host:port"`);
-      }
-      const port = parseInt(parts[1], 10);
-      if (isNaN(port) || port <= 0 || port > 65535) {
-        throw new Error(`Invalid port in proxy: ${trimmed}. Port must be 1-65535`);
-      }
-      return { host: parts[0], port };
-    });
-  }
-  return DEFAULT_PROXIES;
-}
-
-const PROXIES = getProxies();
-
-// Get proxy credentials from environment variables
+// Proxy configuration from environment variables
+const PROXY_HOST = process.env['PROXY_HOST'] || '';
+const PROXY_PORT = parseInt(process.env['PROXY_PORT'] || '0', 10);
 const PROXY_USER = process.env['PROXY_USER'] || '';
 const PROXY_PASS = process.env['PROXY_PASS'] || '';
 
-function createProxyConfig(host: string, port: number): ProxyConfig {
+if (!API_PRIVATE_KEY) {
+  throw new Error('API_PRIVATE_KEY environment variable is required');
+}
+
+if (!PROXY_HOST || !PROXY_PORT) {
+  throw new Error('PROXY_HOST and PROXY_PORT environment variables are required');
+}
+
+function createProxyConfig(): ProxyConfig {
   const config: ProxyConfig = {
-    host,
-    port,
+    host: PROXY_HOST,
+    port: PROXY_PORT,
     protocol: 'http',
   };
   
-  // Only add auth if credentials are provided
   if (PROXY_USER && PROXY_PASS) {
     config.auth = {
       username: PROXY_USER,
@@ -80,18 +47,15 @@ function createProxyConfig(host: string, port: number): ProxyConfig {
   return config;
 }
 
-async function testWebSocketConnection(proxyConfig: ProxyConfig, proxyIndex: number) {
-  console.log(`📡 Test 1: WebSocket Connection via Proxy #${proxyIndex + 1}\n`);
+async function testWebSocketConnection(proxyConfig: ProxyConfig) {
+  console.log(`📡 Test 1: WebSocket Connection via Proxy\n`);
   console.log(`Proxy: ${proxyConfig.host}:${proxyConfig.port}`);
   
   let messageCount = 0;
   let subscribed = false;
   
-  const baseUrl = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
-  const wsUrl = process.env['WS_URL'] || baseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/stream';
-
   const wsClient = new WsClient({
-    url: wsUrl,
+    url: 'wss://mainnet.zklighter.elliot.ai/stream',
     proxy: proxyConfig,
     maxReconnectAttempts: 0,
     onOpen: () => {
@@ -143,8 +107,8 @@ async function testWebSocketConnection(proxyConfig: ProxyConfig, proxyIndex: num
   }
 }
 
-async function testSendOrderViaProxy(proxyConfig: ProxyConfig, proxyIndex: number) {
-  console.log(`📡 Test 2: Send Order via HTTP API using Proxy #${proxyIndex + 1}\n`);
+async function testSendOrderViaProxy(proxyConfig: ProxyConfig, proxyIndex: number = 0) {
+  console.log(`📡 Test 2: Send Order via HTTP API using Proxy\n`);
   console.log(`Proxy: ${proxyConfig.host}:${proxyConfig.port}`);
   console.log(`Account: ${ACCOUNT_INDEX}, API Key Index: ${API_KEY_INDEX}\n`);
   
@@ -162,11 +126,9 @@ async function testSendOrderViaProxy(proxyConfig: ProxyConfig, proxyIndex: numbe
     proxy: proxyConfig, // HTTP requests use proxy
   });
 
-  const wsUrl = process.env['WS_URL'] || baseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/stream';
-
   // Try /stream endpoint (same as subscriptions) - some deployments use /stream for both
   const wsOrderClient = new WebSocketOrderClient({
-    url: wsUrl, // Use full WS URL with /stream
+    url: 'wss://mainnet.zklighter.elliot.ai/stream', // Use full WS URL with /stream
     endpointPath: '', // Already full URL
     proxy: proxyConfig, // WebSocket connection uses proxy
   });
@@ -206,10 +168,10 @@ async function testSendOrderViaProxy(proxyConfig: ProxyConfig, proxyIndex: numbe
       clientOrderIndex: Date.now(),
       baseAmount: baseAmount,
       price: testPrice,
-      isAsk: 0, // BUY order (WASM signer expects number: 0=BUY, 1=SELL)
+      isAsk: 0, // BUY order
       orderType: OrderType.LIMIT,
       timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-      reduceOnly: 0, // Not reduce only (WASM signer expects number: 0=false, 1=true)
+      reduceOnly: 0,
       triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
       orderExpiry: Date.now() + (60 * 60 * 1000), // 1 hour expiry
       nonce: nextNonce.nonce,
@@ -285,63 +247,32 @@ async function testSendOrderViaProxy(proxyConfig: ProxyConfig, proxyIndex: numbe
 async function main() {
   console.log('🚀 Real Order Test via Proxy\n');
   console.log('='.repeat(60));
-  console.log(`Testing with ${PROXIES.length} proxies until one works`);
+  console.log(`Testing with proxy: ${PROXY_HOST}:${PROXY_PORT}`);
   console.log('='.repeat(60) + '\n');
 
-  let success = false;
-  let lastError: Error | null = null;
-
-  // Try each proxy until one works
-  for (let i = 0; i < PROXIES.length; i++) {
-    const proxy = PROXIES[i];
-    const proxyConfig = createProxyConfig(proxy.host, proxy.port);
+  const proxyConfig = createProxyConfig();
+  
+  try {
+    // Test: Send actual order via proxy
+    const txHash = await testSendOrderViaProxy(proxyConfig, 0);
     
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`Trying Proxy ${i + 1}/${PROXIES.length}: ${proxy.host}:${proxy.port}`);
-    console.log('='.repeat(60) + '\n');
-
-    try {
-      // Test 2: Send actual order (skip WebSocket test for now)
-      const txHash = await testSendOrderViaProxy(proxyConfig, i);
-      
-      console.log('\n' + '='.repeat(60));
-      console.log('🎉🎉🎉 SUCCESS! 🎉🎉🎉\n');
-      console.log('Summary:');
-      console.log(`  ✅ Working Proxy: ${proxy.host}:${proxy.port} (#${i + 1})`);
-      console.log('  ✅ Order sending via proxy: Working');
-      console.log(`  ✅ Transaction Hash: ${txHash.substring(0, 32)}...`);
-      console.log('\n✅ Proxy implementation is fully functional!\n');
-      
-      success = true;
-      break;
-      
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      lastError = error instanceof Error ? error : new Error(String(error));
-      
-      if (errorMsg.includes('restricted jurisdiction')) {
-        console.log(`\n⚠️  Proxy #${i + 1} is in a restricted jurisdiction, trying next...\n`);
-      } else if (errorMsg.includes('timeout')) {
-        console.log(`\n⚠️  Proxy #${i + 1} timed out, trying next...\n`);
-      } else {
-        console.log(`\n⚠️  Proxy #${i + 1} failed: ${errorMsg.substring(0, 100)}...\n`);
-      }
-      
-      // Small delay before trying next proxy
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-  }
-
-  if (!success) {
     console.log('\n' + '='.repeat(60));
-    console.log('❌ All proxies failed\n');
+    console.log('🎉🎉🎉 SUCCESS! 🎉🎉🎉\n');
+    console.log('Summary:');
+    console.log(`  ✅ Working Proxy: ${PROXY_HOST}:${PROXY_PORT}`);
+    console.log('  ✅ Order sending via proxy: Working');
+    console.log(`  ✅ Transaction Hash: ${txHash.substring(0, 32)}...`);
+    console.log('\n✅ Proxy implementation is fully functional!\n');
+    
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.log('\n' + '='.repeat(60));
+    console.log('❌ Proxy test failed\n');
     console.log('Possible reasons:');
-    console.log('  - All proxies are in restricted jurisdictions');
+    console.log('  - Proxy is in a restricted jurisdiction');
     console.log('  - Network connectivity issues');
     console.log('  - Proxy authentication problems');
-    if (lastError) {
-      console.log(`\nLast error: ${lastError.message}`);
-    }
+    console.log(`\nError: ${errorMsg}`);
     process.exit(1);
   }
 }

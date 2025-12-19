@@ -1,7 +1,7 @@
 /**
- * Example: Create Market Spot Orders on Testnet
+ * Example: Create Market Spot Orders
  * NOTE: Market indices: 2048 (ETH SPOT), 2049 (Prove SPOT), 2050 (Zk SPOT)
- * NOTE: Spot markets are currently testnet-only
+ * Available on mainnet
  */
 
 import { SignerClient, OrderType, ApiClient } from '../../src';
@@ -28,10 +28,10 @@ async function createMarketSpotOrders() {
   }
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
-  // Spot markets are testnet-only for now
-  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+  // Use BASE_URL from env or default to mainnet
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
-  console.log(`📋 Creating Market Spot Orders on Testnet`);
+  console.log(`📋 Creating Market Spot Orders`);
   console.log(`   Account Index: ${ACCOUNT_INDEX}`);
   console.log(`   API Key Index: ${API_KEY_INDEX}`);
   console.log(`   Base URL: ${BASE_URL}\n`);

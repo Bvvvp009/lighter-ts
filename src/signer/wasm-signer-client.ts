@@ -68,11 +68,13 @@ export interface CreateMarketOrderParams {
   avgExecutionPrice: number;
   isAsk: boolean;
   reduceOnly?: boolean;
+  nonce?: number; // Optional nonce (will be fetched automatically if not provided)
 }
 
 export interface CancelOrderParams {
   marketIndex: number;
   orderIndex: number;
+  nonce?: number; // Optional nonce (will be fetched automatically if not provided)
 }
 
 export interface ChangeApiKeyParams {
@@ -146,6 +148,7 @@ export class SignerClient {
   private nonceManager?: NonceManager;
   private l1BridgeConfig?: L1BridgeConfig;
   private clientCreated: boolean = false;
+  private clientCreationPromise: Promise<void> | null = null;
   private nonceCache: NonceCache | null = null;
   private wsOrderClient: WebSocketOrderClient | null = null;
   private orderBatcher: RequestBatcher | null = null;
@@ -182,6 +185,14 @@ export class SignerClient {
   static readonly ORDER_TYPE_TAKE_PROFIT = 4
   static readonly ORDER_TYPE_TAKE_PROFIT_LIMIT = 5
   static readonly ORDER_TYPE_TWAP = 6
+
+  // Order side constants (for isAsk parameter)
+  static readonly BUY = false;  // isAsk = false means BUY order
+  static readonly SELL = true;  // isAsk = true means SELL order
+
+  // Reduce only constants
+  static readonly NOT_REDUCE_ONLY = false;
+  static readonly REDUCE_ONLY = true;
 
   static readonly ORDER_TIME_IN_FORCE_POST_ONLY = 2
 
@@ -438,62 +449,79 @@ export class SignerClient {
   }
 
   async ensureWasmClient(): Promise<void> {
-
     if (this.signerType !== 'wasm' && this.signerType !== 'node-wasm') return;
     if (this.clientCreated) return;
 
-    // Initialize WASM client
-    // Determine chainId from API, try layer2BasicInfo first, then /info, fallback based on URL
-    const root = new RootApi(this.apiClient);
-    
-    // Determine default chain ID from URL (testnet = 300, mainnet = 304)
-    const urlLower = this.config.url.toLowerCase();
-    const defaultChainId = urlLower.includes('testnet') ? 300 : 304;
-    
-    let chainIdNum = defaultChainId;
-    try {
-      // Try modern endpoint
-      try {
-        const basic: any = await (this.apiClient as any).get('/api/v1/layer2BasicInfo');
-        const data: any = basic?.data ?? basic; // ApiClient.get wraps in {data}
-        const cid = (data && (data.chain_id ?? data.chainId ?? data.chainID)) ?? undefined;
-        if (cid !== undefined) {
-          if (typeof cid === 'number') {
-            chainIdNum = cid;
-          } else {
-            const s = String(cid).toLowerCase();
-            if (/^\d+$/.test(s)) chainIdNum = parseInt(s, 10);
-            else if (s.includes('mainnet')) chainIdNum = 304;
-            else if (s.includes('testnet')) chainIdNum = 300;
-          }
-        }
-      } catch {}
-
-      if (!Number.isFinite(chainIdNum) || chainIdNum <= 0) {
-        const info: any = await root.getInfo();
-        const cid = (info && (info.chain_id ?? info.chainId ?? info.chainID)) ?? defaultChainId;
-        if (typeof cid === 'number') chainIdNum = cid; else {
-          const s = String(cid).toLowerCase();
-          if (/^\d+$/.test(s)) chainIdNum = parseInt(s, 10);
-          else if (s.includes('mainnet')) chainIdNum = 304;
-          else if (s.includes('testnet')) chainIdNum = 300;
-          else chainIdNum = defaultChainId;
-        }
-      }
-      if (!Number.isFinite(chainIdNum) || chainIdNum <= 0) chainIdNum = defaultChainId;
-    } catch {
-      chainIdNum = defaultChainId;
+    // If initialization is already in progress, wait for it to complete
+    if (this.clientCreationPromise) {
+      return this.clientCreationPromise;
     }
 
-    await (this.wallet as WasmSignerClient).createClient({
-      url: this.config.url,
-      privateKey: this.config.privateKey?.startsWith('0x') ? this.config.privateKey : `0x${this.config.privateKey}`,
-      chainId: chainIdNum,
-      apiKeyIndex: this.config.apiKeyIndex,
-      accountIndex: this.config.accountIndex,
-    } as any);
+    // Create a promise that will be shared by all concurrent callers
+    this.clientCreationPromise = (async () => {
+      try {
+        // Double-check after acquiring the lock
+        if (this.clientCreated) return;
 
-    this.clientCreated = true;
+        // Initialize WASM client
+        // Determine chainId from API, try layer2BasicInfo first, then /info, fallback based on URL
+        const root = new RootApi(this.apiClient);
+        
+        // Determine default chain ID from URL (testnet = 300, mainnet = 304)
+        const urlLower = this.config.url.toLowerCase();
+        const defaultChainId = urlLower.includes('testnet') ? 300 : 304;
+        
+        let chainIdNum = defaultChainId;
+        try {
+          // Try modern endpoint
+          try {
+            const basic: any = await (this.apiClient as any).get('/api/v1/layer2BasicInfo');
+            const data: any = basic?.data ?? basic; // ApiClient.get wraps in {data}
+            const cid = (data && (data.chain_id ?? data.chainId ?? data.chainID)) ?? undefined;
+            if (cid !== undefined) {
+              if (typeof cid === 'number') {
+                chainIdNum = cid;
+              } else {
+                const s = String(cid).toLowerCase();
+                if (/^\d+$/.test(s)) chainIdNum = parseInt(s, 10);
+                else if (s.includes('mainnet')) chainIdNum = 304;
+                else if (s.includes('testnet')) chainIdNum = 300;
+              }
+            }
+          } catch {}
+
+          if (!Number.isFinite(chainIdNum) || chainIdNum <= 0) {
+            const info: any = await root.getInfo();
+            const cid = (info && (info.chain_id ?? info.chainId ?? info.chainID)) ?? defaultChainId;
+            if (typeof cid === 'number') chainIdNum = cid; else {
+              const s = String(cid).toLowerCase();
+              if (/^\d+$/.test(s)) chainIdNum = parseInt(s, 10);
+              else if (s.includes('mainnet')) chainIdNum = 304;
+              else if (s.includes('testnet')) chainIdNum = 300;
+              else chainIdNum = defaultChainId;
+            }
+          }
+          if (!Number.isFinite(chainIdNum) || chainIdNum <= 0) chainIdNum = defaultChainId;
+        } catch {
+          chainIdNum = defaultChainId;
+        }
+
+        await (this.wallet as WasmSignerClient).createClient({
+          url: this.config.url,
+          privateKey: this.config.privateKey?.startsWith('0x') ? this.config.privateKey : `0x${this.config.privateKey}`,
+          chainId: chainIdNum,
+          apiKeyIndex: this.config.apiKeyIndex,
+          accountIndex: this.config.accountIndex,
+        } as any);
+
+        this.clientCreated = true;
+      } finally {
+        // Clear the promise so subsequent calls can proceed normally
+        this.clientCreationPromise = null;
+      }
+    })();
+
+    return this.clientCreationPromise;
   }
 
   // ============================================================================
@@ -580,9 +608,11 @@ export class SignerClient {
         // Try WebSocket first if enabled and connected
         if (this.config.enableWebSocket && this.wsOrderClient?.isReady()) {
           try {
-            // Get next nonce
-            const nonceResult = await this.getNextNonce();
-            const nonce = nonceResult.nonce;
+            // Get next nonce if not provided
+            const nextNonce = (params.nonce === undefined || params.nonce === -1) ? 
+              await this.getNextNonce() :
+              { nonce: params.nonce };
+            const nonce = nextNonce.nonce;
 
             // Handle order expiry conversion (same as createOrderOptimized)
             let orderExpiry = params.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY;
@@ -671,8 +701,10 @@ export class SignerClient {
   }
 
   private async createOrderOptimized(params: CreateOrderParams): Promise<[any, string, string | null]> {
-    // Get next nonce (with caching)
-    const nextNonce = await this.getNextNonce();
+    // Get next nonce if not provided (with caching)
+    const nextNonce = (params.nonce === undefined || params.nonce === -1) ? 
+      await this.getNextNonce() :
+      { nonce: params.nonce };
 
     // Handle order expiry
     let orderExpiry = params.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY;
@@ -862,8 +894,10 @@ export class SignerClient {
     // Performance monitoring removed
 
     try {
-      // Get next nonce (with caching)
-      const nextNonce = await this.getNextNonce();
+      // Get next nonce if not provided (with caching)
+      const nextNonce = (params.nonce === undefined || params.nonce === -1) ? 
+        await this.getNextNonce() :
+        { nonce: params.nonce };
 
       // Use WASM signer
       const wasmParams = {
@@ -925,6 +959,7 @@ export class SignerClient {
     isAsk: boolean;
     reduceOnly?: boolean;
     idealPrice?: number;
+    nonce?: number; // Optional nonce (will be fetched automatically if not provided)
   }): Promise<[any, string, string | null]> {
     try {
       let idealPrice = params.idealPrice;
@@ -947,7 +982,8 @@ export class SignerClient {
         baseAmount: params.baseAmount,
         avgExecutionPrice: acceptableExecutionPrice,
         isAsk: params.isAsk,
-        reduceOnly: params.reduceOnly || false
+        reduceOnly: params.reduceOnly || false,
+        ...(params.nonce !== undefined && { nonce: params.nonce })
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -967,6 +1003,7 @@ export class SignerClient {
     isAsk: boolean;
     reduceOnly?: boolean;
     idealPrice?: number;
+    nonce?: number; // Optional nonce (will be fetched automatically if not provided)
   }): Promise<[any, string, string | null]> {
     try {
       let idealPrice = params.idealPrice;
@@ -986,7 +1023,8 @@ export class SignerClient {
         baseAmount: params.baseAmount,
         avgExecutionPrice: Math.round(acceptableExecutionPrice),
         isAsk: params.isAsk,
-        reduceOnly: params.reduceOnly || false
+        reduceOnly: params.reduceOnly || false,
+        ...(params.nonce !== undefined && { nonce: params.nonce })
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -1000,8 +1038,10 @@ export class SignerClient {
   async cancelOrder(params: CancelOrderParams): Promise<[any, string, string | null]> {
     return await this.processTransactionWithRetry(async () => {
       try {
-        // Get next nonce (with caching)
-        const nextNonce = await this.getNextNonce();
+        // Get next nonce if not provided (with caching)
+        const nextNonce = (params.nonce === undefined || params.nonce === -1) ? 
+          await this.getNextNonce() :
+          { nonce: params.nonce };
 
         // Use WASM signer
         const wasmParams = {
@@ -1038,8 +1078,16 @@ export class SignerClient {
 
   /**
    * Change API key (register new public key)
+   * 
+   * Can be used to:
+   * 1. Register a new API key at a new index (defaults to current + 1)
+   * 2. Overwrite/revoke an existing API key by using the same index
+   * 
    * @param ethPrivateKey - Ethereum private key for L1 signature
    * @param newPubkey - New public key to register
+   * @param newPrivateKey - Private key corresponding to newPubkey
+   * @param newApiKeyIndex - Optional API key index (defaults to current + 1). 
+   *                         To revoke an existing key, specify the same index as the key to revoke.
    * @returns [txHash, txInfo, error]
    */
   async changeApiKey(params: ChangeApiKeyParams): Promise<[any, string, string | null]> {
@@ -1388,6 +1436,7 @@ export class SignerClient {
     reduceOnly?: boolean;
     timeInForce?: TimeInForce;
     orderExpiry?: number;
+    nonce?: number; // Optional nonce (will be fetched automatically if not provided, used as starting nonce for batch operations)
   }): Promise<{
     mainOrder: { tx: any, hash: string, error: string | null };
     stopLoss?: { tx: any, hash: string, error: string | null };
@@ -1426,7 +1475,17 @@ export class SignerClient {
       
       // Get nonces for all orders in the batch
       const orderCount = 1 + (shouldCreateSL ? 1 : 0) + (shouldCreateTP ? 1 : 0);
-      const nonces = await this.getNextNonces(orderCount);
+      let nonces: number[];
+      if (params.nonce !== undefined && params.nonce !== -1) {
+        // Use provided nonce as starting nonce and calculate sequential nonces
+        nonces = [];
+        for (let i = 0; i < orderCount; i++) {
+          nonces.push(params.nonce + i);
+        }
+      } else {
+        // Fetch nonces from API
+        nonces = await this.getNextNonces(orderCount);
+      }
 
       // Prepare transactions array
       const txTypes: number[] = [];
@@ -2060,8 +2119,11 @@ export class SignerClient {
         const scaledAmount = Math.floor(params.usdcAmount * SignerClient.USDC_TICKER_SCALE);
 
         // Use WASM signer
+        // Default to assetIndex=3 (USDCAssetIndex) and routeType=0 (Perps) if not specified
         const wasmResponse = await (this.wallet as WasmSignerClient).signWithdraw({
           usdcAmount: scaledAmount,
+          assetIndex: params.assetIndex ?? 3,
+          routeType: params.routeType ?? 0,
           nonce: nextNonce.nonce,
           apiKeyIndex: this.config.apiKeyIndex,
           accountIndex: this.config.accountIndex

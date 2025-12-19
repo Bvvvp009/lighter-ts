@@ -35,12 +35,12 @@ async function createAuthToken() {
   try {
     // Create short-lived auth token (default ~10 minutes)
     const authToken = await signerClient.createAuthToken();
-    console.log(`Auth token created: ${authToken}`);
+    console.log(`Auth token created: ${authToken.substring(0, 20)}...`);
     
     // Create custom duration token (maximum 8 hour)
-    const oneHourInSeconds = 8 *60 * 60;
-    const longToken = await signerClient.createAuthTokenWithExpiry(oneHourInSeconds);
-    console.log(`8-hour token created: ${longToken}`);
+    const eightHoursInSeconds = 8 * 60 * 60;
+    const longToken = await signerClient.createAuthTokenWithExpiry(eightHoursInSeconds);
+    console.log(`8-hour token created: ${longToken.substring(0, 20)}...`);
 
     console.log('Auth tokens created successfully');
 

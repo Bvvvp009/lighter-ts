@@ -1,0 +1,16 @@
+# This file tracks the lighter-go commit hash used to build the WASM signer
+# Auto-updated by CI/CD pipeline
+# Format: <commit-hash>
+# Example: abc123def456...
+
+
+
+
+
+
+
+
+
+
+
+

@@ -7,6 +7,13 @@ export interface SubAccount {
   l2_address: string;
 }
 
+export interface AccountAsset {
+  symbol: string;
+  asset_id: number;
+  balance: string;
+  locked_balance: string;
+}
+
 export interface Account {
   index: string;
   l1_address: string;
@@ -21,6 +28,7 @@ export interface Account {
   positions: AccountPosition[];
   orders: Order[];
   trades: Trade[];
+  assets?: AccountAsset[]; // Assets array with balance and locked_balance
 }
 
 export interface AccountPosition {

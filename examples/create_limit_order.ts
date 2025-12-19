@@ -20,7 +20,6 @@ async function createLimitOrderWithSLTP() {
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
   const BASE_URL = 'https://testnet.zklighter.elliot.ai';
 
-  console.log(ACCOUNT_INDEX, API_KEY_INDEX, BASE_URL,API_PRIVATE_KEY);
   const signerClient = new SignerClient({
     url: BASE_URL,
     privateKey: API_PRIVATE_KEY,
