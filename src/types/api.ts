@@ -151,6 +151,8 @@ export type ZkLighterInfo = Schemas['ZkLighterInfo'];
 export interface TransferParams {
   toAccountIndex: number;
   usdcAmount: number;
+  asset_id?: number; // Asset ID (required for spot transfers)
+  is_spot_account?: boolean; // true for spot account, false/undefined for perp account (only used for USDC transfers)
   fee: number;
   memo: string;
   ethPrivateKey: string;
@@ -159,6 +161,8 @@ export interface TransferParams {
 
 export interface WithdrawParams {
   usdcAmount: number;
+  assetIndex?: number; // Asset index (default: 3 for USDCAssetIndex)
+  routeType?: number; // Route type: 0 = Perps, 1 = Spot (default: 0)
   nonce?: number;
 }
 

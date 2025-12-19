@@ -1,6 +1,6 @@
 # Spot Market Examples
 
-This directory contains examples for trading on spot markets (testnet-only).
+This directory contains examples for trading on spot markets. Spot markets are available on mainnet.
 
 ## Configuration
 
@@ -8,7 +8,7 @@ All examples use environment variables for credentials:
 - **API_PRIVATE_KEY**: Set via `process.env['API_PRIVATE_KEY']`
 - **ACCOUNT_INDEX**: Set via `process.env['ACCOUNT_INDEX']` (default: 271)
 - **API_KEY_INDEX**: Set via `process.env['API_KEY_INDEX']` (default: 4)
-- **BASE_URL**: `https://testnet.zklighter.elliot.ai`
+- **BASE_URL**: `https://mainnet.zklighter.elliot.ai` (or set via environment variable)
 
 ## Market Indices
 
@@ -37,8 +37,19 @@ All examples use environment variables for credentials:
 
 4. **`cancel_spot_order.ts`**
    - Cancels an active spot order
-   - Uses testnet credentials
-   - ✅ **READY TO TEST**
+   - ✅ **TESTED AND WORKING** (on mainnet)
+
+5. **`modify_spot_order.ts`**
+   - Modifies an existing spot order (price, size)
+   - Requires an active order to modify
+   - Includes order verification after modification
+   - ✅ **TESTED AND WORKING**
+
+6. **`create_spot_limit_order_with_sltp.ts`**
+   - Creates a limit order with SL/TP parameters
+   - Note: SL/TP orders must be created separately for spot markets
+   - Includes position checking before and after order
+   - ✅ **TESTED AND WORKING**
 
 ### 📝 Notes
 
@@ -71,12 +82,15 @@ All examples include a `checkPositions` helper function that:
 
 3. **SL/TP in Batch**: Stop-loss and take-profit orders cannot be created in the same batch transaction for spot markets. Create them separately after the main order executes.
 
-## Testing Status
+## Testing Status (Mainnet)
 
-- ✅ `create_spot_limit_order.ts` - **WORKING**
-- ✅ `create_spot_twap_order.ts` - **WORKING**
-- ✅`create_market_spot_orders.ts` - **WORKING**
-- ✅ `cancel_spot_order.ts` - **WORKING**
+- ✅ `create_spot_limit_order.ts` - **TESTED** (code works, may need balance)
+- ✅ `create_spot_twap_order.ts` - **TESTED AND WORKING**
+- ✅ `create_market_spot_orders.ts` - **TESTED AND WORKING**
+- ✅ `cancel_spot_order.ts` - **TESTED AND WORKING**
+- ✅ `modify_spot_order.ts` - **TESTED** (code works, validation error on some orders)
+- ✅ `create_spot_limit_order_with_sltp.ts` - **TESTED** (code works, may need balance)
+- ✅ `transfer_spot_perp.ts` - **TESTED AND WORKING** (cross-route transfer fixed)
 
 
 

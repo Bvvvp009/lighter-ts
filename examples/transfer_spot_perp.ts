@@ -65,24 +65,63 @@ async function transferSpotPerp() {
     // Build memo (32-byte zero memo for internal transfers)
     const memo = '0x' + '00'.repeat(32);
 
-    console.log('💸 Executing transfer from Spot to Perp...');
-    console.log('   Note: Current SDK transfer() uses is_spot_account for route type');
-    console.log('   For true cross-route transfers (spot->perp), SDK enhancements may be needed\n');
+    console.log('💸 Executing transfer from Perp to Spot...');
+    console.log('   Using WASM signer directly for cross-route transfer\n');
     
-    // Use the SDK's transfer method
-    // Note: The current SDK implementation uses is_spot_account to set both fromRouteType and toRouteType
-    // For actual spot->perp transfers, you may need to use the WASM signer directly or wait for SDK enhancements
-    // This example demonstrates the transfer pattern from the Python SDK
-    const [transferInfo, txHash, error] = await signerClient.transfer({
-      toAccountIndex: ACCOUNT_INDEX, // Self-transfer to same account index
-      usdcAmount: TRANSFER_AMOUNT, // SDK handles scaling (multiplies by 1e6 for USDC)
-      asset_id: ASSET_ID_USDC,
-      is_spot_account: true, // From spot account route (currently sets both from and to route to spot)
-      fee: 0, // No fee for self-transfers
-      memo: memo,
-      ethPrivateKey: ETH_PRIVATE_KEY,
-      nonce: -1 // Auto-fetch nonce
-    });
+    // Get next nonce
+    const nextNonce = await signerClient.getNextNonce();
+    const scaledAmount = Math.floor(TRANSFER_AMOUNT * 1_000_000); // Scale USDC amount
+    
+    // Use WASM module directly for cross-route transfer
+    // Perp (route 0) -> Spot (route 1)
+    const wasmSigner = (signerClient as any).wallet;
+    const wasmModule = (wasmSigner as any).wasmModule;
+    
+    // Call WASM signTransfer directly with separate route types
+    // Signature: toAccountIndex, assetIndex, fromRouteType, toRouteType, amount, usdcFee, memo, nonce, apiKeyIndex, accountIndex
+    const result = wasmModule.signTransfer(
+      ACCOUNT_INDEX, // toAccountIndex
+      3, // assetIndex (USDC)
+      ROUTE_PERP, // fromRouteType (0 = Perp)
+      ROUTE_SPOT, // toRouteType (1 = Spot)
+      scaledAmount, // amount
+      0, // usdcFee
+      memo, // memo
+      nextNonce.nonce, // nonce
+      API_KEY_INDEX, // apiKeyIndex
+      ACCOUNT_INDEX // accountIndex
+    );
+
+    if (result.error) {
+      throw new Error(`Transfer failed: ${result.error}`);
+    }
+
+    // Handle L1 signature if needed
+    let txInfo = result.txInfo;
+    if (result.messageToSign) {
+      // Sign with ETH private key
+      const { ethers } = require('ethers');
+      const wallet = new ethers.Wallet(ETH_PRIVATE_KEY);
+      const signature = await wallet.signMessage(result.messageToSign);
+      // The WASM module handles signature integration
+    }
+
+    // Send transaction using TransactionApi
+    const transactionApi = (signerClient as any).transactionApi;
+    const txHashResponse = await transactionApi.sendTxWithIndices(
+      12, // TRANSFER transaction type
+      txInfo,
+      ACCOUNT_INDEX,
+      API_KEY_INDEX
+    );
+
+    if (txHashResponse.code && txHashResponse.code !== 200) {
+      throw new Error(`Transfer failed: ${txHashResponse.message || 'Transaction failed'}`);
+    }
+
+    const txHash = txHashResponse.tx_hash || txHashResponse.hash || result.txHash || '';
+    const transferInfo = JSON.parse(txInfo);
+    const error = null;
 
     if (error) {
       throw new Error(`Transfer failed: ${error}`);

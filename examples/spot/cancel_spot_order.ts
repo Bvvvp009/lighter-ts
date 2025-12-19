@@ -2,7 +2,7 @@
  * Example: Cancel Spot Order
  * Works for ETH SPOT (2048), BTC SPOT (2049), SOL SPOT (2051)
  * Uses the same cancel method as perpetual orders (tx_type=15)
- * NOTE: Spot markets are currently testnet-only
+ * MarketIndex: 2048 (ETH SPOT) - Available on mainnet
  */
 
 import { SignerClient, ApiClient, OrderApi } from '../../src';
@@ -22,8 +22,8 @@ async function cancelSpotOrder() {
   }
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
-  // Spot markets are testnet-only for now
-  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+  // Use BASE_URL from env or default to mainnet
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   
   // Market indices: 2048 (ETH SPOT), 2049 (Prove SPOT), 2050 (Zk SPOT)
   const MARKET_INDEX = 2048; // ETH SPOT

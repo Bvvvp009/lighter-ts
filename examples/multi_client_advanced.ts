@@ -12,14 +12,17 @@ dotenv.config();
 
 async function multiClientAdvancedExample() {
   const API_KEY_1 = process.env['API_PRIVATE_KEY'] || "";
+  const API_KEY_2 = process.env['API_PRIVATE_KEY_2'] || "";
   if (!API_KEY_1) {
     throw new Error('API_PRIVATE_KEY environment variable is required');
   }
-  const API_KEY_2 = "a900ad2f39b9f55dbf5471f8ca7cf9c8ffbcb3a9205dd2f53b6163a5fc294425ca3bebfbc38fdf74";
-  const API_KEY_INDEX_1 = 4;
-  const API_KEY_INDEX_2 = 5;
-  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
-  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+  if (!API_KEY_2) {
+    throw new Error('API_PRIVATE_KEY_2 environment variable is required for multi-client example');
+  }
+  const API_KEY_INDEX_1 = parseInt(process.env['API_KEY_INDEX'] || '4', 10);
+  const API_KEY_INDEX_2 = parseInt(process.env['API_KEY_INDEX_2'] || '5', 10);
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '271', 10);
+  const BASE_URL = process.env['BASE_URL'] || 'https://testnet.zklighter.elliot.ai';
   // Client 1: Master account with API key index 1
   const client1 = new SignerClient({
     url: BASE_URL,

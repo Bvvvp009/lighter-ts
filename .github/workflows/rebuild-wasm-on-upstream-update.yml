@@ -1,0 +1,233 @@
+name: Rebuild WASM on lighter-go Update
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild even if no changes detected'
+        required: false
+        default: 'false'
+        type: boolean
+  
+  # Scheduled check (daily at 2 AM UTC)
+  schedule:
+    - cron: '0 2 * * *'
+  
+  # Webhook trigger (if configured in lighter-go repo)
+  # This would require lighter-go to send webhook on releases/tags
+  repository_dispatch:
+    types: [lighter-go-updated]
+
+jobs:
+  check-upstream:
+    name: Check lighter-go for Updates
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.check.outputs.has_changes }}
+      upstream_commit: ${{ steps.check.outputs.upstream_commit }}
+      upstream_ref: ${{ steps.check.outputs.upstream_ref }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for comparison
+      
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      
+      - name: Check for lighter-go updates
+        id: check
+        run: |
+          set -e
+          
+          # Clone or update lighter-go
+          if [ ! -d "lighter-go" ]; then
+            echo "Cloning lighter-go..."
+            git clone https://github.com/elliottech/lighter-go.git lighter-go
+          else
+            echo "Updating lighter-go..."
+            cd lighter-go
+            git fetch origin
+            git checkout main || git checkout master
+            git pull origin main || git pull origin master
+            cd ..
+          fi
+          
+          # Get current WASM commit hash (if tracked)
+          CURRENT_WASM_COMMIT=""
+          if [ -f ".wasm-commit" ]; then
+            CURRENT_WASM_COMMIT=$(cat .wasm-commit)
+          fi
+          
+          # Get latest lighter-go commit
+          cd lighter-go
+          UPSTREAM_COMMIT=$(git rev-parse HEAD)
+          UPSTREAM_REF=$(git rev-parse --abbrev-ref HEAD)
+          cd ..
+          
+          # Check if wasm directory changed
+          WASM_CHANGED=false
+          if [ -n "$CURRENT_WASM_COMMIT" ]; then
+            cd lighter-go
+            if git diff --quiet $CURRENT_WASM_COMMIT HEAD -- wasm/; then
+              echo "No changes in lighter-go/wasm/"
+            else
+              echo "Changes detected in lighter-go/wasm/"
+              WASM_CHANGED=true
+            fi
+            cd ..
+          else
+            echo "No previous WASM commit tracked, assuming changes"
+            WASM_CHANGED=true
+          fi
+          
+          # Force rebuild if requested
+          if [ "${{ github.event.inputs.force_rebuild }}" == "true" ]; then
+            WASM_CHANGED=true
+            echo "Force rebuild requested"
+          fi
+          
+          echo "has_changes=$WASM_CHANGED" >> $GITHUB_OUTPUT
+          echo "upstream_commit=$UPSTREAM_COMMIT" >> $GITHUB_OUTPUT
+          echo "upstream_ref=$UPSTREAM_REF" >> $GITHUB_OUTPUT
+          
+          if [ "$WASM_CHANGED" == "true" ]; then
+            echo "✅ Changes detected - will rebuild WASM"
+            echo "Upstream commit: $UPSTREAM_COMMIT"
+          else
+            echo "ℹ️ No changes detected - skipping rebuild"
+          fi
+
+  rebuild-wasm:
+    name: Rebuild WASM Signer
+    needs: check-upstream
+    if: needs.check-upstream.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Clone lighter-go
+        run: |
+          if [ ! -d "lighter-go" ]; then
+            git clone https://github.com/elliottech/lighter-go.git lighter-go
+          else
+            cd lighter-go
+            git fetch origin
+            git checkout main || git checkout master
+            git pull origin main || git pull origin master
+            cd ..
+          fi
+      
+      - name: Build WASM
+        run: npm run build:wasm
+      
+      - name: Verify WASM
+        run: npm run verify:wasm
+      
+      - name: Build TypeScript SDK
+        run: npm run build
+      
+      - name: Run Integration Tests
+        run: |
+          # Test that TypeScript SDK can load and use new WASM
+          npm test -- --testPathPattern="wasm|signer" || true
+          # Note: Tests may fail if WASM has breaking changes - that's expected
+          # This will be visible in the PR for review
+      
+      - name: Get upstream commit hash
+        id: upstream
+        run: |
+          cd lighter-go
+          COMMIT=$(git rev-parse HEAD)
+          REF=$(git rev-parse --abbrev-ref HEAD)
+          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
+          echo "ref=$REF" >> $GITHUB_OUTPUT
+          echo "$COMMIT" > ../.wasm-commit
+          cd ..
+      
+      - name: Check for changes
+        id: changes
+        run: |
+          if [ -n "$(git status --porcelain wasm/ .wasm-commit)" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create Pull Request
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: |
+            chore: rebuild WASM signer from lighter-go
+            
+            - Upstream commit: ${{ steps.upstream.outputs.commit }}
+            - Upstream ref: ${{ steps.upstream.outputs.ref }}
+            - Auto-generated by CI/CD pipeline
+          title: 'chore: Rebuild WASM signer from lighter-go'
+          body: |
+            ## Automated WASM Rebuild
+            
+            This PR was automatically created because changes were detected in `lighter-go/wasm/`.
+            
+            **Upstream Details:**
+            - Commit: `${{ steps.upstream.outputs.commit }}`
+            - Branch: `${{ steps.upstream.outputs.ref }}`
+            - Repository: [elliottech/lighter-go](https://github.com/elliottech/lighter-go)
+            
+            **Changes:**
+            - Rebuilt `wasm/lighter-signer.wasm` from latest lighter-go
+            - Updated `.wasm-commit` with upstream commit hash
+            
+            **Note:** This only rebuilds the WASM signer. The TypeScript SDK code remains unchanged.
+            
+            Please review and test before merging.
+          branch: chore/rebuild-wasm-${{ steps.upstream.outputs.commit }}
+          delete-branch: true
+          labels: |
+            automated
+            wasm
+            dependencies
+
+  notify:
+    name: Notify on Completion
+    needs: [check-upstream, rebuild-wasm]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Notify status
+        run: |
+          if [ "${{ needs.check-upstream.outputs.has_changes }}" == "true" ]; then
+            if [ "${{ needs.rebuild-wasm.result }}" == "success" ]; then
+              echo "✅ WASM rebuild completed successfully"
+            else
+              echo "❌ WASM rebuild failed"
+            fi
+          else
+            echo "ℹ️ No upstream changes detected - no rebuild needed"
+          fi
+

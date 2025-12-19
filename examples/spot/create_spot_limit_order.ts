@@ -1,7 +1,7 @@
 /**
  * Example: Create ETH SPOT Limit Order
  * MarketIndex: 2048
- * NOTE: Spot markets are currently testnet-only
+ * MarketIndex: 2048 (ETH SPOT) - Available on mainnet
  */
 
 import { SignerClient, OrderType, ApiClient, AccountApi } from '../../src';
@@ -17,8 +17,8 @@ async function createEthSpotLimitOrder() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
-  // Spot markets are testnet-only for now
-  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+  // Use BASE_URL from env or default to mainnet
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY environment variable is required');

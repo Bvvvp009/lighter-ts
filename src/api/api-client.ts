@@ -18,14 +18,35 @@ export class ApiClient {
 
   constructor(config?: Partial<Configuration>) {
     this.config = config ? new Config(config) : Config.getDefault();
-    this.axiosInstance = axios.create({
+    
+    const axiosConfig: any = {
       baseURL: this.config.getHost(),
       timeout: this.config.getTimeout(),
       headers: {
         'User-Agent': this.config.getUserAgent(),
         'Content-Type': 'application/json',
       },
-    });
+    };
+
+    // Add proxy configuration if provided
+    const proxyConfig = this.config.getProxy();
+    if (proxyConfig) {
+      const protocol = proxyConfig.protocol || 'http';
+      // Axios proxy format: { host, port, protocol, auth }
+      axiosConfig.proxy = {
+        host: proxyConfig.host,
+        port: proxyConfig.port,
+        protocol: protocol === 'https' ? 'https' : 'http', // Axios uses http/https only
+        ...(proxyConfig.auth && {
+          auth: {
+            username: proxyConfig.auth.username,
+            password: proxyConfig.auth.password,
+          },
+        }),
+      };
+    }
+
+    this.axiosInstance = axios.create(axiosConfig);
 
     this.setupInterceptors();
   }

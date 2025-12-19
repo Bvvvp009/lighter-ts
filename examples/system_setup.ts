@@ -91,8 +91,9 @@ async function systemSetup() {
         console.log('📋 API Key Configuration:');
         console.log(`   Account Index: ${ACCOUNT_INDEX}`);
         console.log(`   API Key Index: ${targetApiKeyIndex}`);
-        console.log(`   Private Key: ${apiKeyPair.privateKey}`);
-        console.log(`   Public Key: ${apiKeyPair.publicKey}\n`);
+        console.log(`   Private Key: ${apiKeyPair.privateKey.substring(0, 20)}...`);
+        console.log(`   Public Key: ${apiKeyPair.publicKey.substring(0, 20)}...`);
+        console.log(`   ⚠️  Save the full private key securely - it is not shown here for security\n`);
 
         // Optional: Verify the API key works by creating a new client with it
         // Note: Verification may fail if the transaction hasn't been processed yet

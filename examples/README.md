@@ -48,6 +48,10 @@ try {
 - **public_pool_operations.ts** - Create, update, mint, and burn shares in public pools
 - **modify_order.ts** - Modify existing orders without canceling
 - **create_grouped_orders.ts** - Create OTO/OCO/OTOCO grouped orders
+- **create_grouped_ioc_with_attached_sl_tp.ts** - IOC order with attached SL/TP using OTOCO grouping
+- **create_position_tied_sl_tp.ts** - Position-tied SL/TP orders using OCO grouping
+- **create_market_order_max_slippage.ts** - Market orders with max slippage protection
+- **generate_api_key.ts** - Generate API key pairs from seed using WASM
 
 ### Data & System Examples
 - **market_data.ts** - Fetch market data, order books, trades, candlesticks
@@ -60,6 +64,21 @@ try {
 - **ws_send_tx.ts** - Send transactions via WebSocket
 - **ws_send_batch_tx.ts** - Send batch transactions via WebSocket
 - **ws_ping_pong.ts** - Ping-pong mechanism to keep connections alive
+
+### Network & Proxy Examples
+- **proxy_example.ts** - Configure and use HTTP/HTTPS/SOCKS proxies for API and WebSocket connections
+- **proxy_usage.ts** - Comprehensive proxy examples with authentication and different proxy types
+
+### Spot Market Examples
+See `examples/spot/` directory for complete spot trading examples:
+- **create_spot_limit_order.ts** - Create limit orders for spot markets
+- **create_spot_limit_order_with_sltp.ts** - Create limit orders with SL/TP (note: SL/TP created separately)
+- **create_market_spot_orders.ts** - Create market orders for multiple spot markets
+- **create_spot_twap_order.ts** - Create TWAP orders for spot markets
+- **modify_spot_order.ts** - Modify existing spot orders
+- **cancel_spot_order.ts** - Cancel active spot orders
+
+**Note**: Spot markets use market indices 2048-2050 (ETH SPOT, PROVE SPOT, ZK SPOT) and are available on mainnet.
 
 ## 🚀 Quick Start
 
@@ -85,6 +104,12 @@ DEPOSIT_AMOUNT=0.1
 WITHDRAW_AMOUNT=0.1
 L1_ADDRESS=0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6
 ORDER_INDEX=12345
+
+# Proxy configuration (for proxy examples)
+PROXY_HOST=proxy.example.com
+PROXY_PORT=8080
+PROXY_USER=proxy_username
+PROXY_PASS=proxy_password
 ```
 
 ### Running Examples

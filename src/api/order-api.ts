@@ -2,10 +2,26 @@ import { ApiClient } from './api-client';
 import { OrderBookParams, TradeParams, PaginationParams } from '../types';
 
 export interface OrderBook {
+  symbol: string;
   market_id: number;
-  bids: PriceLevel[];
-  asks: PriceLevel[];
-  last_update_id: string;
+  market_type?: number; // 0 = perps, 1 = spot
+  base_asset_id?: number;
+  quote_asset_id?: number;
+  size_extension_multiplier?: number;
+  quote_extension_multiplier?: number;
+  status: string;
+  taker_fee: string;
+  maker_fee: string;
+  liquidation_fee: string;
+  min_base_amount: string;
+  min_quote_amount: string;
+  order_quote_limit: string;
+  supported_size_decimals: number;
+  supported_price_decimals: number;
+  supported_quote_decimals: number;
+  bids?: PriceLevel[];
+  asks?: PriceLevel[];
+  last_update_id?: string;
 }
 
 export interface PriceLevel {
@@ -29,6 +45,11 @@ export interface OrderBookDetailsResponse {
 export interface OrderBookDetailItem {
   symbol: string;
   market_id: number;
+  market_type?: number; // 0 = perps, 1 = spot
+  base_asset_id?: number;
+  quote_asset_id?: number;
+  size_extension_multiplier?: number;
+  quote_extension_multiplier?: number;
   status: string;
   taker_fee: string;
   maker_fee: string;
@@ -41,11 +62,11 @@ export interface OrderBookDetailItem {
   supported_quote_decimals: number;
   size_decimals: number;
   price_decimals: number;
-  quote_multiplier: number;
-  default_initial_margin_fraction: number;
-  min_initial_margin_fraction: number;
-  maintenance_margin_fraction: number;
-  closeout_margin_fraction: number;
+  quote_multiplier?: number;
+  default_initial_margin_fraction?: number;
+  min_initial_margin_fraction?: number;
+  maintenance_margin_fraction?: number;
+  closeout_margin_fraction?: number;
   last_trade_price: number;
   daily_trades_count: number;
   daily_base_token_volume: number;
@@ -53,9 +74,9 @@ export interface OrderBookDetailItem {
   daily_price_low: number;
   daily_price_high: number;
   daily_price_change: number;
-  open_interest: number;
+  open_interest?: number;
   daily_chart: Record<string, any>;
-  market_config: {
+  market_config?: {
     market_margin_mode: number;
     insurance_fund_account_index: number;
     liquidation_mode: number;
@@ -89,7 +110,7 @@ export interface Order {
   filled_quote_amount?: string;
   remaining_size?: string;
   remaining_base_amount?: string;
-  status?: string;
+  status?: 'open' | 'filled' | 'cancelled' | 'rejected' | 'canceled-invalid-balance' | string;
   created_at?: number;
   updated_at?: number;
   timestamp?: number;
@@ -146,6 +167,98 @@ export interface ExchangeStats {
   total_trades_24h: number;
   total_orders_24h: number;
   active_markets: number;
+}
+
+// Base OrderBook type for obDetails endpoint
+export interface BaseOrderBook {
+  symbol: string;
+  market_id: number;
+  market_type: number; // 0 = perps, 1 = spot
+  base_asset_id: number;
+  quote_asset_id: number;
+  size_extension_multiplier: number;
+  quote_extension_multiplier: number;
+  status: string;
+  taker_fee: string;
+  maker_fee: string;
+  liquidation_fee: string;
+  min_base_amount: string;
+  min_quote_amount: string;
+  order_quote_limit: string;
+  supported_size_decimals: number;
+  supported_price_decimals: number;
+  supported_quote_decimals: number;
+}
+
+export interface PerpsOrderBookDetail extends BaseOrderBook {
+  size_decimals: number;
+  price_decimals: number;
+  quote_multiplier: number;
+  default_initial_margin_fraction: number;
+  min_initial_margin_fraction: number;
+  maintenance_margin_fraction: number;
+  closeout_margin_fraction: number;
+  last_trade_price: number;
+  daily_trades_count: number;
+  daily_base_token_volume: number;
+  daily_quote_token_volume: number;
+  daily_price_low: number;
+  daily_price_high: number;
+  daily_price_change: number;
+  open_interest: number;
+  daily_chart: Record<string, number>;
+  market_config: {
+    market_margin_mode: number;
+    insurance_fund_account_index: number;
+    liquidation_mode: number;
+    force_reduce_only: boolean;
+    trading_hours: string;
+  };
+}
+
+export interface SpotOrderBookDetail extends BaseOrderBook {
+  size_decimals: number;
+  price_decimals: number;
+  last_trade_price: number;
+  daily_trades_count: number;
+  daily_base_token_volume: number;
+  daily_quote_token_volume: number;
+  daily_price_low: number;
+  daily_price_high: number;
+  daily_price_change: number;
+  daily_chart: Record<string, number>;
+  market_config: {
+    market_margin_mode: number;
+    insurance_fund_account_index: number;
+    liquidation_mode: number;
+    force_reduce_only: boolean;
+    trading_hours: string;
+  };
+}
+
+export interface OBDetails {
+  code: number;
+  perps_order_book_details: PerpsOrderBookDetail[];
+  spot_order_book_details: SpotOrderBookDetail[];
+}
+
+export interface Asset {
+  asset_index: number;
+  symbol: string;
+  l1_decimals: number;
+  decimals: number;
+  extension_multiplier: number;
+  min_transfer_amount: number;
+  min_withdrawal_amount: number;
+  margin_mode: number;
+  index_price: number;
+  l1_address: string;
+  tick_size: string;
+}
+
+export interface AssetDetails {
+  code: number;
+  asset_details: Asset[];
 }
 
 export class OrderApi {
@@ -264,6 +377,36 @@ export class OrderApi {
     const response = await this.client.delete<{ success: boolean }>('/api/v1/orders/all', {
       params,
     });
+    return response.data;
+  }
+
+  /**
+   * Get order book details (both perps and spot)
+   * @param marketId Optional market ID (default: 255 for all markets)
+   * @returns Order book details for perps and spot markets
+   */
+  public async getOBDetails(marketId?: number): Promise<OBDetails> {
+    const params: any = {};
+    if (marketId !== undefined) {
+      params.market_id = marketId;
+    }
+    
+    const response = await this.client.get<OBDetails>('/api/v1/obDetails', params);
+    return response.data;
+  }
+
+  /**
+   * Get asset details
+   * @param assetIndex Optional asset index (default: 0 for all assets)
+   * @returns Asset details
+   */
+  public async getAssetDetails(assetIndex?: number): Promise<AssetDetails> {
+    const params: any = {};
+    if (assetIndex !== undefined) {
+      params.asset_index = assetIndex;
+    }
+    
+    const response = await this.client.get<AssetDetails>('/api/v1/assetDetails', params);
     return response.data;
   }
 }

@@ -102,6 +102,7 @@ export {
 // Types from AccountApi
 export type { 
   Account,
+  AccountAsset,
   SubAccount,
   AccountPosition,
   AccountApiKeys,
@@ -123,7 +124,12 @@ export type {
   OrderBookOrders,
   Order,
   ExchangeStats,
-  PriceLevel
+  PriceLevel,
+  OBDetails,
+  PerpsOrderBookDetail,
+  SpotOrderBookDetail,
+  Asset,
+  AssetDetails
 } from './api/order-api';
 
 // Types from TransactionApi
@@ -197,7 +203,8 @@ export type {
   ApiResponse,
   ApiError,
   WebSocketConfig,
-  WebSocketSubscription
+  WebSocketSubscription,
+  ProxyConfig
 } from './types';
 
 // Utility Classes
