@@ -740,41 +740,53 @@ export class WasmSignerClient {
     await this.ensureInitialized();
     
     // Map TransferParams to WASM SignTransfer signature:
-    // toAccount, usdcAmount, fee, memo, nonce, apiKeyIndex, accountIndex (7 args)
-    // Note: New API simplified - removed assetIndex, fromRouteType, toRouteType
-    // Memo must be exactly 32 bytes (raw bytes, no hex encoding)
+    // SignTransfer expects 10 args: toAccountIndex, assetIndex, fromRouteType, toRouteType, amount, usdcFee, memo, nonce, apiKeyIndex, accountIndex
+    // Memo must be exactly 32 bytes (raw bytes, no hex encoding) or 64 hex chars
     const nonce = params.nonce ?? -1;
     
-    // Ensure memo is exactly 32 bytes
+    // Default values for route types and asset
+    // AssetIndex: 3 = USDC (based on protocol constants)
+    const assetIndex = params.asset_id ?? 3; // 3 = USDC
+    const fromRouteType = params.is_spot_account === true ? 1 : 0; // 0 = Perp, 1 = Spot
+    const toRouteType = params.is_spot_account === true ? 1 : 0; // 0 = Perp, 1 = Spot
+    
+    // Ensure memo is exactly 32 bytes or 64 hex chars
     let memoBytes: string;
     if (typeof params.memo === 'string') {
       const memoStr = params.memo;
-      if (memoStr.length !== 32) {
+      // Accept 32-byte string, 64 hex chars, or 66 with 0x prefix
+      if (memoStr.length === 32) {
+        memoBytes = memoStr;
+      } else if (memoStr.length === 64 || (memoStr.length === 66 && memoStr.startsWith('0x'))) {
+        memoBytes = memoStr;
+      } else {
         return { 
           txType: 0, 
           txInfo: '', 
           txHash: '', 
-          error: `memo expected to be 32 bytes long, got ${memoStr.length}` 
+          error: `memo expected to be 32 bytes, 64 hex chars, or 66 with 0x prefix, got ${memoStr.length}` 
         };
       }
-      memoBytes = memoStr;
     } else {
       return { 
         txType: 0, 
         txInfo: '', 
         txHash: '', 
-        error: 'memo must be a string of exactly 32 bytes' 
+        error: 'memo must be a string' 
       };
     }
     
     const result = this.wasmModule.signTransfer(
-      params.toAccountIndex,  // toAccount
-      params.usdcAmount,      // usdcAmount
-      params.fee,             // fee
-      memoBytes,              // memo (32 bytes)
-      nonce,                  // nonce (-1 for auto-fetch)
-      params.apiKeyIndex,
-      params.accountIndex
+      params.toAccountIndex,  // toAccountIndex (longlong)
+      assetIndex,              // assetIndex (int16_t) - 0 for USDC
+      fromRouteType,           // fromRouteType (uint8_t) - 0 = Perp, 1 = Spot
+      toRouteType,             // toRouteType (uint8_t) - 0 = Perp, 1 = Spot
+      params.usdcAmount,        // amount (longlong)
+      params.fee,              // usdcFee (longlong)
+      memoBytes,               // memo (char*)
+      nonce,                   // nonce (longlong)
+      params.apiKeyIndex,      // apiKeyIndex (int)
+      params.accountIndex      // accountIndex (longlong)
     );
     
     if (result.error) {
