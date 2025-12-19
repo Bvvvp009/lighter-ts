@@ -2082,9 +2082,35 @@ export class SignerClient {
           return [null, '', wasmResponse.error];
         }
 
+        // Handle L1 signature if messageToSign is present (required for transfers)
+        let txInfo = wasmResponse.txInfo;
+        if (wasmResponse.messageToSign) {
+          try {
+            if (!params.ethPrivateKey && !this.config.privateKey) {
+              return [null, '', 'L1 signature required for transfer. Please provide ethPrivateKey (Ethereum private key) in TransferParams.'];
+            }
+            
+            const privateKeyToUse = params.ethPrivateKey || this.config.privateKey!;
+            
+            const ethers = await import('ethers');
+            const wallet = new ethers.Wallet(privateKeyToUse);
+            const l1Sig = await wallet.signMessage(wasmResponse.messageToSign);
+            
+            const txInfoObj = JSON.parse(txInfo);
+            txInfoObj.L1Sig = l1Sig;
+            txInfo = JSON.stringify(txInfoObj);
+          } catch (sigError) {
+            const errorMsg = sigError instanceof Error ? sigError.message : String(sigError);
+            if (!params.ethPrivateKey && (errorMsg.includes('invalid private key') || errorMsg.includes('invalid hex'))) {
+              return [null, '', `L1 signature required for transfer. Please provide ethPrivateKey (Ethereum private key). Error: ${errorMsg}`];
+            }
+            return [null, '', `Failed to sign L1 message: ${errorMsg}`];
+          }
+        }
+
         const txHash = await this.transactionApi.sendTxWithIndices(
           wasmResponse.txType || SignerClient.TX_TYPE_TRANSFER,
-          wasmResponse.txInfo,
+          txInfo,
           this.config.accountIndex,
           this.config.apiKeyIndex
         );
