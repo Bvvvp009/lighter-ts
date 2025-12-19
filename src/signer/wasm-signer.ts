@@ -65,7 +65,7 @@ export interface TransferParams {
   is_spot_account?: boolean; // true for spot account, false/undefined for perp account (only used for USDC transfers)
   fee: number;
   memo: string;
-  ethPrivateKey: string;
+  ethPrivateKey?: string; // Optional: ETH private key for L1 signature. If not provided, will try API private key (may fail)
   nonce?: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -777,16 +777,16 @@ export class WasmSignerClient {
     }
     
     const result = this.wasmModule.signTransfer(
-      params.toAccountIndex,  // toAccountIndex (longlong)
-      assetIndex,              // assetIndex (int16_t) - 0 for USDC
-      fromRouteType,           // fromRouteType (uint8_t) - 0 = Perp, 1 = Spot
-      toRouteType,             // toRouteType (uint8_t) - 0 = Perp, 1 = Spot
-      params.usdcAmount,        // amount (longlong)
-      params.fee,              // usdcFee (longlong)
-      memoBytes,               // memo (char*)
-      nonce,                   // nonce (longlong)
-      params.apiKeyIndex,      // apiKeyIndex (int)
-      params.accountIndex      // accountIndex (longlong)
+      params.toAccountIndex,
+      assetIndex,
+      fromRouteType,
+      toRouteType,
+      params.usdcAmount,
+      params.fee,
+      memoBytes,
+      nonce,
+      params.apiKeyIndex,
+      params.accountIndex
     );
     
     if (result.error) {

@@ -32,7 +32,11 @@ async function depositToSubaccount() {
 
   const specifiedSubAccountIndex = parseInt(process.env['SUB_ACCOUNT_INDEX'] || '0');
   const amount = parseFloat(process.env['DEPOSIT_AMOUNT'] || '1');
-  const ETH_PRIVATE_KEY = process.env['ETH_PRIVATE_KEY'] || process.env['ACCOUNT_PRIVATE_KEY'] || API_PRIVATE_KEY; 
+  const ETH_PRIVATE_KEY = process.env['ETH_PRIVATE_KEY'] || process.env['ACCOUNT_PRIVATE_KEY'] || '';
+  
+  if (!ETH_PRIVATE_KEY) {
+    throw new Error('ETH_PRIVATE_KEY or ACCOUNT_PRIVATE_KEY environment variable is required for transfers');
+  } 
 
   try {
     console.log('🚀 Depositing to Subaccount...\n');
