@@ -13,6 +13,10 @@ async function depositToSubaccount() {
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  
+  if (!API_PRIVATE_KEY) {
+    throw new Error('API_PRIVATE_KEY environment variable is required');
+  }
 
   const signerClient = new SignerClient({
     url: BASE_URL,
@@ -27,7 +31,8 @@ async function depositToSubaccount() {
   const apiClient = new ApiClient({ host: BASE_URL });
 
   const specifiedSubAccountIndex = parseInt(process.env['SUB_ACCOUNT_INDEX'] || '0');
-  const amount = parseFloat(process.env['DEPOSIT_AMOUNT'] || '1'); 
+  const amount = parseFloat(process.env['DEPOSIT_AMOUNT'] || '1');
+  const ETH_PRIVATE_KEY = process.env['ETH_PRIVATE_KEY'] || process.env['ACCOUNT_PRIVATE_KEY'] || API_PRIVATE_KEY; 
 
   try {
     console.log('🚀 Depositing to Subaccount...\n');
@@ -63,7 +68,7 @@ async function depositToSubaccount() {
       usdcAmount: amount,
       fee: 0,
       memo: 'a'.repeat(32),
-      ethPrivateKey: API_PRIVATE_KEY,
+      ethPrivateKey: ETH_PRIVATE_KEY,
       nonce: -1
     });
 
