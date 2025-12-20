@@ -1134,8 +1134,22 @@ export class SignerClient {
       await tempSignerClient.ensureWasmClient();
 
       // Now use the temporary client's WASM to sign the ChangePubKey transaction
+      // The lighter-go WASM module expects public key to be exactly 40 bytes (80 hex chars)
+      // hexutil.Decode handles '0x' prefix, but we need to ensure the key is the right length
+      let formattedPubkey = params.newPubkey.startsWith('0x') 
+        ? params.newPubkey.substring(2) 
+        : params.newPubkey;
+      
+      // Validate public key length: should be 80 hex characters (40 bytes)
+      if (formattedPubkey.length !== 80) {
+        return [null, '', `Invalid public key length: expected 80 hex characters (40 bytes), got ${formattedPubkey.length}. Public key: ${params.newPubkey.substring(0, 50)}...`];
+      }
+      
+      // Add '0x' prefix for hexutil.Decode (it expects it)
+      formattedPubkey = `0x${formattedPubkey}`;
+      
       const wasmResponse = await (tempSignerClient.wallet as WasmSignerClient).signChangePubKey({
-        pubkey: params.newPubkey,
+        pubkey: formattedPubkey,
         nonce,
         apiKeyIndex: newApiKeyIndex,
         accountIndex: this.config.accountIndex
@@ -1148,7 +1162,37 @@ export class SignerClient {
       // Parse txInfo first to get messageToSign if needed
       let txInfo = JSON.parse(wasmResponse.txInfo);
       
+      // The server expects PubKey as a hex string (without '0x' prefix), not base64
+      // Go's json.Marshal encodes []byte as base64, but the server expects hex
+      // Convert base64 PubKey to hex if needed
+      if (txInfo.PubKey && typeof txInfo.PubKey === 'string') {
+        // Check if it's base64 (typical Go []byte encoding)
+        // Base64 for 40 bytes would be ~54 chars, hex would be 80 chars
+        if (txInfo.PubKey.length < 70) {
+          // Likely base64, convert to hex
+          try {
+            const pubKeyBytes = Buffer.from(txInfo.PubKey, 'base64');
+            if (pubKeyBytes.length === 40) {
+              txInfo.PubKey = pubKeyBytes.toString('hex');
+            } else {
+              return [null, '', `Invalid PubKey length after base64 decode: expected 40 bytes, got ${pubKeyBytes.length}`];
+            }
+          } catch (e) {
+            // If conversion fails, assume it's already hex
+          }
+        }
+        // Ensure no '0x' prefix (server expects plain hex)
+        if (txInfo.PubKey.startsWith('0x')) {
+          txInfo.PubKey = txInfo.PubKey.substring(2);
+        }
+        // Validate final hex length (should be 80 hex chars for 40 bytes)
+        if (txInfo.PubKey.length !== 80) {
+          return [null, '', `Invalid PubKey hex length: expected 80 hex characters (40 bytes), got ${txInfo.PubKey.length}`];
+        }
+      }
+      
       // Get the messageToSign from WASM response (this is the correct L1 message format)
+      // The WASM module should provide messageToSign via GetL1SignatureBody()
       let messageToSign = wasmResponse.messageToSign;
       
       // Fallback: check if messageToSign is in txInfo JSON
@@ -1157,21 +1201,45 @@ export class SignerClient {
         delete txInfo.MessageToSign;
       }
 
-      // If messageToSign not found, construct it using the standard format
+      // If messageToSign still not found, construct it using the standard format
+      // The format must match lighter-go exactly: "Register Lighter Account\n\npubkey: 0x%s\nnonce: %s\naccount index: %s\napi key index: %s\nOnly sign this message for a trusted client!"
+      // Note: getHex10FromUint64 pads to 16 bytes (32 hex chars) with leading zeros, then adds '0x' prefix
       if (!messageToSign) {
-        // Helper function to format hex values as 16-byte (32 hex char) strings
+        // Helper function to format hex values as 16-byte (32 hex char) strings (matches getHex10FromUint64)
         const formatHex16Bytes = (value: number): string => {
           const hex = value.toString(16);
+          // Pad to 16 bytes (32 hex chars) with leading zeros, then add '0x' prefix
+          // This matches getHex10FromUint64 in lighter-go/types/txtypes/utils.go
           return '0x' + hex.padStart(32, '0');
         };
         
-        messageToSign = `Register Lighter Account\n\npubkey: 0x${params.newPubkey.replace('0x', '')}\nnonce: ${formatHex16Bytes(nonce)}\naccount index: ${formatHex16Bytes(this.config.accountIndex)}\napi key index: ${formatHex16Bytes(newApiKeyIndex)}\nOnly sign this message for a trusted client!`;
+        // Use the public key from txInfo (already converted to hex without '0x' prefix)
+        // The public key should be 80 hex characters (40 bytes)
+        const pubKeyHex = txInfo.PubKey || params.newPubkey.replace('0x', '');
+        
+        messageToSign = `Register Lighter Account\n\npubkey: 0x${pubKeyHex}\nnonce: ${formatHex16Bytes(nonce)}\naccount index: ${formatHex16Bytes(this.config.accountIndex)}\napi key index: ${formatHex16Bytes(newApiKeyIndex)}\nOnly sign this message for a trusted client!`;
       }
 
       // Sign the L1 message with ETH private key
+      // The message format must match exactly what lighter-go generates via GetL1SignatureBody()
+      // Python SDK uses encode_defunct + sign_message which produces the same format as ethers.signMessage
       const ethers = await import('ethers');
       const wallet = new ethers.Wallet(params.ethPrivateKey);
+      
+      // Debug: Log message format to verify it matches Python SDK
+      // The message should be: "Register Lighter Account\n\npubkey: 0x<80 hex chars>\nnonce: 0x<32 hex chars>\naccount index: 0x<32 hex chars>\napi key index: 0x<32 hex chars>\nOnly sign this message for a trusted client!"
+      // Python SDK uses encode_defunct(text=msg_to_sign) which is equivalent to ethers signMessage
+      if (process.env.DEBUG_SIGNATURE) {
+        console.log('DEBUG: Message to sign:', messageToSign);
+        console.log('DEBUG: Message length:', messageToSign.length);
+      }
+      
       const l1Sig = await wallet.signMessage(messageToSign);
+      
+      if (process.env.DEBUG_SIGNATURE) {
+        console.log('DEBUG: L1 Signature:', l1Sig);
+        console.log('DEBUG: Signature length:', l1Sig.length);
+      }
 
       // Add L1 signature to txInfo
       txInfo.L1Sig = l1Sig;
