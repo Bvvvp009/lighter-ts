@@ -1,20 +1,11 @@
 /**
  * Example: Fast Withdrawal
- * Demonstrates fast withdrawal using the fast withdraw pool
- * Based on: https://github.com/elliottech/lighter-python/blob/aecdec059f92a25510cad341a257b992d95ba7c2/examples/withdraw_fast.py
- * 
- * IMPORTANT: Two different private keys are required:
- * 1. API_PRIVATE_KEY - Used for L2 (Layer 2) transaction signing (done by WASM internally)
- * 2. ETH_PRIVATE_KEY / ACCOUNT_PRIVATE_KEY - Used for L1 (Ethereum) signature (required for withdrawals/transfers)
- * 
- * ✅ TESTED AND WORKING
- * 
- * Implementation notes:
- * - Python SDK uses encode_defunct + sign_message from eth_account library
- * - Python code: tx_info["L1Sig"] = signature.signature.to_0x_hex()
- * - Our TypeScript code uses ethers.js signMessage which produces the same format
- * - Both add Ethereum message prefix automatically
- * - The code structure matches the Python reference implementation
+ 
+ * IMPORTANT: Private key requirements:
+ * 1. API_PRIVATE_KEY - Required for L2 (Layer 2) transaction signing (done by WASM internally)
+ * 2. ETH_PRIVATE_KEY / ACCOUNT_PRIVATE_KEY - Optional for L1 (Ethereum) signature
+ *    - L1 signature is OPTIONAL - transfers work with only L2 signature (API key signature)
+ *    - If provided, must be an Ethereum wallet private key (NOT the API key)
  */
 
 import { SignerClient, ApiClient, TransactionApi } from '../src';
@@ -30,14 +21,11 @@ async function withdrawFast() {
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0');
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   const ETH_PRIVATE_KEY = process.env['ETH_PRIVATE_KEY'] || process.env['ACCOUNT_PRIVATE_KEY'] || '';
-  const WITHDRAW_ADDRESS = process.env['WITHDRAW_ADDRESS'] || '';
+  const WITHDRAW_ADDRESS = process.env['L1_ADDRESS'] || '';
   const AMOUNT_USDC = parseFloat(process.env['WITHDRAW_AMOUNT'] || '5.0');
 
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY environment variable is required');
-  }
-  if (!ETH_PRIVATE_KEY) {
-    throw new Error('ETH_PRIVATE_KEY or ACCOUNT_PRIVATE_KEY environment variable is required');
   }
   if (!WITHDRAW_ADDRESS) {
     throw new Error('WITHDRAW_ADDRESS environment variable is required');
@@ -109,8 +97,6 @@ async function withdrawFast() {
     const nextNonce = await transactionApi.getNextNonce(ACCOUNT_INDEX, API_KEY_INDEX);
     console.log(`✅ Next nonce: ${nextNonce.nonce}\n`);
 
-    // Step 5: Build memo (20-byte address + 12 zeros = 32 bytes total)
-    // Note: Python SDK uses hex string without '0x' prefix
     console.log('📝 Building memo from withdraw address...');
     const addrHex = WITHDRAW_ADDRESS.toLowerCase().replace(/^0x/, '');
     const addrBytes = Buffer.from(addrHex, 'hex');
@@ -118,7 +104,6 @@ async function withdrawFast() {
       throw new Error(`Invalid address length: ${addrBytes.length}. Expected 20 bytes (40 hex chars)`);
     }
     const memoBytes = Buffer.concat([addrBytes, Buffer.alloc(12, 0)]);
-    // Use hex string without '0x' prefix to match Python SDK format
     const memoHex = memoBytes.toString('hex');
     console.log(`✅ Memo: ${memoHex}\n`);
 
@@ -134,7 +119,6 @@ async function withdrawFast() {
       usdcAmount: scaledAmount,
       fee: fee,
       memo: memoHex,
-      ethPrivateKey: ETH_PRIVATE_KEY,
       nonce: nextNonce.nonce,
       apiKeyIndex: API_KEY_INDEX,
       accountIndex: ACCOUNT_INDEX
@@ -146,13 +130,10 @@ async function withdrawFast() {
 
     console.log('✅ Transfer transaction signed\n');
 
-    // Step 6.5: Sign L1 message and add to tx_info
-    // Note: Transfer transactions require L1 signature in the L1Sig field
-    // IMPORTANT: L1 signature requires ETH_PRIVATE_KEY (Ethereum wallet private key),
-    // NOT API_PRIVATE_KEY. This is different from L2 signatures which use API_PRIVATE_KEY.
+  
     let txInfo = signedTx.txInfo;
-    if (signedTx.messageToSign) {
-      console.log('🔐 Signing L1 message with Ethereum private key...');
+    if (signedTx.messageToSign && ETH_PRIVATE_KEY) {
+      console.log('🔐 Signing L1 message with Ethereum private key (optional)...');
       try {
         const { ethers } = require('ethers');
         const wallet = new ethers.Wallet(ETH_PRIVATE_KEY); // ETH_PRIVATE_KEY = Ethereum wallet private key
@@ -169,8 +150,8 @@ async function withdrawFast() {
       } catch (e) {
         throw new Error(`Failed to sign L1 message: ${e instanceof Error ? e.message : e}`);
       }
-    } else {
-      console.warn('⚠️  No messageToSign returned - L1 signature may be required\n');
+    } else if (signedTx.messageToSign && !ETH_PRIVATE_KEY) {
+      console.log('ℹ️  L1 signature message available but ETH_PRIVATE_KEY not provided - using only L2 signature\n');
     }
 
     // Step 7: Submit to fastwithdraw endpoint

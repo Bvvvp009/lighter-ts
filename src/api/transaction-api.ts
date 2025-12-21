@@ -125,26 +125,10 @@ export class TransactionApi {
   }
 
   public async getTransaction(params: TransactionParams): Promise<Transaction> {
-    // Debug logging
-    if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
-      console.log('🔍 Querying transaction:', params.by, params.value);
-    }
-    
     const response = await this.client.get<Transaction>('/api/v1/tx', {
       by: params.by,
       value: params.value,
     });
-    
-    // Debug logging
-    if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
-      console.log('📥 Transaction query response:', {
-        found: !!response.data,
-        hash: response.data?.hash?.substring(0, 32),
-        status: response.data?.status,
-        code: response.data?.code,
-        message: response.data?.message
-      });
-    }
     
     return response.data;
   }
@@ -221,7 +205,8 @@ export class TransactionApi {
     txInfo: string,
     accountIndex: number,
     apiKeyIndex: number,
-    priceProtection: boolean = true
+    priceProtection: boolean = true,
+    auth?: string
   ): Promise<TxHash> {
     const params = new URLSearchParams();
     params.append('tx_type', txType.toString());
@@ -229,17 +214,14 @@ export class TransactionApi {
     params.append('account_index', accountIndex.toString());
     params.append('api_key_index', apiKeyIndex.toString());
     params.append('price_protection', priceProtection ? 'true' : 'false');
+    if (auth) {
+      params.append('auth', auth);
+    }
 
     // Debug logging
     if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
       try {
         const txInfoParsed = JSON.parse(txInfo);
-        console.log('🔍 Sending transaction details:');
-        console.log('   TxType:', txType);
-        console.log('   MarketIndex:', txInfoParsed.MarketIndex);
-        console.log('   AccountIndex:', accountIndex);
-        console.log('   ApiKeyIndex:', apiKeyIndex);
-        console.log('   TxInfo length:', txInfo.length);
       } catch (e) {
         // Ignore parse errors
       }
@@ -248,10 +230,6 @@ export class TransactionApi {
     const response = await this.client.post<TxHash>('/api/v1/sendTx', params, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
-    
-    // Debug logging
-    if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
-    }
     
     return response.data;
   }

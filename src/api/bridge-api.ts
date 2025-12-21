@@ -54,7 +54,6 @@ export class BridgeApi {
       return response.data;
     } catch (error) {
       // Fallback to empty array if endpoint doesn't exist
-      console.warn('Bridge networks endpoint not available:', error);
       return [];
     }
   }
