@@ -378,17 +378,9 @@ export class SignerClient {
       } catch (error) {
         lastError = error;
         
-        // Check if it's a nonce-related error
         if (this.isNonceError(error)) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          console.log(`Nonce error detected (attempt ${attempt + 1}): ${errorMessage}`);
-          
-          // Hard refresh nonce from API
           await this.hardRefreshNonce();
-          
-          // If this was the first attempt, retry once
           if (attempt === 0) {
-            console.log('Retrying transaction with fresh nonce...');
             continue;
           }
         }
@@ -778,34 +770,10 @@ export class SignerClient {
 
     const wasmResponse = await (this.wallet as WasmSignerClient).signCreateOrder(wasmParams);
     if (wasmResponse.error) {
-      console.error('❌ WASM signer error:', wasmResponse.error);
       return [null, '', wasmResponse.error];
     }
     
-    // Log WASM response details
     try {
-      const txInfoParsed = JSON.parse(wasmResponse.txInfo);
-      console.log('📦 WASM Signer Response:');
-      console.log('   TxType:', wasmResponse.txType || SignerClient.TX_TYPE_CREATE_ORDER);
-      console.log('   MarketIndex:', txInfoParsed.MarketIndex);
-      console.log('   OrderType:', txInfoParsed.Type);
-      console.log('   TimeInForce:', txInfoParsed.TimeInForce);
-      console.log('   OrderExpiry:', txInfoParsed.OrderExpiry);
-      console.log('   AccountIndex:', txInfoParsed.AccountIndex);
-      console.log('   ApiKeyIndex:', txInfoParsed.ApiKeyIndex);
-      console.log('   Nonce:', txInfoParsed.Nonce);
-      console.log('   TxHash (from WASM):', wasmResponse.txHash?.substring(0, 32) || 'N/A');
-    } catch (e) {
-      console.warn('⚠️ Could not parse WASM txInfo:', e);
-    }
-    
-    try {
-      // Send exactly what WASM produced, using urlencoded form
-      console.log('\n📡 Sending transaction to API...');
-      console.log('   Endpoint: /api/v1/sendTx');
-      console.log('   AccountIndex:', this.config.accountIndex);
-      console.log('   ApiKeyIndex:', this.config.apiKeyIndex);
-      
       const txHash = await this.transactionApi.sendTxWithIndices(
         wasmResponse.txType || SignerClient.TX_TYPE_CREATE_ORDER,
         wasmResponse.txInfo,
@@ -813,21 +781,13 @@ export class SignerClient {
         this.config.apiKeyIndex
       );
       
-      console.log('📥 API Response:');
-      console.log('   Code:', txHash.code);
-      console.log('   Message:', txHash.message);
-      console.log('   TxHash:', txHash.tx_hash || txHash.hash || 'N/A');
-      
-      // Check for immediate errors in the response
       if (txHash.code && txHash.code !== 200) {
         this.acknowledgeFailure();
         const errorMsg = txHash.message || 'Transaction failed';
-        console.error('❌ API returned error code:', txHash.code, errorMsg);
         return [null, '', errorMsg];
       }
       
       const finalHash = txHash.tx_hash || txHash.hash || wasmResponse.txHash || '';
-      console.log('✅ Transaction submitted, hash:', finalHash.substring(0, 32));
       
       return [JSON.parse(wasmResponse.txInfo), finalHash, null];
     } catch (apiError: any) {
@@ -836,19 +796,13 @@ export class SignerClient {
       
       // If it's a nonce error, refresh the nonce cache
       if (this.isNonceError(apiError) || errorMessage.toLowerCase().includes('invalid nonce') || errorMessage.toLowerCase().includes('nonce')) {
-        console.log('🔄 Nonce error detected, refreshing nonce cache...');
         try {
           await this.hardRefreshNonce();
         } catch (refreshError) {
-          console.warn('⚠️ Could not refresh nonce cache:', refreshError);
         }
       }
       
       this.acknowledgeFailure();
-      console.error('❌ API Error:', apiError);
-      console.error('   Response:', apiError?.response?.data);
-      console.error('   Status:', apiError?.response?.status);
-      console.error('   StatusText:', apiError?.response?.statusText);
       return [null, '', errorMessage];
     }
   }
@@ -1092,179 +1046,325 @@ export class SignerClient {
    */
   async changeApiKey(params: ChangeApiKeyParams): Promise<[any, string, string | null]> {
     try {
-      // Determine new API key index (default to current + 1)
       const newApiKeyIndex = params.newApiKeyIndex ?? (this.config.apiKeyIndex + 1);
       
-      // Determine nonce for the new API key index
-      // For first-time registration, nonce should be 0
-      // For updating an existing key, fetch the next nonce
-      let nonce: number;
-      if (params.nonce !== undefined) {
-        nonce = params.nonce;
-      } else {
-        // Try to fetch the next nonce for the new API key index
-        // If it doesn't exist yet (new slot), this will fail and we'll use 0
+      // Use nonce 0 for new API keys, or fetch next nonce if updating existing
+      let nonce = params.nonce ?? 0;
+      if (nonce === 0) {
         try {
           const nextNonceResult = await this.transactionApi.getNextNonce(
             this.config.accountIndex,
             newApiKeyIndex
           );
           nonce = nextNonceResult.nonce;
-        } catch (error) {
-          // If fetching nonce fails (e.g., API key slot doesn't exist yet), use 0
-          // This is expected for first-time registration of a new API key slot
-          nonce = 0;
+        } catch {
+          nonce = 0; // New key slot, use 0
         }
       }
 
-      // Create a temporary SignerClient with the new private key and new API key index
-      // This is needed because the WASM client must be initialized with the new key context
-      
-      // Create temporary client with new key context
-      // wasmConfig should always be present after validation, but provide fallback for TypeScript
-      const tempSignerClient = new SignerClient({
+      // Format pubkey: remove 0x if present, ensure 80 hex chars (40 bytes)
+      // Go code expects exactly 40 bytes = 80 hex characters
+      let pubkey = params.newPubkey.replace(/^0x/, '');
+      if (pubkey.length !== 80) {
+        return [null, '', `Invalid public key length: expected 80 hex chars (40 bytes), got ${pubkey.length}. Public key: ${params.newPubkey.substring(0, 30)}...`];
+      }
+
+      // Validate that it's valid hex
+      if (!/^[0-9a-fA-F]{80}$/.test(pubkey)) {
+        return [null, '', `Invalid public key format: must be 80 hex characters. Public key: ${params.newPubkey.substring(0, 30)}...`];
+      }
+
+      // Create temporary client with new key to sign (WASM needs client for the new key index)
+      const tempClient = new SignerClient({
         url: this.config.url,
         privateKey: params.newPrivateKey,
         accountIndex: this.config.accountIndex,
         apiKeyIndex: newApiKeyIndex,
         wasmConfig: this.config.wasmConfig || { wasmPath: 'wasm/lighter-signer.wasm' }
       });
+      await tempClient.initialize();
+      await tempClient.ensureWasmClient();
 
-      await tempSignerClient.initialize();
-      await tempSignerClient.ensureWasmClient();
-
-      // Now use the temporary client's WASM to sign the ChangePubKey transaction
-      // The lighter-go WASM module expects public key to be exactly 40 bytes (80 hex chars)
-      // hexutil.Decode handles '0x' prefix, but we need to ensure the key is the right length
-      let formattedPubkey = params.newPubkey.startsWith('0x') 
-        ? params.newPubkey.substring(2) 
-        : params.newPubkey;
-      
-      // Validate public key length: should be 80 hex characters (40 bytes)
-      if (formattedPubkey.length !== 80) {
-        return [null, '', `Invalid public key length: expected 80 hex characters (40 bytes), got ${formattedPubkey.length}. Public key: ${params.newPubkey.substring(0, 50)}...`];
-      }
-      
-      // Add '0x' prefix for hexutil.Decode (it expects it)
-      formattedPubkey = `0x${formattedPubkey}`;
-      
-      const wasmResponse = await (tempSignerClient.wallet as WasmSignerClient).signChangePubKey({
-        pubkey: formattedPubkey,
+      // Sign ChangePubKey using temp client's WASM
+      // Pass pubkey with 0x prefix - Go's hexutil.Decode handles it
+      const wasmResponse = await (tempClient.wallet as WasmSignerClient).signChangePubKey({
+        pubkey: `0x${pubkey}`,
         nonce,
         apiKeyIndex: newApiKeyIndex,
         accountIndex: this.config.accountIndex
       });
 
+      await tempClient.close();
+
       if (wasmResponse.error) {
         return [null, '', wasmResponse.error];
       }
 
-      // Parse txInfo first to get messageToSign if needed
-      let txInfo = JSON.parse(wasmResponse.txInfo);
+      // Parse txInfo and get messageToSign from WASM
+      const txInfo = JSON.parse(wasmResponse.txInfo);
+      const messageToSign = wasmResponse.messageToSign;
       
-      // The server expects PubKey as a hex string (without '0x' prefix), not base64
-      // Go's json.Marshal encodes []byte as base64, but the server expects hex
-      // Convert base64 PubKey to hex if needed
-      if (txInfo.PubKey && typeof txInfo.PubKey === 'string') {
-        // Check if it's base64 (typical Go []byte encoding)
-        // Base64 for 40 bytes would be ~54 chars, hex would be 80 chars
-        if (txInfo.PubKey.length < 70) {
-          // Likely base64, convert to hex
-          try {
-            const pubKeyBytes = Buffer.from(txInfo.PubKey, 'base64');
-            if (pubKeyBytes.length === 40) {
-              txInfo.PubKey = pubKeyBytes.toString('hex');
-            } else {
-              return [null, '', `Invalid PubKey length after base64 decode: expected 40 bytes, got ${pubKeyBytes.length}`];
+      if (!messageToSign) {
+        return [null, '', 'No messageToSign from WASM'];
+      }
+
+
+      // Convert byte array fields from base64 (Go's default JSON encoding for []byte) to hex
+      // The server expects byte arrays as hex strings with 0x prefix
+      // Go JSON marshals []byte as base64, so we need to convert them
+      
+      // Helper function to convert base64 to hex
+      const convertByteArrayToHex = (value: any, expectedLength?: number, fieldName?: string): string | null => {
+        if (!value || typeof value !== 'string') {
+          return null;
+        }
+        
+        try {
+          // If it already has 0x prefix and looks like hex, return as is
+          if (value.startsWith('0x')) {
+            const hexPart = value.substring(2);
+            // Check if it's valid hex
+            if (/^[0-9a-fA-F]+$/.test(hexPart)) {
+              if (process.env.DEBUG_TX_INFO) {
+                console.log(`DEBUG: ${fieldName || 'Field'} already in hex format with 0x prefix`);
+              }
+              return value;
             }
-          } catch (e) {
-            // If conversion fails, assume it's already hex
+          }
+          
+          // Check if it's base64 encoded (Go's default for []byte in JSON)
+          // Base64 strings don't start with '0x' and are typically longer
+          // A 40-byte value in base64 is ~56 characters
+          if (!value.startsWith('0x')) {
+            // Try to decode as base64 first
+            try {
+              const bytes = Buffer.from(value, 'base64');
+              // If expectedLength is provided, verify it matches
+              if (expectedLength && bytes.length !== expectedLength) {
+                if (process.env.DEBUG_TX_INFO) {
+                  console.log(`DEBUG: ${fieldName || 'Field'} base64 decode length mismatch: expected ${expectedLength}, got ${bytes.length}`);
+                }
+                // Try as hex without prefix
+                if (/^[0-9a-fA-F]+$/.test(value)) {
+                  return '0x' + value;
+                }
+                return null;
+              }
+              // Convert to hex with 0x prefix
+              const hex = '0x' + bytes.toString('hex');
+              if (process.env.DEBUG_TX_INFO) {
+                console.log(`DEBUG: Converted ${fieldName || 'Field'} from base64 to hex: ${value.substring(0, 20)}... -> ${hex.substring(0, 20)}...`);
+              }
+              return hex;
+            } catch (base64Error) {
+              // Not base64, try as hex without prefix
+              if (/^[0-9a-fA-F]+$/.test(value)) {
+                const hex = '0x' + value;
+                if (process.env.DEBUG_TX_INFO) {
+                  console.log(`DEBUG: ${fieldName || 'Field'} is hex without prefix, added 0x: ${value.substring(0, 20)}... -> ${hex.substring(0, 20)}...`);
+                }
+                return hex;
+              }
+            }
+          }
+        } catch (error) {
+          // Conversion failed, might already be in correct format
+          if (process.env.DEBUG_TX_INFO) {
+            console.warn(`DEBUG: ${fieldName || 'Field'} conversion error:`, error instanceof Error ? error.message : String(error));
           }
         }
-        // Ensure no '0x' prefix (server expects plain hex)
-        if (txInfo.PubKey.startsWith('0x')) {
-          txInfo.PubKey = txInfo.PubKey.substring(2);
-        }
-        // Validate final hex length (should be 80 hex chars for 40 bytes)
-        if (txInfo.PubKey.length !== 80) {
-          return [null, '', `Invalid PubKey hex length: expected 80 hex characters (40 bytes), got ${txInfo.PubKey.length}`];
-        }
-      }
-      
-      // Get the messageToSign from WASM response (this is the correct L1 message format)
-      // The WASM module should provide messageToSign via GetL1SignatureBody()
-      let messageToSign = wasmResponse.messageToSign;
-      
-      // Fallback: check if messageToSign is in txInfo JSON
-      if (!messageToSign && txInfo.MessageToSign) {
-        messageToSign = txInfo.MessageToSign;
-        delete txInfo.MessageToSign;
-      }
-
-      // If messageToSign still not found, construct it using the standard format
-      // The format must match lighter-go exactly: "Register Lighter Account\n\npubkey: 0x%s\nnonce: %s\naccount index: %s\napi key index: %s\nOnly sign this message for a trusted client!"
-      // Note: getHex10FromUint64 pads to 16 bytes (32 hex chars) with leading zeros, then adds '0x' prefix
-      if (!messageToSign) {
-        // Helper function to format hex values as 16-byte (32 hex char) strings (matches getHex10FromUint64)
-        const formatHex16Bytes = (value: number): string => {
-          const hex = value.toString(16);
-          // Pad to 16 bytes (32 hex chars) with leading zeros, then add '0x' prefix
-          // This matches getHex10FromUint64 in lighter-go/types/txtypes/utils.go
-          return '0x' + hex.padStart(32, '0');
-        };
         
-        // Use the public key from txInfo (already converted to hex without '0x' prefix)
-        // The public key should be 80 hex characters (40 bytes)
-        const pubKeyHex = txInfo.PubKey || params.newPubkey.replace('0x', '');
-        
-        messageToSign = `Register Lighter Account\n\npubkey: 0x${pubKeyHex}\nnonce: ${formatHex16Bytes(nonce)}\naccount index: ${formatHex16Bytes(this.config.accountIndex)}\napi key index: ${formatHex16Bytes(newApiKeyIndex)}\nOnly sign this message for a trusted client!`;
-      }
+        return null;
+      };
 
-      // Sign the L1 message with ETH private key
-      // The message format must match exactly what lighter-go generates via GetL1SignatureBody()
-      // Python SDK uses encode_defunct + sign_message which produces the same format as ethers.signMessage
+
+      // Sign message with ETH private key
       const ethers = await import('ethers');
       const wallet = new ethers.Wallet(params.ethPrivateKey);
       
-      // Debug: Log message format to verify it matches Python SDK
-      // The message should be: "Register Lighter Account\n\npubkey: 0x<80 hex chars>\nnonce: 0x<32 hex chars>\naccount index: 0x<32 hex chars>\napi key index: 0x<32 hex chars>\nOnly sign this message for a trusted client!"
-      // Python SDK uses encode_defunct(text=msg_to_sign) which is equivalent to ethers signMessage
-      if (process.env.DEBUG_SIGNATURE) {
-        console.log('DEBUG: Message to sign:', messageToSign);
-        console.log('DEBUG: Message length:', messageToSign.length);
-      }
+      // Use signMessage which automatically handles Ethereum message prefix
+      // This matches Go's accounts.TextHash which prepends "\x19Ethereum Signed Message:\n" + len + message
+      const fullSig = await wallet.signMessage(messageToSign);
       
-      const l1Sig = await wallet.signMessage(messageToSign);
+      // Go code expects 65 bytes (r + s + v) for signature recovery
+      // ethers.js signMessage returns: 0x + r (64 hex) + s (64 hex) + v (2 hex) = 132 chars = 65 bytes
+      // We need to pass the full signature (r+s+v) for Go's calculateL1AddressBySignature to work
+      // Go code accesses signatureContent[64] which is the v byte, so we need all 65 bytes
+      const l1Sig = fullSig.startsWith('0x') && fullSig.length === 132 ? fullSig : fullSig;
       
-      if (process.env.DEBUG_SIGNATURE) {
-        console.log('DEBUG: L1 Signature:', l1Sig);
-        console.log('DEBUG: Signature length:', l1Sig.length);
-      }
-
-      // Add L1 signature to txInfo
+      // Set L1Sig in txInfo
       txInfo.L1Sig = l1Sig;
 
-      // Send transaction with account and API key indices using current client
-      // (transaction is authorized by L1 signature)
-      const txHashResponse = await this.transactionApi.sendTxWithIndices(
-        wasmResponse.txType || SignerClient.TX_TYPE_CHANGE_PUB_KEY,
-        JSON.stringify(txInfo),
-        this.config.accountIndex,
-        this.config.apiKeyIndex
-      );
+      // Create auth token for HTTP authentication
+      const authToken = await this.createAuthTokenWithExpiry().catch(() => undefined);
 
-      // Check for API errors in the response
-      if (txHashResponse.code && txHashResponse.code !== 200) {
-        const errorMessage = txHashResponse.message || `API returned error code ${txHashResponse.code}`;
-        return [null, '', errorMessage];
+      // Send transaction
+      // If server rejects with "invalid tx info", try PubKey without 0x prefix as fallback
+      try {
+        const txHashResponse = await this.transactionApi.sendTxWithIndices(
+          wasmResponse.txType || SignerClient.TX_TYPE_CHANGE_PUB_KEY,
+          JSON.stringify(txInfo),
+          this.config.accountIndex,
+          this.config.apiKeyIndex,
+          true,
+          authToken
+        );
+
+        if (txHashResponse.code && txHashResponse.code !== 200) {
+          return [null, '', txHashResponse.message || `API error: ${txHashResponse.code}`];
+        }
+
+        const txHash = txHashResponse.tx_hash || txHashResponse.hash || wasmResponse.txHash || '';
+        return txHash ? [txHashResponse, txHash, null] : [null, '', 'No transaction hash'];
+      } catch (error: any) {
+        // If we get "invalid signature" error, try different Sig formats
+        const errorMsg = error?.message || error?.data?.message || String(error);
+        if (errorMsg.includes('invalid signature') && txInfo.Sig) {
+          // Try Sig with 0x prefix (matching L1Sig format)
+          if (!txInfo.Sig.startsWith('0x') && !txInfo.Sig.includes('=')) {
+            try {
+              const txInfoRetry = { ...txInfo };
+              txInfoRetry.Sig = '0x' + txInfo.Sig;
+              
+              const txHashResponse = await this.transactionApi.sendTxWithIndices(
+                wasmResponse.txType || SignerClient.TX_TYPE_CHANGE_PUB_KEY,
+                JSON.stringify(txInfoRetry),
+                this.config.accountIndex,
+                this.config.apiKeyIndex,
+                true,
+                authToken
+              );
+
+              if (!txHashResponse.code || txHashResponse.code === 200) {
+                const txHash = txHashResponse.tx_hash || txHashResponse.hash || wasmResponse.txHash || '';
+                if (txHash) {
+                  return [txHashResponse, txHash, null];
+                }
+              }
+            } catch (retryError: any) {
+              // Continue to try base64
+            }
+          }
+          
+          // Try Sig in base64 format (original format)
+          if (!txInfo.Sig.includes('=')) {
+            try {
+              // Convert hex Sig back to base64
+              const sigHex = txInfo.Sig.startsWith('0x') ? txInfo.Sig.substring(2) : txInfo.Sig;
+              const sigBytes = Buffer.from(sigHex, 'hex');
+              const txInfoRetry = { ...txInfo };
+              txInfoRetry.Sig = sigBytes.toString('base64');
+              
+              const txHashResponse = await this.transactionApi.sendTxWithIndices(
+                wasmResponse.txType || SignerClient.TX_TYPE_CHANGE_PUB_KEY,
+                JSON.stringify(txInfoRetry),
+                this.config.accountIndex,
+                this.config.apiKeyIndex,
+                true,
+                authToken
+              );
+
+              if (!txHashResponse.code || txHashResponse.code === 200) {
+                const txHash = txHashResponse.tx_hash || txHashResponse.hash || wasmResponse.txHash || '';
+                if (txHash) {
+                  return [txHashResponse, txHash, null];
+                }
+              }
+            } catch (retryError: any) {
+              // Retry failed
+            }
+          }
+        }
+        
+        // If we get "invalid tx info" or "invalid PublicKey" error, try different PubKey formats
+        if ((errorMsg.includes('invalid tx info') || errorMsg.includes('invalid PublicKey')) && txInfo.PubKey) {
+          // If PubKey has 0x prefix, try without it
+          if (txInfo.PubKey.startsWith('0x')) {
+            const txInfoRetry = { ...txInfo };
+            txInfoRetry.PubKey = txInfo.PubKey.substring(2); // Remove 0x prefix
+            
+            try {
+              const txHashResponse = await this.transactionApi.sendTxWithIndices(
+                wasmResponse.txType || SignerClient.TX_TYPE_CHANGE_PUB_KEY,
+                JSON.stringify(txInfoRetry),
+                this.config.accountIndex,
+                this.config.apiKeyIndex,
+                true,
+                authToken
+              );
+
+              if (!txHashResponse.code || txHashResponse.code === 200) {
+                const txHash = txHashResponse.tx_hash || txHashResponse.hash || wasmResponse.txHash || '';
+                if (txHash) {
+                  return [txHashResponse, txHash, null];
+                }
+              }
+            } catch (retryError: any) {
+              // Continue to try other formats if this fails
+            }
+          }
+          
+          // If PubKey is still base64 (no 0x prefix and looks like base64), try converting to hex
+          if (!txInfo.PubKey.startsWith('0x') && txInfo.PubKey.length > 50) {
+            // PubKey is still base64, try converting to hex
+            try {
+              const bytes = Buffer.from(txInfo.PubKey, 'base64');
+              if (bytes.length === 40) {
+                const hexPubKey = bytes.toString('hex');
+                
+                // Try with 0x prefix first
+                const txInfoRetry1 = { ...txInfo };
+                txInfoRetry1.PubKey = '0x' + hexPubKey;
+                
+                try {
+                  const txHashResponse1 = await this.transactionApi.sendTxWithIndices(
+                    wasmResponse.txType || SignerClient.TX_TYPE_CHANGE_PUB_KEY,
+                    JSON.stringify(txInfoRetry1),
+                    this.config.accountIndex,
+                    this.config.apiKeyIndex,
+                    true,
+                    authToken
+                  );
+
+                  if (!txHashResponse1.code || txHashResponse1.code === 200) {
+                    const txHash1 = txHashResponse1.tx_hash || txHashResponse1.hash || wasmResponse.txHash || '';
+                    if (txHash1) {
+                      return [txHashResponse1, txHash1, null];
+                    }
+                  }
+                } catch (e1: any) {
+                  // Continue to try without 0x prefix
+                }
+
+                // Try without 0x prefix
+                const txInfoRetry2 = { ...txInfo };
+                txInfoRetry2.PubKey = hexPubKey;
+                
+                const txHashResponse2 = await this.transactionApi.sendTxWithIndices(
+                  wasmResponse.txType || SignerClient.TX_TYPE_CHANGE_PUB_KEY,
+                  JSON.stringify(txInfoRetry2),
+                  this.config.accountIndex,
+                  this.config.apiKeyIndex,
+                  true,
+                  authToken
+                );
+
+                if (txHashResponse2.code && txHashResponse2.code !== 200) {
+                  return [null, '', txHashResponse2.message || `API error: ${txHashResponse2.code}`];
+                }
+
+                const txHash2 = txHashResponse2.tx_hash || txHashResponse2.hash || wasmResponse.txHash || '';
+                return txHash2 ? [txHashResponse2, txHash2, null] : [null, '', 'No transaction hash'];
+              }
+            } catch (retryError: any) {
+              // Retry also failed, return original error
+              return [null, '', errorMsg];
+            }
+          }
+        }
+        // Return error if not "invalid tx info" or if PubKey is already hex
+        return [null, '', errorMsg];
       }
-
-      const txHash = txHashResponse.tx_hash || txHashResponse.hash || wasmResponse.txHash || '';
-      if (!txHash) {
-        return [null, '', 'No transaction hash returned from API'];
-      }
-
-      return [txHashResponse, txHash, null];
     } catch (error) {
       return [null, '', error instanceof Error ? error.message : 'Unknown error'];
     }
@@ -2134,34 +2234,35 @@ export class SignerClient {
 
         const scaledAmount = Math.floor(params.usdcAmount * SignerClient.USDC_TICKER_SCALE);
 
-        // Use WASM signer
-        const wasmResponse = await (this.wallet as WasmSignerClient).signTransfer({
+        // Use WASM signer - build params object conditionally
+        const wasmParams: any = {
           toAccountIndex: params.toAccountIndex,
           usdcAmount: scaledAmount,
           fee: params.fee,
           memo: params.memo,
-          ethPrivateKey: params.ethPrivateKey,
           nonce: nextNonce.nonce,
           apiKeyIndex: this.config.apiKeyIndex,
           accountIndex: this.config.accountIndex
-        });
+        };
+        // Only include ethPrivateKey if provided
+        if (params.ethPrivateKey !== undefined) {
+          wasmParams.ethPrivateKey = params.ethPrivateKey;
+        }
+        
+        const wasmResponse = await (this.wallet as WasmSignerClient).signTransfer(wasmParams);
 
         if (wasmResponse.error) {
           return [null, '', wasmResponse.error];
         }
 
-        // Handle L1 signature if messageToSign is present (required for transfers)
+        // Handle L1 signature ONLY if messageToSign is present AND ethPrivateKey is explicitly provided
+        // If ethPrivateKey is not provided, transfer will use only L2 signature (API key signature)
+        // Note: this.config.privateKey is the API key (for L2 signing), NOT an Ethereum key (for L1 signing)
         let txInfo = wasmResponse.txInfo;
-        if (wasmResponse.messageToSign) {
+        if (wasmResponse.messageToSign && params.ethPrivateKey) {
           try {
-            if (!params.ethPrivateKey && !this.config.privateKey) {
-              return [null, '', 'L1 signature required for transfer. Please provide ethPrivateKey (Ethereum private key) in TransferParams.'];
-            }
-            
-            const privateKeyToUse = params.ethPrivateKey || this.config.privateKey!;
-            
             const ethers = await import('ethers');
-            const wallet = new ethers.Wallet(privateKeyToUse);
+            const wallet = new ethers.Wallet(params.ethPrivateKey);
             const l1Sig = await wallet.signMessage(wasmResponse.messageToSign);
             
             const txInfoObj = JSON.parse(txInfo);
@@ -2169,12 +2270,10 @@ export class SignerClient {
             txInfo = JSON.stringify(txInfoObj);
           } catch (sigError) {
             const errorMsg = sigError instanceof Error ? sigError.message : String(sigError);
-            if (!params.ethPrivateKey && (errorMsg.includes('invalid private key') || errorMsg.includes('invalid hex'))) {
-              return [null, '', `L1 signature required for transfer. Please provide ethPrivateKey (Ethereum private key). Error: ${errorMsg}`];
-            }
             return [null, '', `Failed to sign L1 message: ${errorMsg}`];
           }
         }
+        // If messageToSign is present but no ethPrivateKey provided, proceed with only L2 signature (L1Sig will be empty string in txInfo)
 
         const txHash = await this.transactionApi.sendTxWithIndices(
           wasmResponse.txType || SignerClient.TX_TYPE_TRANSFER,
@@ -2909,8 +3008,7 @@ export class SignerClient {
         }
         
       } catch (e) {
-        // Failed to parse, log and continue to generic message
-        console.log(`Failed to parse transaction error info: ${e}`);
+        // Failed to parse, continue to generic message
       }
       
       return 'Transaction failed - no detailed error information available';
@@ -2926,26 +3024,10 @@ export class SignerClient {
             value: txHash
           });
           
-          // Debug: Log transaction query results
-          if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
-            console.log('📊 Transaction query result:', {
-              hash: transaction.hash?.substring(0, 32),
-              status: transaction.status,
-              code: transaction.code,
-              message: transaction.message,
-              found: !!transaction.hash
-            });
-          }
-          
           const status = typeof transaction.status === 'number' ? transaction.status : parseInt(String(transaction.status), 10);
-          const statusName = getStatusName(status);
           
-          // No logging - just check status silently
-          
-          // Status 3 = EXECUTED (successful)
           if (status === SignerClient.TX_STATUS_EXECUTED) {
             stopAnimation();
-            console.log('✅ Transaction executed successfully!');
             return transaction;
           } 
           // Status 4 = FAILED, Status 5 = REJECTED
@@ -2972,12 +3054,9 @@ export class SignerClient {
               throw new TransactionException(errorInfo, 'waitForTransaction', transaction);
             }
             
-            // Check if transaction has code 200 (success) - return immediately
             const txCode = transaction.code;
             if (txCode !== undefined && txCode !== null && (txCode === 200 || String(txCode) === '200')) {
-              // Transaction committed successfully with code 200
               stopAnimation();
-              console.log('✅ Transaction committed successfully!');
               return transaction;
             }
             
@@ -3009,36 +3088,14 @@ export class SignerClient {
             ));
           
           if (isNotFound) {
-            if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
-              console.log(`⏳ Transaction not found yet (${error instanceof Error ? error.message : String(error)}), continuing to poll...`);
-            } else {
-              console.log(`⏳ Transaction not found yet, continuing to poll...`);
-            }
             await new Promise(resolve => setTimeout(resolve, pollInterval));
             continue;
           }
           
-          // Log other errors for debugging
-          console.error('⚠️ Error checking transaction status:', error);
-          if (error instanceof Error) {
-            console.error('   Error Type:', error.constructor.name);
-            console.error('   Error Name:', error.name);
-            console.error('   Message:', error.message);
-            if ((error as any).status) {
-              console.error('   Status:', (error as any).status);
-            }
-            if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
-              console.error('   Stack:', error.stack);
-            }
-          }
-          
-          // If it's a TransactionException, re-throw it
           if (error instanceof TransactionException) {
             throw error;
           }
           
-          // For other errors, log and continue trying
-          console.log(`⚠️ Error checking transaction status: ${error instanceof Error ? error.message : String(error)}`);
           await new Promise(resolve => setTimeout(resolve, pollInterval));
         }
       }

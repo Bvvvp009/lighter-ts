@@ -203,8 +203,7 @@ export type {
   ApiResponse,
   ApiError,
   WebSocketConfig,
-  WebSocketSubscription,
-  ProxyConfig
+  WebSocketSubscription
 } from './types';
 
 // Utility Classes

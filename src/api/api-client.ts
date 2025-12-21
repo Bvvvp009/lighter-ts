@@ -28,24 +28,6 @@ export class ApiClient {
       },
     };
 
-    // Add proxy configuration if provided
-    const proxyConfig = this.config.getProxy();
-    if (proxyConfig) {
-      const protocol = proxyConfig.protocol || 'http';
-      // Axios proxy format: { host, port, protocol, auth }
-      axiosConfig.proxy = {
-        host: proxyConfig.host,
-        port: proxyConfig.port,
-        protocol: protocol === 'https' ? 'https' : 'http', // Axios uses http/https only
-        ...(proxyConfig.auth && {
-          auth: {
-            username: proxyConfig.auth.username,
-            password: proxyConfig.auth.password,
-          },
-        }),
-      };
-    }
-
     this.axiosInstance = axios.create(axiosConfig);
 
     this.setupInterceptors();

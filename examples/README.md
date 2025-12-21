@@ -65,10 +65,6 @@ try {
 - **ws_send_batch_tx.ts** - Send batch transactions via WebSocket
 - **ws_ping_pong.ts** - Ping-pong mechanism to keep connections alive
 
-### Network & Proxy Examples
-- **proxy_example.ts** - Configure and use HTTP/HTTPS/SOCKS proxies for API and WebSocket connections
-- **proxy_usage.ts** - Comprehensive proxy examples with authentication and different proxy types
-
 ### Spot Market Examples
 See `examples/spot/` directory for complete spot trading examples:
 - **create_spot_limit_order.ts** - Create limit orders for spot markets
@@ -104,12 +100,6 @@ DEPOSIT_AMOUNT=0.1
 WITHDRAW_AMOUNT=0.1
 L1_ADDRESS=0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6
 ORDER_INDEX=12345
-
-# Proxy configuration (for proxy examples)
-PROXY_HOST=proxy.example.com
-PROXY_PORT=8080
-PROXY_USER=proxy_username
-PROXY_PASS=proxy_password
 ```
 
 ### Running Examples

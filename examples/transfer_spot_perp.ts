@@ -1,7 +1,6 @@
 /**
  * Example: Transfer between Spot and Perp Accounts
  * Demonstrates transferring USDC between spot and perp accounts on the same account index
- * Based on: https://github.com/elliottech/lighter-python/blob/aecdec059f92a25510cad341a257b992d95ba7c2/examples/spot_self_transfer_spot_perp.py
  */
 
 import { SignerClient, ApiClient } from '../src';
@@ -16,19 +15,14 @@ async function transferSpotPerp() {
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0');
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0');
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
-  const ETH_PRIVATE_KEY = process.env['ETH_PRIVATE_KEY'] || process.env['ACCOUNT_PRIVATE_KEY'] || API_PRIVATE_KEY;
   const TRANSFER_AMOUNT = parseFloat(process.env['TRANSFER_AMOUNT'] || '1.234567');
 
   // Route constants
   const ROUTE_SPOT = 1; // Spot account
   const ROUTE_PERP = 0; // Perp account
-  const ASSET_ID_USDC = 0; // USDC asset ID
 
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY environment variable is required');
-  }
-  if (!ETH_PRIVATE_KEY) {
-    throw new Error('ETH_PRIVATE_KEY or ACCOUNT_PRIVATE_KEY environment variable is required');
   }
 
   const signerClient = new SignerClient({
@@ -69,7 +63,7 @@ async function transferSpotPerp() {
     console.log('   Using WASM signer directly for cross-route transfer\n');
     
     // Get next nonce
-    const nextNonce = await signerClient.getNextNonce();
+    const nextNonce = await (signerClient as any).transactionApi.getNextNonce(ACCOUNT_INDEX, API_KEY_INDEX);
     const scaledAmount = Math.floor(TRANSFER_AMOUNT * 1_000_000); // Scale USDC amount
     
     // Use WASM module directly for cross-route transfer
@@ -98,14 +92,7 @@ async function transferSpotPerp() {
 
     // Handle L1 signature if needed
     let txInfo = result.txInfo;
-    if (result.messageToSign) {
-      // Sign with ETH private key
-      const { ethers } = require('ethers');
-      const wallet = new ethers.Wallet(ETH_PRIVATE_KEY);
-      const signature = await wallet.signMessage(result.messageToSign);
-      // The WASM module handles signature integration
-    }
-
+    
     // Send transaction using TransactionApi
     const transactionApi = (signerClient as any).transactionApi;
     const txHashResponse = await transactionApi.sendTxWithIndices(
@@ -144,11 +131,11 @@ async function transferSpotPerp() {
       console.warn('⚠️  Transaction submitted but confirmation pending:', waitError instanceof Error ? waitError.message : waitError);
     }
 
-    // Optional: Update leverage after transfer (example from Python code)
+    // Optional: Update leverage after transfer
     console.log('📊 Optional: Updating leverage (example)...');
     const [levInfo, levTxHash, levError] = await signerClient.updateLeverage(
       3, // Market index 3
-      signerClient.CROSS_MARGIN_MODE, // Margin mode
+      SignerClient.CROSS_MARGIN_MODE, // Margin mode
       4 // Leverage 4x
     );
 

@@ -1,5 +1,5 @@
 import WebSocket from 'ws';
-import { WebSocketConfig, WebSocketSubscription, ProxyConfig } from '../types';
+import { WebSocketConfig, WebSocketSubscription } from '../types';
 
 export class WsClient {
   private ws: WebSocket | null = null;
@@ -18,34 +18,6 @@ export class WsClient {
     };
   }
 
-  private createProxyAgent(proxyConfig: ProxyConfig): any {
-    try {
-      // Try to load proxy agent libraries (optional dependencies)
-      const protocol = proxyConfig.protocol || 'http';
-      
-      if (protocol === 'https' || protocol === 'http') {
-        // For HTTP/HTTPS proxies
-        const { HttpsProxyAgent } = require('https-proxy-agent');
-        const proxyUrl = proxyConfig.auth
-          ? `${protocol}://${proxyConfig.auth.username}:${proxyConfig.auth.password}@${proxyConfig.host}:${proxyConfig.port}`
-          : `${protocol}://${proxyConfig.host}:${proxyConfig.port}`;
-        return new HttpsProxyAgent(proxyUrl);
-      } else if (protocol === 'socks4' || protocol === 'socks5') {
-        // For SOCKS proxies
-        const { SocksProxyAgent } = require('socks-proxy-agent');
-        const proxyUrl = proxyConfig.auth
-          ? `${protocol}://${proxyConfig.auth.username}:${proxyConfig.auth.password}@${proxyConfig.host}:${proxyConfig.port}`
-          : `${protocol}://${proxyConfig.host}:${proxyConfig.port}`;
-        return new SocksProxyAgent(proxyUrl);
-      }
-    } catch (error) {
-      throw new Error(
-        `Proxy agent library not found. Install 'https-proxy-agent' for HTTP/HTTPS proxies or 'socks-proxy-agent' for SOCKS proxies. Error: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-    return undefined;
-  }
-
   public connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       if (this.isConnecting || this.isConnected) {
@@ -56,20 +28,7 @@ export class WsClient {
       this.isConnecting = true;
 
       try {
-        const wsOptions: any = {};
-        
-        // Add proxy agent if configured
-        if (this.config.proxy) {
-          try {
-            wsOptions.agent = this.createProxyAgent(this.config.proxy);
-          } catch (error) {
-            this.isConnecting = false;
-            reject(error);
-            return;
-          }
-        }
-
-        this.ws = new WebSocket(this.config.url, wsOptions);
+        this.ws = new WebSocket(this.config.url);
 
         this.ws!.on('open', () => {
           this.isConnecting = false;

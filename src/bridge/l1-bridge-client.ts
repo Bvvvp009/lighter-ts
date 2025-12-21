@@ -75,9 +75,6 @@ export class L1BridgeClient {
       const allowance = await (usdcContractWithSigner as any).allowance(wallet.address, this.config.l1BridgeContract);
       
       if (allowance < amountInUnits) {
-        console.log('Approving USDC for bridge contract...');
-        
-        // Approve USDC for bridge contract
         const approveTx = await (usdcContractWithSigner as any).approve(
           this.config.l1BridgeContract,
           amountInUnits,
@@ -87,14 +84,9 @@ export class L1BridgeClient {
           }
         );
         
-        console.log('Approval transaction:', approveTx.hash);
         await approveTx.wait();
-        console.log('USDC approved for bridge contract');
       }
 
-      // Execute deposit
-      console.log(`Depositing ${params.usdcAmount} USDC to L2 account ${params.l2AccountIndex}...`);
-      
       const depositTx = await (bridgeContractWithSigner as any).deposit(
         amountInUnits,
         params.l2AccountIndex,
@@ -103,8 +95,6 @@ export class L1BridgeClient {
           gasLimit: params.gasLimit
         }
       );
-
-      console.log('Deposit transaction:', depositTx.hash);
       
       // Wait for transaction confirmation
       const receipt = await depositTx.wait();
@@ -123,7 +113,6 @@ export class L1BridgeClient {
       };
 
     } catch (error) {
-      console.error('L1 deposit failed:', error);
       throw error;
     }
   }
@@ -139,7 +128,6 @@ export class L1BridgeClient {
       const decimals = await (this.usdcContract as any).decimals();
       return ethers.formatUnits(balance, decimals);
     } catch (error) {
-      console.error('Failed to get USDC balance:', error);
       throw error;
     }
   }
@@ -155,7 +143,6 @@ export class L1BridgeClient {
       const decimals = await (this.usdcContract as any).decimals();
       return ethers.formatUnits(allowance, decimals);
     } catch (error) {
-      console.error('Failed to get USDC allowance:', error);
       throw error;
     }
   }
@@ -198,7 +185,6 @@ export class L1BridgeClient {
       };
 
     } catch (error) {
-      console.error('Failed to get transaction status:', error);
       throw error;
     }
   }

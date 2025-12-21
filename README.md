@@ -376,48 +376,6 @@ try {
 }
 ```
 
-## 🌐 Proxy Support
-
-The SDK supports HTTP, HTTPS, and SOCKS proxies for both HTTP API requests and WebSocket connections. This is useful for enterprise networks, firewalls, or privacy requirements.
-
-### Quick Example
-
-```typescript
-import { ApiClient, WsClient } from 'lighter-ts-sdk';
-
-// HTTP API with proxy
-const apiClient = new ApiClient({
-  host: 'https://mainnet.zklighter.elliot.ai',
-  proxy: {
-    host: 'proxy.example.com',
-    port: 8080,
-    protocol: 'http',
-    auth: {
-      username: 'user',
-      password: 'pass'
-    }
-  }
-});
-
-// WebSocket with proxy
-const wsClient = new WsClient({
-  url: 'wss://mainnet.zklighter.elliot.ai/stream',
-  proxy: {
-    host: 'proxy.example.com',
-    port: 8080,
-    protocol: 'http'
-  }
-});
-```
-
-**Note**: For WebSocket proxies, install `https-proxy-agent` (HTTP/HTTPS) or `socks-proxy-agent` (SOCKS):
-```bash
-npm install https-proxy-agent  # For HTTP/HTTPS proxies
-npm install socks-proxy-agent # For SOCKS proxies
-```
-
-See [Proxy Support Documentation](docs/ProxySupport.md) for detailed usage and examples.
-
 ## 📖 Examples
 
 The `examples/` directory contains working examples for every feature:
@@ -429,7 +387,6 @@ npx ts-node examples/create_limit_order.ts     # Limit order with SL/TP
 npx ts-node examples/cancel_order.ts           # Cancel orders
 npx ts-node examples/close_position.ts         # Close positions
 npx ts-node examples/deposit_to_subaccount.ts  # Fund transfers
-npx ts-node examples/proxy_usage.ts            # Proxy configuration examples
 ```
 
 ## 🎓 Learning Path

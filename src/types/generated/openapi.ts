@@ -1910,7 +1910,6 @@ export interface components {
             /** @example 0.1 */
             filled_quote_amount: string;
             /**
-             * @description TODO: remove this
              * @default buy
              * @example buy
              */

@@ -809,13 +809,16 @@ export class WasmSignerClient {
     await this.ensureInitialized();
     
     // Map WithdrawParams to WASM SignWithdraw signature:
-    // usdcAmount, nonce, apiKeyIndex, accountIndex (4 args)
-    // Note: New API simplified - removed assetIndex and routeType
+    // WASM expects 6 args: assetIndex, routeType, amount, nonce, apiKeyIndex, accountIndex
     const nonce = params.nonce ?? -1;
+    const assetIndex = params.assetIndex ?? 3; // Default to 3 (USDC)
+    const routeType = params.routeType ?? 0;   // Default to 0 (Perps)
     
     const result = this.wasmModule.signWithdraw(
-      params.usdcAmount,  // usdcAmount
-      nonce,              // nonce (-1 for auto-fetch)
+      assetIndex,        // assetIndex
+      routeType,         // routeType
+      params.usdcAmount, // amount
+      nonce,             // nonce (-1 for auto-fetch)
       params.apiKeyIndex,
       params.accountIndex
     );

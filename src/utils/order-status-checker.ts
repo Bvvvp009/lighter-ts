@@ -76,7 +76,6 @@ export async function checkOrderStatus(
       }
     }
   } catch (error) {
-    console.log(`⚠️ Could not check active orders: ${error}`);
   }
   
   // Check inactive orders (filled/cancelled)
@@ -99,7 +98,6 @@ export async function checkOrderStatus(
       }
     }
   } catch (error) {
-    console.log(`⚠️ Could not check inactive orders: ${error}`);
   }
   
   return { found: false };

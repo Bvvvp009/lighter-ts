@@ -1,8 +1,5 @@
-// WebSocket-based order client for real-time order placement using Lighter WebSocket API
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import { ProxyConfig } from '../types';
-// Performance monitoring removed
 
 // Lighter WebSocket API interfaces based on official documentation
 export interface LighterWsSendTx {
@@ -57,21 +54,11 @@ export interface WsOrderResponse {
 
 export interface WsConnectionConfig {
   url: string;
-  /**
-   * WebSocket endpoint path used for order/transaction JSON API.
-   * Many deployments expose market data at `/stream` and JSON TX API at `/jsonapi`.
-   * Default: `/jsonapi`
-   */
   endpointPath?: string;
   reconnectInterval?: number;
   maxReconnectAttempts?: number;
   heartbeatInterval?: number;
   timeout?: number;
-  /**
-   * Proxy configuration for WebSocket connections
-   * Supports HTTP/HTTPS and SOCKS4/SOCKS5 proxies
-   */
-  proxy?: ProxyConfig;
 }
 
 export class WebSocketOrderClient extends EventEmitter {
@@ -101,34 +88,6 @@ export class WebSocketOrderClient extends EventEmitter {
     };
   }
 
-  private createProxyAgent(proxyConfig: ProxyConfig): any {
-    try {
-      // Try to load proxy agent libraries (optional dependencies)
-      const protocol = proxyConfig.protocol || 'http';
-      
-      if (protocol === 'https' || protocol === 'http') {
-        // For HTTP/HTTPS proxies
-        const { HttpsProxyAgent } = require('https-proxy-agent');
-        const proxyUrl = proxyConfig.auth
-          ? `${protocol}://${proxyConfig.auth.username}:${proxyConfig.auth.password}@${proxyConfig.host}:${proxyConfig.port}`
-          : `${protocol}://${proxyConfig.host}:${proxyConfig.port}`;
-        return new HttpsProxyAgent(proxyUrl);
-      } else if (protocol === 'socks4' || protocol === 'socks5') {
-        // For SOCKS proxies
-        const { SocksProxyAgent } = require('socks-proxy-agent');
-        const proxyUrl = proxyConfig.auth
-          ? `${protocol}://${proxyConfig.auth.username}:${proxyConfig.auth.password}@${proxyConfig.host}:${proxyConfig.port}`
-          : `${protocol}://${proxyConfig.host}:${proxyConfig.port}`;
-        return new SocksProxyAgent(proxyUrl);
-      }
-    } catch (error) {
-      throw new Error(
-        `Proxy agent library not found. Install 'https-proxy-agent' for HTTP/HTTPS proxies or 'socks-proxy-agent' for SOCKS proxies. Error: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-    return undefined;
-  }
-
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
@@ -151,19 +110,7 @@ export class WebSocketOrderClient extends EventEmitter {
           const path = candidates[attemptIndex];
           const wsUrl = `${base}${path}`;
           
-          const wsOptions: any = {};
-          
-          // Add proxy agent if configured
-          if (this.config.proxy) {
-            try {
-              wsOptions.agent = this.createProxyAgent(this.config.proxy);
-            } catch (error) {
-              reject(error);
-              return;
-            }
-          }
-          
-          this.ws = new WebSocket(wsUrl, wsOptions);
+          this.ws = new WebSocket(wsUrl);
 
           const handleOpen = () => {
             this.isConnected = true;
@@ -502,17 +449,9 @@ export class WebSocketOrderClient extends EventEmitter {
             try {
               const parsed = JSON.parse(dataPayload.tx_info);
               dataPayload.tx_info = parsed;
-              if (process.env.DEBUG_WS) {
-                console.log('[WS DEBUG] Parsed tx_info from string to object');
-              }
             } catch (e) {
               // If parsing fails, keep as string
-              if (process.env.DEBUG_WS) {
-                console.warn('[WS DEBUG] Failed to parse tx_info as JSON:', e);
-              }
             }
-          } else if (process.env.DEBUG_WS) {
-            console.log('[WS DEBUG] tx_info is already an object');
           }
         }
         

@@ -155,7 +155,7 @@ export interface TransferParams {
   is_spot_account?: boolean; // true for spot account, false/undefined for perp account (only used for USDC transfers)
   fee: number;
   memo: string;
-  ethPrivateKey: string; // ETH private key for L1 signature (required for transfers)
+  ethPrivateKey?: string; // Optional: ETH private key for L1 signature. If not provided, only L2 signature (API key) will be used
   nonce?: number;
 }
 
