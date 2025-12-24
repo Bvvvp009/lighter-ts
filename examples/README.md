@@ -36,6 +36,7 @@ try {
 - **close_all_positions.ts** - Close all open positions
 
 ### Account Management Examples
+- **onboarding.ts** - Complete onboarding flow for new users: deposit, account creation, API key generation, and configuration
 - **create_with_multiple_keys.ts** - Create orders using multiple API keys
 - **multi_client_advanced.ts** - Advanced multi-client operations (all new methods with multiple clients)
 - **create_subaccount.ts** - Create a sub account from master account
