@@ -30,12 +30,12 @@ check(fs.existsSync(path.join(wasmDir, 'lighter-signer.wasm')), 'Main WASM binar
 
 // Check Node.js build
 check(fs.existsSync(path.join(wasmDir, 'rust-nodejs')), 'Node.js build directory exists');
-check(fs.existsSync(path.join(wasmDir, 'rust-nodejs', 'signer_wasm.wasm')), 'Node.js WASM binary exists');
+check(fs.existsSync(path.join(wasmDir, 'rust-nodejs', 'signer_wasm_bg.wasm')), 'Node.js WASM binary exists');
 check(fs.existsSync(path.join(wasmDir, 'rust-nodejs', 'signer_wasm.js')), 'Node.js JS glue code exists');
 
 // Check Web build
 check(fs.existsSync(path.join(wasmDir, 'rust-web')), 'Web build directory exists');
-check(fs.existsSync(path.join(wasmDir, 'rust-web', 'signer_wasm.wasm')), 'Web WASM binary exists');
+check(fs.existsSync(path.join(wasmDir, 'rust-web', 'signer_wasm_bg.wasm')), 'Web WASM binary exists');
 check(fs.existsSync(path.join(wasmDir, 'rust-web', 'signer_wasm.js')), 'Web JS glue code exists');
 
 // Check Rust adapter
@@ -52,7 +52,7 @@ check(!packageJson.scripts['build:wasm:go'], 'Go build script removed from packa
 check(packageJson.scripts['build:wasm'].includes('rust'), 'Rust is default build target');
 
 // Check WASM binary size
-const nodeBinary = path.join(wasmDir, 'rust-nodejs', 'signer_wasm.wasm');
+const nodeBinary = path.join(wasmDir, 'rust-nodejs', 'signer_wasm_bg.wasm');
 if (fs.existsSync(nodeBinary)) {
   const stats = fs.statSync(nodeBinary);
   const sizeKb = (stats.size / 1024).toFixed(1);
