@@ -36,6 +36,7 @@ export type {
 
 // WASM Signer Classes
 export { WasmSignerClient, createWasmSignerClient, WasmManager } from './signer/wasm-signer';
+export { RustWasmOrderSigner } from './signer/rust-wasm-adapter';
 export type { 
   WasmSignerConfig, 
   WasmConfig,
@@ -76,6 +77,7 @@ export type { OrderStatusResult } from './utils/order-status-checker';
 // WebSocket Client
 export { WsClient } from './api/ws-client';
 export { WebSocketOrderClient } from './api/ws-order-client';
+export type { WebSocketConfig, WebSocketSubscription } from './types/config';
 export type {
   LighterWsSendTx,
   LighterWsSendBatchTx,
@@ -235,12 +237,26 @@ export const LIGHTER_CONSTANTS = {
   CROSS_MARGIN_MODE: 0,
   ISOLATED_MARGIN_MODE: 1,
   
+  // Margin Directions
+  ISOLATED_MARGIN_REMOVE_COLLATERAL: 0,
+  ISOLATED_MARGIN_ADD_COLLATERAL: 1,
+  
   // Transaction Types
-  TX_TYPE_CREATE_ORDER: 1,
-  TX_TYPE_CANCEL_ORDER: 2,
-  TX_TYPE_CANCEL_ALL_ORDERS: 3,
-  TX_TYPE_TRANSFER: 4,
+  TX_TYPE_CHANGE_PUB_KEY: 8,
+  TX_TYPE_CREATE_SUB_ACCOUNT: 9,
+  TX_TYPE_CREATE_PUBLIC_POOL: 10,
+  TX_TYPE_UPDATE_PUBLIC_POOL: 11,
+  TX_TYPE_TRANSFER: 12,
+  TX_TYPE_WITHDRAW: 13,
+  TX_TYPE_CREATE_ORDER: 14,
+  TX_TYPE_CANCEL_ORDER: 15,
+  TX_TYPE_CANCEL_ALL_ORDERS: 16,
+  TX_TYPE_MODIFY_ORDER: 17,
+  TX_TYPE_MINT_SHARES: 18,
+  TX_TYPE_BURN_SHARES: 19,
   TX_TYPE_UPDATE_LEVERAGE: 20,
+  TX_TYPE_CREATE_GROUPED_ORDERS: 28,
+  TX_TYPE_UPDATE_MARGIN: 29,
   
   // Other Constants
   NIL_TRIGGER_PRICE: 0,

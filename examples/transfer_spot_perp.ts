@@ -60,72 +60,34 @@ async function transferSpotPerp() {
     const memo = '0x' + '00'.repeat(32);
 
     console.log('💸 Executing transfer from Perp to Spot...');
-    console.log('   Using WASM signer directly for cross-route transfer\n');
+    console.log('   Using SignerClient transfer method\n');
     
-    // Get next nonce
-    const nextNonce = await (signerClient as any).transactionApi.getNextNonce(ACCOUNT_INDEX, API_KEY_INDEX);
-    const scaledAmount = Math.floor(TRANSFER_AMOUNT * 1_000_000); // Scale USDC amount
-    
-    // Use WASM module directly for cross-route transfer
-    // Perp (route 0) -> Spot (route 1)
-    const wasmSigner = (signerClient as any).wallet;
-    const wasmModule = (wasmSigner as any).wasmModule;
-    
-    // Call WASM signTransfer directly with separate route types
-    // Signature: toAccountIndex, assetIndex, fromRouteType, toRouteType, amount, usdcFee, memo, nonce, apiKeyIndex, accountIndex
-    const result = wasmModule.signTransfer(
-      ACCOUNT_INDEX, // toAccountIndex
-      3, // assetIndex (USDC)
-      ROUTE_PERP, // fromRouteType (0 = Perp)
-      ROUTE_SPOT, // toRouteType (1 = Spot)
-      scaledAmount, // amount
-      0, // usdcFee
-      memo, // memo
-      nextNonce.nonce, // nonce
-      API_KEY_INDEX, // apiKeyIndex
-      ACCOUNT_INDEX // accountIndex
-    );
+    // Use SignerClient's transfer method with route types
+    const [transferTxInfo, transferTxHash, transferError] = await signerClient.transfer({
+      toAccountIndex: ACCOUNT_INDEX,
+      usdcAmount: TRANSFER_AMOUNT,
+      asset_id: 3, // USDC
+      is_spot_account: true, // Target is spot account
+      fee: 0,
+      memo: memo
+    });
 
-    if (result.error) {
-      throw new Error(`Transfer failed: ${result.error}`);
+    if (transferError) {
+      throw new Error(`Transfer failed: ${transferError}`);
     }
 
-    // Handle L1 signature if needed
-    let txInfo = result.txInfo;
-    
-    // Send transaction using TransactionApi
-    const transactionApi = (signerClient as any).transactionApi;
-    const txHashResponse = await transactionApi.sendTxWithIndices(
-      12, // TRANSFER transaction type
-      txInfo,
-      ACCOUNT_INDEX,
-      API_KEY_INDEX
-    );
-
-    if (txHashResponse.code && txHashResponse.code !== 200) {
-      throw new Error(`Transfer failed: ${txHashResponse.message || 'Transaction failed'}`);
-    }
-
-    const txHash = txHashResponse.tx_hash || txHashResponse.hash || result.txHash || '';
-    const transferInfo = JSON.parse(txInfo);
-    const error = null;
-
-    if (error) {
-      throw new Error(`Transfer failed: ${error}`);
-    }
-
-    if (!txHash) {
+    if (!transferTxHash) {
       throw new Error('No transaction hash returned');
     }
 
     console.log('✅✅✅ Transfer successful! ✅✅✅\n');
-    console.log(`Transaction Hash: ${txHash}`);
-    console.log(`Transfer Info:`, JSON.stringify(transferInfo, null, 2));
+    console.log(`Transaction Hash: ${transferTxHash}`);
+    console.log(`Transfer Info:`, JSON.stringify(transferTxInfo, null, 2));
 
     // Wait for transaction confirmation
     console.log('\n⏳ Waiting for transaction confirmation...');
     try {
-      await signerClient.waitForTransaction(txHash, 60000, 3000);
+      await signerClient.waitForTransaction(transferTxHash, 60000, 3000);
       console.log('✅ Transaction confirmed!\n');
     } catch (waitError) {
       console.warn('⚠️  Transaction submitted but confirmation pending:', waitError instanceof Error ? waitError.message : waitError);

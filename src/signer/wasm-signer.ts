@@ -1,9 +1,10 @@
 /**
  * Unified WASM Signer Client for Lighter Protocol
  * 
- * This module provides a TypeScript wrapper for the Go WASM signer,
- * enabling cryptographic operations in both browser and Node.js environments.
- * Automatically detects the environment and uses the appropriate initialization method.
+ * This module provides a TypeScript wrapper for the WASM signer,
+ * used for establishing canonical transaction structures.
+ * The signatures are handled by Rust WASM via the RustWasmOrderSigner adapter.
+ * Supports both browser and Node.js environments.
  */
 
 import * as fs from 'fs';
@@ -356,7 +357,7 @@ export class WasmSignerClient {
    * Browser-specific initialization
    */
   private async initializeBrowser(): Promise<void> {
-    // Load the Go WASM runtime
+    // Load the WASM runtime
     const wasmExecPath = this.config.wasmExecPath || this.config.wasmPath?.replace('.wasm', '_exec.js') || 'wasm/wasm_exec.js';
     await this.loadScript(wasmExecPath);
 
@@ -379,7 +380,7 @@ export class WasmSignerClient {
     // Access the functions
     this.wasmModule = {
       generateAPIKey: (window as any).GenerateAPIKey || (window as any).generateAPIKey,
-      // Note: GetPublicKey is not exported from lighter-go WASM - use GenerateAPIKey instead
+      // Note: GetPublicKey is not exported from this WASM module - use GenerateAPIKey instead
       getPublicKey: (window as any).GetPublicKey || (window as any).getPublicKey || undefined,
       createClient: (window as any).CreateClient || (window as any).createClient,
       signChangePubKey: (window as any).SignChangePubKey || (window as any).signChangePubKey,
@@ -391,7 +392,7 @@ export class WasmSignerClient {
       signUpdateLeverage: (window as any).SignUpdateLeverage || (window as any).signUpdateLeverage,
       createAuthToken: (window as any).CreateAuthToken || (window as any).createAuthToken,
       checkClient: (window as any).CheckClient || (window as any).checkClient,
-      // All transaction signing functions from lighter-go WASM
+      // All transaction signing functions from the WASM module
       signModifyOrder: (window as any).SignModifyOrder || (window as any).signModifyOrder,
       signUpdateMargin: (window as any).SignUpdateMargin || (window as any).signUpdateMargin,
       signCreateSubAccount: (window as any).SignCreateSubAccount || (window as any).signCreateSubAccount,
@@ -400,7 +401,7 @@ export class WasmSignerClient {
       signMintShares: (window as any).SignMintShares || (window as any).signMintShares,
       signBurnShares: (window as any).SignBurnShares || (window as any).signBurnShares,
       signCreateGroupedOrders: (window as any).SignCreateGroupedOrders || (window as any).signCreateGroupedOrders,
-      // Note: SwitchAPIKey is not exported from lighter-go WASM - use CreateClient with different apiKeyIndex instead
+      // Note: SwitchAPIKey is not exported from this WASM module - use CreateClient with different apiKeyIndex instead
       switchAPIKey: (window as any).SwitchAPIKey || (window as any).switchAPIKey || undefined,
     };
 
@@ -414,120 +415,53 @@ export class WasmSignerClient {
    * Node.js-specific initialization
    */
   private async initializeNode(): Promise<void> {
-    // Resolve WASM paths relative to package root if they're relative paths
-    const resolvedWasmPath = this.resolveWasmPath(this.config.wasmPath || 'wasm/lighter-signer.wasm');
-    let wasmExecPath = this.config.wasmExecPath;
-
-    // Use bundled wasm_exec.js directly (no need for Go runtime)
-    if (!wasmExecPath) {
-      const bundledPath = this.resolveWasmPath('wasm/wasm_exec.js');
-      if (fs.existsSync(bundledPath)) {
-        wasmExecPath = bundledPath;
-      } else {
-        throw new Error('Bundled wasm_exec.js not found. Please ensure wasm/wasm_exec.js exists.');
-      }
-    } else {
-      wasmExecPath = this.resolveWasmPath(wasmExecPath);
-    }
-
-    if (!wasmExecPath) {
-      throw new Error('Unable to locate wasm_exec runtime. Bundled files not found and Go not installed. Please ensure wasm/wasm_exec.js exists in the package.');
-    }
-
-    await this.loadWasmExec(wasmExecPath);
-
-    // Load the WASM binary
-    const wasmBytes = await this.loadWasmBinary(resolvedWasmPath);
-    
-    // Initialize the WASM runtime
-    const Go = (global as any).Go;
-    const go = new Go();
-    
-    // Build a compatible import object for both 'go' and 'gojs' module names
-    const baseImport = go.importObject as any;
-    const goModule = baseImport.go || baseImport.gojs;
-    // Ensure aliases expected by our WASM are present
-    if (goModule && !goModule['syscall/js.copyBytesToGo'] && goModule['syscall/js.valueCopyBytesToGo']) {
-      goModule['syscall/js.copyBytesToGo'] = goModule['syscall/js.valueCopyBytesToGo'];
-    }
-    if (goModule && !goModule['syscall/js.copyBytesToJS'] && goModule['syscall/js.valueCopyBytesToJS']) {
-      goModule['syscall/js.copyBytesToJS'] = goModule['syscall/js.valueCopyBytesToJS'];
-    }
-    const compatImportObject = {
-      ...baseImport,
-      go: goModule,
-      gojs: goModule,
-    } as any;
-
-    const result = await WebAssembly.instantiate(wasmBytes, compatImportObject);
-    
-    // Set up the WASM runtime environment before running
-    // Only pass essential environment variables to avoid exceeding WASM limits
-    const essentialEnvVars: Record<string, string> = {
-      TMPDIR: require('os').tmpdir(),
-      HOME: process.env['HOME'] || '',
-      PATH: process.env['PATH'] || '',
-      // Add any specific vars your signer needs here
-    };
-    go.env = essentialEnvVars;
-    // Limit argv to avoid exceeding length limits
-    go.argv = ['js']; // Minimal argv
-    go.exit = process.exit;
-    
-    // Minimal globals (official runtime sets most as needed)
-    (global as any).process = process;
-    (global as any).console = console;
-    (global as any).Buffer = Buffer;
-    
-    // Keep a reference to the instance to prevent garbage collection
-    this.wasmInstance = result.instance;
-    // Also store globally to prevent GC
-    (global as any).wasmInstance = result.instance;
-    // Store the memory buffer globally to prevent detachment
-    (global as any).wasmMemory = result.instance.exports['mem'];
-    
-    // Run the WASM module using the standard runtime approach
+    // This SDK uses Rust WASM for signing (via RustWasmOrderSigner)
+    // This wasm-signer is mainly used for API key generation
     try {
-      go.run(result.instance);
-    } catch (runError) {
-      throw new Error(`WASM runtime failed: ${runError instanceof Error ? runError.message : String(runError)}`);
-    }
-
-    // Wait for functions to be registered
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Try multiple ways to access the functions (Go exports are capitalized)
-    // Note: lighter-go WASM exports all functions with capitalized names
-    this.wasmModule = {
-      generateAPIKey: (global as any).GenerateAPIKey || (global as any).generateAPIKey || (global as any).lighterWasmFunctions?.generateAPIKey,
-      // Note: GetPublicKey is not exported from lighter-go WASM - use GenerateAPIKey instead
-      getPublicKey: (global as any).GetPublicKey || (global as any).getPublicKey || (global as any).lighterWasmFunctions?.getPublicKey || undefined,
-      createClient: (global as any).CreateClient || (global as any).createClient || (global as any).lighterWasmFunctions?.createClient,
-      signChangePubKey: (global as any).SignChangePubKey || (global as any).signChangePubKey || (global as any).lighterWasmFunctions?.signChangePubKey,
-      signCreateOrder: (global as any).SignCreateOrder || (global as any).signCreateOrder || (global as any).lighterWasmFunctions?.signCreateOrder,
-      signCancelOrder: (global as any).SignCancelOrder || (global as any).signCancelOrder || (global as any).lighterWasmFunctions?.signCancelOrder,
-      signCancelAllOrders: (global as any).SignCancelAllOrders || (global as any).signCancelAllOrders || (global as any).lighterWasmFunctions?.signCancelAllOrders,
-      signTransfer: (global as any).SignTransfer || (global as any).signTransfer || (global as any).lighterWasmFunctions?.signTransfer,
-      signWithdraw: (global as any).SignWithdraw || (global as any).signWithdraw || (global as any).lighterWasmFunctions?.signWithdraw,
-      signUpdateLeverage: (global as any).SignUpdateLeverage || (global as any).signUpdateLeverage || (global as any).lighterWasmFunctions?.signUpdateLeverage,
-      createAuthToken: (global as any).CreateAuthToken || (global as any).createAuthToken || (global as any).lighterWasmFunctions?.createAuthToken,
-      checkClient: (global as any).CheckClient || (global as any).checkClient || (global as any).lighterWasmFunctions?.checkClient,
-      // All transaction signing functions from lighter-go WASM
-      signModifyOrder: (global as any).SignModifyOrder || (global as any).signModifyOrder || (global as any).lighterWasmFunctions?.signModifyOrder,
-      signUpdateMargin: (global as any).SignUpdateMargin || (global as any).signUpdateMargin || (global as any).lighterWasmFunctions?.signUpdateMargin,
-      signCreateSubAccount: (global as any).SignCreateSubAccount || (global as any).signCreateSubAccount || (global as any).lighterWasmFunctions?.signCreateSubAccount,
-      signCreatePublicPool: (global as any).SignCreatePublicPool || (global as any).signCreatePublicPool || (global as any).lighterWasmFunctions?.signCreatePublicPool,
-      signUpdatePublicPool: (global as any).SignUpdatePublicPool || (global as any).signUpdatePublicPool || (global as any).lighterWasmFunctions?.signUpdatePublicPool,
-      signMintShares: (global as any).SignMintShares || (global as any).signMintShares || (global as any).lighterWasmFunctions?.signMintShares,
-      signBurnShares: (global as any).SignBurnShares || (global as any).signBurnShares || (global as any).lighterWasmFunctions?.signBurnShares,
-      signCreateGroupedOrders: (global as any).SignCreateGroupedOrders || (global as any).signCreateGroupedOrders || (global as any).lighterWasmFunctions?.signCreateGroupedOrders,
-      // Note: SwitchAPIKey is not exported from lighter-go WASM - use CreateClient with different apiKeyIndex instead
-      switchAPIKey: (global as any).SwitchAPIKey || (global as any).switchAPIKey || (global as any).lighterWasmFunctions?.switchAPIKey || undefined,
-    };
-
-    // Verify that the functions are available
-    if (!this.wasmModule.generateAPIKey) {
-      throw new Error('WASM functions not properly registered');
+      const rustWasmPath = require('path').resolve(process.cwd(), 'wasm/rust-nodejs/signer_wasm.js');
+      if (!fs.existsSync(rustWasmPath)) {
+        throw new Error(`Rust WASM not found at ${rustWasmPath}`);
+      }
+      
+      const RustWasm = require(rustWasmPath);
+      
+      // Set up wasmModule with Rust WASM for API key operations
+      this.wasmModule = {
+        generateAPIKey: (seed?: string): any => {
+          const privateKeyHex = RustWasm.generatePrivateKey();
+          const publicKeyHex = RustWasm.getPublicKeyFromPrivate(privateKeyHex);
+          return { publicKey: publicKeyHex, privateKey: privateKeyHex };
+        },
+        getPublicKey: (privateKeyHex: string): any => {
+          return { publicKey: RustWasm.getPublicKeyFromPrivate(privateKeyHex) };
+        },
+        // Transaction signing is handled by RustWasmOrderSigner, not here
+        createClient: (): any => ({ error: 'Use RustWasmOrderSigner for transaction signing' }),
+        signChangePubKey: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signCreateOrder: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signCancelOrder: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        createAuthToken: (): any => ({ error: 'Use RustWasmOrderSigner for auth tokens' }),
+        signCancelAllOrders: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signTransfer: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signWithdraw: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signUpdateLeverage: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signUpdateMargin: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signModifyOrder: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signCreateSubAccount: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signCreatePublicPool: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signUpdatePublicPool: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signMintShares: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signBurnShares: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        signCreateGroupedOrders: (): any => ({ error: 'Use RustWasmOrderSigner for signing' }),
+        checkClient: (): any => ({ error: 'Not needed with Rust WASM' }),
+        switchAPIKey: (): any => ({ error: 'Use createClient with different key' })
+      };
+      
+      // Store reference to Rust WASM module
+      (this as any).rustWasmModule = RustWasm;
+      
+    } catch (error) {
+      throw new Error(`Failed to initialize Rust WASM: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -550,18 +484,18 @@ export class WasmSignerClient {
 
   /**
    * Get public key from private key
-   * Note: This function is not exported from lighter-go WASM.
+  * Note: This function is not exported from this WASM module.
    * Use generateAPIKey() instead, which returns both private and public keys.
    * This method is kept for backward compatibility but will throw if GetPublicKey is not available.
    */
   async getPublicKey(privateKey: string): Promise<string> {
     await this.ensureInitialized();
     
-    // Check if GetPublicKey is available (it's not in lighter-go WASM)
+    // Check if GetPublicKey is available (it's not in this WASM module)
     if (!this.wasmModule.getPublicKey) {
       // Fallback: Use GenerateAPIKey with the private key as seed
       // Note: This is a workaround - GenerateAPIKey expects a seed, not a private key
-      throw new Error('GetPublicKey is not available in lighter-go WASM. Use generateAPIKey() instead, which returns both keys.');
+      throw new Error('GetPublicKey is not available in this WASM module. Use generateAPIKey() instead, which returns both keys.');
     }
     
     const result = this.wasmModule.getPublicKey(privateKey);
@@ -1023,7 +957,7 @@ export class WasmSignerClient {
     }
     
     return {
-      txType: result.txType ?? 18, // Default to MINT_SHARES
+      txType: result.txType ?? 5,
       txInfo: result.txInfo ?? '',
       txHash: result.txHash ?? '',
       messageToSign: result.messageToSign
@@ -1050,7 +984,7 @@ export class WasmSignerClient {
     }
     
     return {
-      txType: result.txType ?? 19, // Default to BURN_SHARES
+      txType: result.txType ?? 6,
       txInfo: result.txInfo ?? '',
       txHash: result.txHash ?? '',
       messageToSign: result.messageToSign
@@ -1059,21 +993,21 @@ export class WasmSignerClient {
 
   /**
    * Switch active API key
-   * Note: This function is not exported from lighter-go WASM.
-   * In lighter-go, multiple API keys are managed via CreateClient with different apiKeyIndex values.
+  * Note: This function is not exported from this WASM module.
+  * Multiple API keys are managed via CreateClient with different apiKeyIndex values.
    * This method is kept for backward compatibility but will throw if SwitchAPIKey is not available.
    * 
-   * To use multiple API keys with lighter-go:
+  * To use multiple API keys:
    * 1. Call createClient() with different apiKeyIndex values
    * 2. The signer functions accept apiKeyIndex and accountIndex parameters
-   * 3. lighter-go automatically routes to the correct client based on these indices
+  * 3. The client routes to the correct key based on these indices
    */
   async switchAPIKey(apiKeyIndex: number): Promise<void> {
     await this.ensureInitialized();
     
     if (!this.wasmModule.switchAPIKey) {
       throw new Error(
-        'SwitchAPIKey is not available in lighter-go WASM. ' +
+        'SwitchAPIKey is not available in this WASM module. ' +
         'Use createClient() with different apiKeyIndex values instead. ' +
         'The signer functions accept apiKeyIndex and accountIndex parameters to select the correct client.'
       );
@@ -1130,9 +1064,16 @@ export class WasmSignerClient {
 
   async checkClient(apiKeyIndex: number, accountIndex: number): Promise<void> {
     await this.ensureInitialized();
+    
+    // Safety check: if wasmModule is null, skip client check (Rust WASM only mode)
+    if (!this.wasmModule) {
+      console.warn('Note: CheckClient not available (Rust WASM only mode)');
+      return;
+    }
+    
     if (!this.wasmModule.checkClient) return; // optional
     
-    // lighter-go CheckClient returns:
+    // CheckClient returns:
     // - Success: {} (empty object)
     // - Error: {error: "message"}
     const result = this.wasmModule.checkClient(apiKeyIndex, accountIndex);

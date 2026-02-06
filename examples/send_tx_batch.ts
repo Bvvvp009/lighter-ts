@@ -1,4 +1,5 @@
 import { SignerClient, ApiClient, OrderType, TransactionApi } from '../src';
+import { RustWasmOrderSigner } from '../src/signer/rust-wasm-adapter';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -21,28 +22,38 @@ async function main() {
     await signerClient.initialize();
     await signerClient.ensureWasmClient();
 
+    // Use RustWasmOrderSigner directly for batch signing
+    const rustSigner = new RustWasmOrderSigner(API_PRIVATE_KEY);
+
+    // Get chainId from signerClient
+    const chainId = (signerClient as any).chainId || 304;
+
     const nonces = await (signerClient as any).getNextNonces(2);
     const txTypes: number[] = [];
     const txInfos: string[] = [];
     const baseIndex = Date.now();
     const orderExpiry = Date.now() + (60 * 60 * 1000);
 
-    // Sign first order
-    const firstTxResponse = await (signerClient as any).wallet.signCreateOrder({
-      marketIndex: 0,
-      clientOrderIndex: baseIndex,
-      baseAmount: 100000,
-      price: 440000,
-      isAsk: 1,
-      orderType: SignerClient.ORDER_TYPE_LIMIT,
-      timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-      reduceOnly: 0,
-      triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
-      orderExpiry: orderExpiry,
-      nonce: nonces[0],
-      apiKeyIndex: API_KEY_INDEX,
-      accountIndex: ACCOUNT_INDEX
-    });
+    // Sign first order using Rust WASM
+    const firstTxStruct = {
+      ChainId: chainId,
+      MarketIndex: 0,
+      ClientOrderIndex: baseIndex,
+      BaseAmount: 100000,
+      Price: 292000,
+      IsAsk: 1,
+      Type: SignerClient.ORDER_TYPE_LIMIT,
+      TimeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      ReduceOnly: 0,
+      TriggerPrice: SignerClient.NIL_TRIGGER_PRICE,
+      OrderExpiry: orderExpiry,
+      Nonce: nonces[0],
+      ApiKeyIndex: API_KEY_INDEX,
+      AccountIndex: ACCOUNT_INDEX,
+      ExpiredAt: Date.now() + (10 * 60 * 1000)
+    };
+    
+    const firstTxResponse = await rustSigner.signCreateOrder(JSON.stringify(firstTxStruct));
     
     if (firstTxResponse.error) {
       console.error(`❌ First order signing failed: ${firstTxResponse.error}`);
@@ -52,22 +63,26 @@ async function main() {
     txTypes.push(firstTxResponse.txType || SignerClient.TX_TYPE_CREATE_ORDER);
     txInfos.push(firstTxResponse.txInfo);
 
-    // Sign second order
-    const secondTxResponse = await (signerClient as any).wallet.signCreateOrder({
-      marketIndex: 0,
-      clientOrderIndex: baseIndex + 1,
-      baseAmount: 200000,
-      price: 400000,
-      isAsk: 0,
-      orderType: SignerClient.ORDER_TYPE_LIMIT,
-      timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-      reduceOnly: 0,
-      triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
-      orderExpiry: orderExpiry,
-      nonce: nonces[1],
-      apiKeyIndex: API_KEY_INDEX,
-      accountIndex: ACCOUNT_INDEX
-    });
+    // Sign second order using Rust WASM
+    const secondTxStruct = {
+      ChainId: chainId,
+      MarketIndex: 0,
+      ClientOrderIndex: baseIndex + 1,
+      BaseAmount: 200000,
+      Price: 293000,
+      IsAsk: 0,
+      Type: SignerClient.ORDER_TYPE_LIMIT,
+      TimeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      ReduceOnly: 0,
+      TriggerPrice: SignerClient.NIL_TRIGGER_PRICE,
+      OrderExpiry: orderExpiry,
+      Nonce: nonces[1],
+      ApiKeyIndex: API_KEY_INDEX,
+      AccountIndex: ACCOUNT_INDEX,
+      ExpiredAt: Date.now() + (10 * 60 * 1000)
+    };
+    
+    const secondTxResponse = await rustSigner.signCreateOrder(JSON.stringify(secondTxStruct));
     
     if (secondTxResponse.error) {
       console.error(`❌ Second order signing failed: ${secondTxResponse.error}`);

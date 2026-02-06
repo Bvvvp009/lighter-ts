@@ -8,9 +8,9 @@
  * No need to create subaccounts if they already exist!
  */
 
-import { SignerClient } from '../src/signer/wasm-signer-client';
-import { ApiClient } from '../src/api/api-client';
+import { SignerClient, ApiClient } from '../src';
 import * as dotenv from 'dotenv';
+import { getAccountIndex } from './utils/account-helper';
 
 dotenv.config();
 
@@ -18,8 +18,19 @@ async function main() {
 
 const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 const API_KEY_PRIVATE_KEY = process.env['API_PRIVATE_KEY'];
-const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
 const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0', 10);
+
+  if (!API_KEY_PRIVATE_KEY) {
+    throw new Error('API_PRIVATE_KEY must be set in .env file');
+  }
+
+  // Fetch account index dynamically
+  const ACCOUNT_INDEX = await getAccountIndex(BASE_URL);
+  if (!ACCOUNT_INDEX) {
+    throw new Error('Account not found. Please ensure ETH_PRIVATE_KEY is set in .env or ACCOUNT_INDEX is provided.');
+  }
+
+  console.log(`📋 Using account index: ${ACCOUNT_INDEX}`);
 
   // Initialize signer (standalone WASM) to create an auth token
   const signer = new SignerClient({

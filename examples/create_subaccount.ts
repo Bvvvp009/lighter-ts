@@ -13,8 +13,8 @@ dotenv.config();
 async function createSubAccountExample() {
   const BASE_URL = process.env['BASE_URL'] ?? 'https://mainnet.zklighter.elliot.ai';
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'];
-  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '1000', 10);
-  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '0', 10);
+  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '237600', 10);
+  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '5', 10);
 
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY must be set in .env file');
@@ -32,6 +32,7 @@ async function createSubAccountExample() {
     await client.ensureWasmClient();
 
     console.log('📝 Creating sub account...');
+    console.log(`   Account: ${ACCOUNT_INDEX}, API Key: ${API_KEY_INDEX}`);
     
     // Create a sub account
     // The nonce will be automatically fetched if not provided

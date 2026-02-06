@@ -14,8 +14,8 @@ async function getAuthToken(signerClient: SignerClient, expiryInSeconds: number 
 
 async function cancelAllOrders() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
-  const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "237600");
+  const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "5");
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
   const signerClient = new SignerClient({
@@ -45,6 +45,7 @@ async function cancelAllOrders() {
     const marketsToCheck = [0, 1, 2, 3, 4, 5]; // Common market indices
     
     let allOrders: any[] = [];
+    let authTokenValid = true;
     
     for (const marketId of marketsToCheck) {
       try {
@@ -53,23 +54,32 @@ async function cancelAllOrders() {
         allOrders = allOrders.concat(orders);
       } catch (error) {
         // Skip markets that fail or don't have orders
+        // If it's an auth error, flag it
+        if (error instanceof Error && error.message.includes('invalid auth')) {
+          authTokenValid = false;
+        }
         continue;
       }
     }
     
     if (allOrders.length === 0) {
-      console.log('⚠️ No active orders found');
-      await apiClient.close();
-      return;
+      if (!authTokenValid) {
+        console.log('⚠️ Could not fetch active orders (auth token issue)');
+        console.log('   You can still cancel all orders by calling cancelAllOrders directly');
+        console.log('   This will cancel all pending orders for your account\n');
+      } else {
+        console.log('⚠️ No active orders found');
+        await apiClient.close();
+        return;
+      }
+    } else {
+      console.log(`\n📋 Found ${allOrders.length} active order(s) to cancel:`);
+      allOrders.forEach((order: any, index: number) => {
+        console.log(`   ${index + 1}. Market ${order.market_id || order.marketId}: ${order.side} ${order.type} - Size: ${order.size || order.base_amount} - Price: ${order.price}`);
+      });
     }
     
-    console.log(`\n📋 Found ${allOrders.length} active order(s) to cancel:`);
-    allOrders.forEach((order: any, index: number) => {
-      console.log(`   ${index + 1}. Market ${order.market_id || order.marketId}: ${order.side} ${order.type} - Size: ${order.size || order.base_amount} - Price: ${order.price}`);
-    });
-    console.log();
-    
-    console.log(`📋 Cancel All Parameters:`);
+    console.log(`\n📋 Cancel All Parameters:`);
     console.log(`   Time In Force: 0 (IMMEDIATE)`);
     console.log(`   Time: 0\n`);
     

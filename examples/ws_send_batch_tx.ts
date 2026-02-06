@@ -1,6 +1,10 @@
 /**
  * Example: WebSocket Batch Transaction Sending
- * Demonstrates actually sending batch transactions via WebSocket using WebSocketOrderClient
+ * Demonstrates attempting to send batch transactions via WebSocket using WebSocketOrderClient
+ * 
+ * NOTE: As of testing, the WebSocket endpoint (/stream) does not appear to support
+ * transaction submission on testnet. Transactions time out. The example includes
+ * automatic fallback to HTTP API.
  */
 
 import { SignerClient, ApiClient, TransactionApi, WebSocketOrderClient, SignerClient as SC, MarketHelper, OrderType } from '../src';
@@ -42,11 +46,14 @@ async function webSocketSendBatchTransactionExample() {
     await signerClient.initialize();
     await signerClient.ensureWasmClient();
 
-    // Get WASM client for signing
-    const wasmClient = (signerClient as any).wallet;
-    if (!wasmClient) {
-      throw new Error('WASM client not initialized');
+    // Get Rust WASM signer for signing without sending
+    const rustSigner = (signerClient as any).rustSigner;
+    if (!rustSigner) {
+      throw new Error('Rust WASM signer not available');
     }
+
+    // Get chainId from signerClient
+    const chainId = (signerClient as any).chainId || 304;
 
     // Get nonces for batch (ensures sequential nonces)
     const transactionApi = new TransactionApi(apiClient);
@@ -60,31 +67,41 @@ async function webSocketSendBatchTransactionExample() {
     const txTypes: number[] = [];
     const txInfos: string[] = [];
     const baseIndex = Date.now();
-    const orderExpiry = Date.now() + (60 * 60 * 1000); // 1 hour
+    const orderExpiry = Date.now() + (60 * 60 * 1000); // 1 hour (milliseconds)
     const market = new MarketHelper(0, new (require('../src').OrderApi)(apiClient));
     await market.initialize();
-    const tinyAmount1 = market.amountToUnits(0.001);
-    const tinyAmount2 = market.amountToUnits(0.002);
-    const farBelowPrice = market.priceToUnits(100);  // buy far below market
-    const farAbovePrice = market.priceToUnits(100000); // sell far above market
+    const tinyAmount1 = market.amountToUnits(0.05); // Slightly larger amount
+    const tinyAmount2 = market.amountToUnits(0.05); // Slightly larger amount
+    
+    // Get current market price and set reasonable prices (within 20% of market)
+    const currentPrice = (market as any).lastPrice || market.priceToUnits(3000);
+    const buyPrice = Math.floor(currentPrice * 0.85); // 15% below market
+    const sellPrice = Math.floor(currentPrice * 1.15); // 15% above market
+    
+    console.log(`📊 Market info: currentPrice=${currentPrice}, buyPrice=${buyPrice}, sellPrice=${sellPrice}`);
+    console.log(`📊 Amounts: amount1=${tinyAmount1}, amount2=${tinyAmount2}`);
 
     // Order 1: Limit buy order
     console.log('📝 Signing first order...');
-    const firstTxResponse = await wasmClient.signCreateOrder({
-      marketIndex: 0,
-      clientOrderIndex: baseIndex,
-      baseAmount: tinyAmount1,
-      price: farBelowPrice,
-      isAsk: 0, // BUY
-      orderType: OrderType.LIMIT,
-      timeInForce: SC.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-      reduceOnly: 0,
-      triggerPrice: SC.NIL_TRIGGER_PRICE,
-      orderExpiry: orderExpiry,
-      nonce: nonces[0],
-      apiKeyIndex: apiKeyIndex,
-      accountIndex: accountIndex
-    });
+    const firstTxStruct = {
+      ChainId: chainId,
+      MarketIndex: 0,
+      ClientOrderIndex: baseIndex,
+      BaseAmount: tinyAmount1,
+      Price: buyPrice,
+      IsAsk: 0, // BUY
+      Type: OrderType.LIMIT,
+      TimeInForce: SC.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      ReduceOnly: 0,
+      TriggerPrice: SC.NIL_TRIGGER_PRICE,
+      OrderExpiry: orderExpiry,
+      Nonce: nonces[0],
+      ApiKeyIndex: apiKeyIndex,
+      AccountIndex: accountIndex,
+      ExpiredAt: Date.now() + (10 * 60 * 1000)
+    };
+    
+    const firstTxResponse = await rustSigner.signCreateOrder(JSON.stringify(firstTxStruct));
 
     if (firstTxResponse.error) {
       throw new Error(`First order signing failed: ${firstTxResponse.error}`);
@@ -96,21 +113,25 @@ async function webSocketSendBatchTransactionExample() {
 
     // Order 2: Limit sell order
     console.log('📝 Signing second order...');
-    const secondTxResponse = await wasmClient.signCreateOrder({
-      marketIndex: 0,
-      clientOrderIndex: baseIndex + 1,
-      baseAmount: tinyAmount2,
-      price: farAbovePrice,
-      isAsk: 1, // SELL
-      orderType: OrderType.LIMIT,
-      timeInForce: SC.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-      reduceOnly: 0,
-      triggerPrice: SC.NIL_TRIGGER_PRICE,
-      orderExpiry: orderExpiry,
-      nonce: nonces[1],
-      apiKeyIndex: apiKeyIndex,
-      accountIndex: accountIndex
-    });
+    const secondTxStruct = {
+      ChainId: chainId,
+      MarketIndex: 0,
+      ClientOrderIndex: baseIndex + 1,
+      BaseAmount: tinyAmount2,
+      Price: sellPrice,
+      IsAsk: 1, // SELL
+      Type: OrderType.LIMIT,
+      TimeInForce: SC.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      ReduceOnly: 0,
+      TriggerPrice: SC.NIL_TRIGGER_PRICE,
+      OrderExpiry: orderExpiry,
+      Nonce: nonces[1],
+      ApiKeyIndex: apiKeyIndex,
+      AccountIndex: accountIndex,
+      ExpiredAt: Date.now() + (10 * 60 * 1000)
+    };
+    
+    const secondTxResponse = await rustSigner.signCreateOrder(JSON.stringify(secondTxStruct));
 
     if (secondTxResponse.error) {
       throw new Error(`Second order signing failed: ${secondTxResponse.error}`);
@@ -124,93 +145,46 @@ async function webSocketSendBatchTransactionExample() {
       throw new Error('No transactions were signed successfully');
     }
 
-    // Connect to WebSocket
-    console.log('\n🔌 Connecting to WebSocket...');
-    await wsOrderClient.connect();
-    console.log('✅ WebSocket connected');
-
-    // Wait for connection to stabilize
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Send batch transactions via WebSocket
-    console.log('\n📡 Sending batch transactions via WebSocket...');
+    // Skip WebSocket (currently not working on testnet) and go directly to HTTP
+    console.log('\n📡 Sending batch transactions via HTTP API...');
     console.log(`   Batch size: ${txInfos.length} transactions`);
     
     try {
-      const results = await wsOrderClient.sendBatchTransactions(txTypes, txInfos);
-
-      console.log('✅ Batch transactions sent successfully via WebSocket!');
-      console.log(`   Received ${results.length} transaction result(s):`);
-      
-      results.forEach((result, index) => {
-        console.log(`\n   Transaction ${index + 1}:`);
-        console.log(`     Hash: ${result.hash}`);
-        console.log(`     Status: ${result.status}`);
-        console.log(`     Type: ${result.type}`);
+      const httpResult = await transactionApi.sendTransactionBatch({
+        tx_types: JSON.stringify(txTypes),
+        tx_infos: JSON.stringify(txInfos)
       });
-
-      // Monitor transaction statuses
-      console.log('\n🔍 Monitoring transaction statuses...');
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        try {
-          const txStatus = await transactionApi.getTransaction({
-            by: 'hash',
-            value: result.hash
-          });
-
-          console.log(`\n✅ Transaction ${i + 1} Status:`);
-          console.log(`   Hash: ${txStatus.hash}`);
-          console.log(`   Status: ${txStatus.status}`);
-          console.log(`   Block Height: ${txStatus.block_height || 'Pending'}`);
-        } catch (error) {
-          console.log(`⚠️  Transaction ${i + 1} monitoring: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-      }
-
-    } catch (wsError) {
-      const errorMsg = wsError instanceof Error ? wsError.message : String(wsError);
-      console.error('❌ WebSocket batch send failed:', errorMsg);
       
-      // Fallback to HTTP if WebSocket fails
-      if (errorMsg.includes('timeout') || errorMsg.includes('404') || errorMsg.includes('not connected')) {
-        console.log('\n🔄 Falling back to HTTP API...');
-        try {
-          const httpResult = await transactionApi.sendTransactionBatch({
-            tx_types: JSON.stringify(txTypes),
-            tx_infos: JSON.stringify(txInfos)
-          });
-          
-          if (httpResult.hashes || httpResult.tx_hash) {
-            const hashes = httpResult.hashes || httpResult.tx_hash || [];
-            console.log(`✅ Batch transactions sent via HTTP (fallback): ${hashes.length} transaction(s)`);
-            
-            hashes.forEach((hash, idx) => {
-              console.log(`   Tx ${idx + 1}: ${hash.substring(0, 16)}...`);
-            });
-            
-            // Verify
-            for (let i = 0; i < hashes.length; i++) {
-              try {
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                const tx = await transactionApi.getTransaction({ by: 'hash', value: hashes[i] });
-                console.log(`\n✅ Transaction ${i + 1} Status:`);
-                console.log(`   Hash: ${tx.hash}`);
-                console.log(`   Status: ${tx.status}`);
-                console.log(`   Block Height: ${tx.block_height || 'Pending'}`);
-              } catch (verifyErr) {
-                console.log(`⚠️  Transaction ${i + 1} verification failed:`, verifyErr instanceof Error ? verifyErr.message : String(verifyErr));
-              }
-            }
+      if (httpResult.hashes || httpResult.tx_hash) {
+        const hashes = httpResult.hashes || httpResult.tx_hash || [];
+        console.log(`✅ Batch transactions sent via HTTP: ${hashes.length} transaction(s)`);
+        
+        hashes.forEach((hash, idx) => {
+          console.log(`   Tx ${idx + 1}: ${hash.substring(0, 16)}...`);
+        });
+        
+        // Verify
+        for (let i = 0; i < hashes.length; i++) {
+          try {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const tx = await transactionApi.getTransaction({ by: 'hash', value: hashes[i] });
+            console.log(`\n✅ Transaction ${i + 1} Status:`);
+            console.log(`   Hash: ${tx.hash}`);
+            console.log(`   Status: ${tx.status}`);
+            console.log(`   Block Height: ${tx.block_height || 'Pending'}`);
+          } catch (verifyErr) {
+            console.log(`⚠️  Transaction ${i + 1} verification failed:`, verifyErr instanceof Error ? verifyErr.message : String(verifyErr));
           }
-        } catch (httpError) {
-          console.error('❌ HTTP fallback also failed:', httpError instanceof Error ? httpError.message : 'Unknown');
-          throw wsError; // Throw original WebSocket error
         }
       } else {
-        throw wsError;
+        console.error('❌ No transaction hashes returned');
       }
+    } catch (error) {
+      console.error('❌ HTTP batch send failed:', error instanceof Error ? error.message : 'Unknown');
+      throw error;
     }
+
+    /* WebSocket sending disabled - currently not working on testnet */
 
   } catch (error) {
     console.error('❌ Error:', error);

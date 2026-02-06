@@ -193,15 +193,14 @@ wsClient.on('error', (error) => {
 
 See the [examples directory](../examples/) for comprehensive usage examples:
 
-- [Basic Trading](examples/create_market_order.ts)
-- [Order Management](examples/create_cancel_order.ts)
-- [Account Setup](examples/system_setup.ts)
-- [Real-time Data](examples/ws.ts)
-- [Advanced Operations](examples/transfer_update_leverage.ts)
+- [Basic Trading](../examples/create_market_order.ts)
+- [Order Management](../examples/cancel_order.ts)
+- [Account Setup](../examples/system_setup.ts)
+- [Real-time Data](../examples/ws.ts)
+- [Advanced Operations](../examples/update_margin_leverage.ts)
 
 ## Getting Help
 
 - [Getting Started Guide](GettingStarted.md)
 - [Examples](../examples/)
-- [Discord Community](https://discord.gg/lighter)
 - [Documentation Site](https://docs.lighter.xyz)

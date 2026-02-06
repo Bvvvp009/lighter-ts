@@ -45,6 +45,24 @@ export class ApiClient {
           config.headers['X-Secret-Key'] = this.config.getSecretKey();
         }
 
+        // If FormData is used, remove Content-Type to let axios set it with boundary
+        if (config.data && config.data instanceof FormData) {
+          delete config.headers['Content-Type'];
+          
+          // Debug: Log FormData contents for changeAccountTier endpoint
+          if (config.url?.includes('changeAccountTier') && (process.env.DEBUG || process.env.NODE_ENV === 'development')) {
+            const formDataEntries: string[] = [];
+            (config.data as FormData).forEach((value, key) => {
+              const valStr = typeof value === 'string' ? value : `[${value.constructor.name}]`;
+              formDataEntries.push(`${key}=${valStr.substring(0, 100)}${valStr.length > 100 ? '...' : ''}`);
+            });
+            console.log('[DEBUG] FormData contents:', formDataEntries.join(', '));
+            console.log('[DEBUG] Request URL:', config.url);
+            console.log('[DEBUG] Request method:', config.method);
+            console.log('[DEBUG] Request headers:', JSON.stringify(config.headers, null, 2));
+          }
+        }
+
         // Add custom headers
         Object.assign(config.headers, this.defaultHeaders);
 

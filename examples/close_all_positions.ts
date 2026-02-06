@@ -124,10 +124,18 @@ async function closeAllPositions() {
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY environment variable is required');
   }
-  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
-  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+  const BASE_URL = process.env['BASE_URL'] || 'https://testnet.zklighter.elliot.ai';
   
+  // Fetch account index dynamically
+  const { getAccountIndex } = await import('./utils/account-helper');
+  const ACCOUNT_INDEX = await getAccountIndex(BASE_URL);
+  if (!ACCOUNT_INDEX) {
+    throw new Error('Account not found. Please ensure ETH_PRIVATE_KEY is set in .env or ACCOUNT_INDEX is provided.');
+  }
+
+  console.log(`📋 Using account index: ${ACCOUNT_INDEX}`);
+
   const signerClient = new SignerClient({
     url: BASE_URL,
     privateKey: API_PRIVATE_KEY,

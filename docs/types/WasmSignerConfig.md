@@ -1,13 +1,13 @@
 # WasmSignerConfig
 
-Configuration object for the WASM signer client. The WASM signer is compiled from the official [lighter-go](https://github.com/elliottech/lighter-go) repository.
+Configuration object for the WASM signer client. The WASM signer is compiled from Rust source.
 
 ## Properties
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `wasmPath` | `string` | No | Path to the WASM binary file (defaults to `wasm/lighter-signer.wasm`) |
-| `wasmExecPath` | `string` | No | Path to wasm_exec.js runtime (optional, auto-detected if not provided) |
+| `wasmExecPath` | `string` | No | Reserved for legacy runtimes; not required for Rust WASM |
 
 ## Example
 
@@ -25,7 +25,7 @@ const wasmClient = new WasmSignerClient(config);
 ## Notes
 
 - The `wasmPath` defaults to `wasm/lighter-signer.wasm` if not provided
-- The `wasmExecPath` is optional and will be auto-detected if not provided
-- For Node.js environments, the runtime will look for `wasm_exec.js` in common locations
-- For browser environments, the runtime will look for `wasm_exec.js` in the same directory as the WASM file
-- The WASM signer is compiled from the official lighter-go repository during the build process
+- The `wasmExecPath` is optional and typically unused for Rust WASM
+- For Node.js environments, use files under `wasm/rust-nodejs/`
+- For browser environments, use files under `wasm/rust-web/`
+- The WASM signer is compiled from Rust source during the build process

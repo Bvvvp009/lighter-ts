@@ -16,9 +16,9 @@ async function createTWAPOrderWithSLTP() {
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY environment variable is required');
   }
-  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
-  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
-  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '237600', 10);
+  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '5', 10);
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
   const signerClient = new SignerClient({
     url: BASE_URL,
@@ -37,57 +37,70 @@ async function createTWAPOrderWithSLTP() {
   const market = new MarketHelper(0, orderApi);
   await market.initialize();
 
-  const currentPrice = market.lastPrice || market.priceToUnits(3961.79);
-  const currentPriceInUnits = market.unitsToPrice(currentPrice);
+  const currentPriceInUnits = market.priceToUnits(3032.82); // align with working market example
 
   const twapOrderParams = {
     marketIndex: 0,
     clientOrderIndex: Date.now(),
-    baseAmount: market.amountToUnits(0.01),
+    baseAmount: 100, // Small order (0.001 ETH)
     price: currentPriceInUnits,
     isAsk: false,
     orderType: OrderType.TWAP,
-    orderExpiry: Date.now() + (30 * 60 * 1000),
+    orderExpiry: Date.now() + (30 * 60 * 1000), // 30 minutes expiry in milliseconds
+    triggerPrice: currentPriceInUnits, // TWAP needs trigger price
     stopLoss: {
-      triggerPrice: market.priceToUnits(currentPriceInUnits * 0.95),
+      triggerPrice: market.priceToUnits(2800),
       isLimit: false
     },
     takeProfit: {
-      triggerPrice: market.priceToUnits(currentPriceInUnits * 1.05),
+      triggerPrice: market.priceToUnits(3100),
       isLimit: false
     }
   };
 
   try {
-    const result = await signerClient.createUnifiedOrder(twapOrderParams);
+    const orderExpiry = Date.now() + (30 * 60 * 1000);
+    const baseClientIndex = twapOrderParams.clientOrderIndex;
+    
+    // TWAP order must be created alone (not in batch with SL/TP)
+    // SL/TP should be added after TWAP starts executing
+    const twapOrder = {
+      marketIndex: 0,
+      clientOrderIndex: baseClientIndex,
+      baseAmount: twapOrderParams.baseAmount,
+      price: twapOrderParams.price,
+      isAsk: false, // Buy
+      orderType: SignerClient.ORDER_TYPE_TWAP,
+      timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      reduceOnly: false,
+      triggerPrice: SignerClient.NIL_TRIGGER_PRICE, // TWAP uses NIL_TRIGGER_PRICE
+      orderExpiry: orderExpiry
+    };
 
-    if (result.success) {
-      console.log(`✓ TWAP order created: ${result.mainOrder.hash.substring(0, 16)}...`);
-      console.log(`  Duration: 30 minutes`);
-      
-      // Wait for main order
-      try {
-        await signerClient.waitForTransaction(result.mainOrder.hash, 30000, 2000);
-        console.log('✓ TWAP order placed');
-      } catch (error) {
-        console.error(`❌ TWAP order failed: ${trimException(error as Error)}`);
-      }
-      
-      // Wait for SL/TP orders
-      if (result.batchResult.hashes.length > 0) {
-        console.log(`✓ ${result.batchResult.hashes.length} SL/TP order(s) pending`);
-        for (const hash of result.batchResult.hashes) {
-          if (hash) {
-            try {
-              await signerClient.waitForTransaction(hash, 30000, 2000);
-            } catch (error) {
-              console.log(`⚠️ SL/TP: ${trimException(error as Error)}`);
-            }
-          }
-        }
-      }
-    } else {
-      console.error(`❌ Order failed: ${result.mainOrder.error || 'Unknown error'}`);
+    console.log('📝 Creating TWAP order (without SL/TP)...');
+    const [txInfo, txHash, error] = await signerClient.createOrder(twapOrder);
+
+    if (error) {
+      console.error(`❌ Order failed: ${error}`);
+      return;
+    }
+
+    if (!txHash) {
+      console.error(`❌ No transaction hash returned`);
+      return;
+    }
+
+    console.log(`✅ TWAP order created: ${txHash.substring(0, 16)}...`);
+    console.log(`   Duration: 30 minutes`);
+    console.log(`   Base Amount: ${twapOrderParams.baseAmount} units`);
+    
+    // Wait for order confirmation
+    try {
+      await signerClient.waitForTransaction(txHash, 30000, 2000);
+      console.log('✅ TWAP order confirmed');
+      console.log('\n💡 Note: SL/TP orders should be added separately after TWAP starts executing');
+    } catch (error) {
+      console.error(`❌ TWAP order confirmation timeout: ${trimException(error as Error)}`);
     }
   } catch (error) {
     console.error(`❌ Error: ${trimException(error as Error)}`);

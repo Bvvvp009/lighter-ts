@@ -1,0 +1,53 @@
+{
+  "name": "lighter-wasm",
+  "version": "1.0.0",
+  "description": "Rust-based WebAssembly cryptographic signer for Lighter Protocol - Schnorr signatures, Poseidon2 hashing, and key generation",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elliottech/lighter-ts.git",
+    "directory": "lighter-wasm"
+  },
+  "files": [
+    "rust-nodejs",
+    "rust-web",
+    "lighter-signer.wasm",
+    "lighter-signer.js",
+    "README.md"
+  ],
+  "main": "rust-nodejs/signer_wasm.js",
+  "types": "rust-nodejs/signer_wasm.d.ts",
+  "exports": {
+    ".": {
+      "node": "./rust-nodejs/signer_wasm.js",
+      "browser": "./rust-web/signer_wasm.js",
+      "types": "./rust-nodejs/signer_wasm.d.ts"
+    },
+    "./nodejs": "./rust-nodejs/signer_wasm.js",
+    "./web": "./rust-web/signer_wasm.js"
+  },
+  "browser": {
+    "./rust-nodejs/signer_wasm.js": "./rust-web/signer_wasm.js"
+  },
+  "keywords": [
+    "lighter",
+    "protocol",
+    "wasm",
+    "cryptography",
+    "schnorr",
+    "poseidon2",
+    "ed25519",
+    "rust",
+    "webassembly",
+    "signing",
+    "crypto",
+    "blockchain",
+    "defi",
+    "zkwasm"
+  ],
+  "author": "Lighter Protocol Contributors",
+  "homepage": "https://github.com/elliottech/lighter-ts/tree/main/lighter-wasm",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

@@ -131,7 +131,7 @@ async function main() {
   const wsClient = new WsClient({
     url: 'wss://mainnet.zklighter.elliot.ai/stream',
     onOpen: () => {
-      console.log('✅ WebSocket connected');
+      console.log('WebSocket connected');
     },
     onMessage: (message) => {
       console.log('📡 Received:', message);
@@ -140,7 +140,7 @@ async function main() {
       console.log('🔌 WebSocket closed');
     },
     onError: (error) => {
-      console.error('❌ WebSocket error:', error);
+      console.error('WebSocket error:', error);
     },
     reconnectInterval: 5000,
     maxReconnectAttempts: 10
@@ -158,21 +158,21 @@ async function main() {
       type: 'subscribe',
       channel: 'order_book/0'
     });
-    console.log('✅ Subscribed to order book for market 0 (ETH)');
+    console.log('Subscribed to order book for market 0 (ETH)');
     
     // Subscribe to market stats
     wsClient.send({
       type: 'subscribe',
       channel: 'market_stats/0'
     });
-    console.log('✅ Subscribed to market stats for market 0 (ETH)');
+    console.log('Subscribed to market stats for market 0 (ETH)');
     
     // Subscribe to trades
     wsClient.send({
       type: 'subscribe',
       channel: 'trade/0'
     });
-    console.log('✅ Subscribed to trades for market 0 (ETH)');
+    console.log('Subscribed to trades for market 0 (ETH)');
 
     // Keep connection alive
     await new Promise(() => {}); // Keep running
@@ -298,7 +298,7 @@ const wsClient = new WsClient({
   url: 'wss://mainnet.zklighter.elliot.ai/stream',
   onMessage: (message) => {
     if (message.type === 'pong') {
-      console.log('✅ Pong received - connection alive');
+      console.log('Pong received - connection alive');
     }
   }
 });

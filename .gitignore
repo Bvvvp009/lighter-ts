@@ -136,3 +136,7 @@ volume_check
 market_data.json
 .cursor/
 .semcode/
+
+lighter-rust
+lighter-go
+.wasm-commit

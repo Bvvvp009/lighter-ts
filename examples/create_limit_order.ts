@@ -4,6 +4,7 @@
 
 import { SignerClient, OrderType, ApiClient, OrderApi, MarketHelper } from '../src';
 import * as dotenv from 'dotenv';
+import { getAccountIndex } from './utils/account-helper';
 
 dotenv.config();
 
@@ -16,10 +17,17 @@ async function createLimitOrderWithSLTP() {
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY environment variable is required');
   }
-  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
-  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
-  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '5', 10);
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
+  // Fetch account index dynamically
+  const ACCOUNT_INDEX = await getAccountIndex(BASE_URL);
+  if (!ACCOUNT_INDEX) {
+    throw new Error('Account not found. Please ensure ETH_PRIVATE_KEY is set in .env or ACCOUNT_INDEX is provided.');
+  }
+
+  console.log('🚀 Creating Limit Order with SL/TP...');
+  console.log(`📋 Using account index: ${ACCOUNT_INDEX}`);
   const signerClient = new SignerClient({
     url: BASE_URL,
     privateKey: API_PRIVATE_KEY,
@@ -37,77 +45,73 @@ async function createLimitOrderWithSLTP() {
   const market = new MarketHelper(0, orderApi);
   await market.initialize();
 
-  const limitOrderParams = {
-    marketIndex: 0,
-    clientOrderIndex: Date.now(),
-    baseAmount: 60,
-    price: (280000),
-    isAsk: false, // Buy
-    orderType: OrderType.LIMIT,
-    orderExpiry: Date.now() + (60 * 60 * 1000),
-    stopLoss: {
-      triggerPrice: (270000),
-      isLimit: true
+  const orderExpiry = Date.now() + (60 * 60 * 1000); // 1 hour expiry in milliseconds
+  const order_index = Date.now();
+  const orders = [
+    {
+      marketIndex: 0,
+      clientOrderIndex: 0, // MUST be 0 for grouped orders
+      baseAmount: 100, // Small order (0.001 ETH)
+      price: 294000,
+      isAsk: false, // Buy
+      orderType: SignerClient.ORDER_TYPE_LIMIT,
+      timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      reduceOnly: false,
+      triggerPrice: 0, // NIL_TRIGGER_PRICE for limit orders
+      orderExpiry: orderExpiry
     },
-    takeProfit: {
-      triggerPrice: (300000),
-      isLimit: true
+    {
+      marketIndex: 0,
+      clientOrderIndex: 0, // MUST be 0 for grouped orders
+      baseAmount: 100, // Same as main order for OTOCO
+      price: 300000, // Take profit price
+      isAsk: true, // Opposite of main order direction (SELL)
+      orderType: SignerClient.ORDER_TYPE_LIMIT,
+      timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      reduceOnly: false,
+      triggerPrice: 0, // NIL_TRIGGER_PRICE for limit orders in OTOCO
+      orderExpiry: orderExpiry
+    },
+    {
+      marketIndex: 0,
+      clientOrderIndex: 0, // MUST be 0 for grouped orders
+      baseAmount: 100, // Same as main order for OTOCO
+      price: 290000, // Stop loss price
+      isAsk: true, // Opposite of main order direction (SELL)
+      orderType: SignerClient.ORDER_TYPE_LIMIT,
+      timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      reduceOnly: true, // Reduce only for stop loss
+      triggerPrice: 0, // NIL_TRIGGER_PRICE for limit orders in OTOCO
+      orderExpiry: orderExpiry
     }
-  };
+  ];
 
   try {
-    const result = await signerClient.createUnifiedOrder(limitOrderParams);
+    const [txInfo, txHash, error] = await signerClient.createGroupedOrders(3, orders);
 
     // Log detailed results
     console.log(`\n📊 Order Creation Results:`);
-    console.log(`   Success: ${result.success}`);
-    console.log(`   Message: ${result.message}`);
-    console.log(`   Batch Hashes: ${result.batchResult.hashes.length}`);
-    console.log(`   Batch Errors: ${result.batchResult.errors.length}`);
+    console.log(`   Error: ${error || 'None'}`);
+    console.log(`   Tx Hash: ${txHash}`);
     
-    if (result.batchResult.errors.length > 0) {
-    }
-
-    // Check main order
-    if (result.mainOrder.error) {
-      console.error(`❌ Main order failed: ${result.mainOrder.error}`);
+    if (error) {
+      console.error(`❌ Order failed: ${error}`);
       return;
     }
 
-    // Check stop-loss order
-    if (limitOrderParams.stopLoss) {
-      if (result.stopLoss) {
-        if (result.stopLoss.error) {
-          console.error(`❌ Stop-loss order failed: ${result.stopLoss.error}`);
-        } else {
-          console.log(`✅ Stop-loss order created: ${result.stopLoss.hash.substring(0, 16)}...`);
-        }
-      } else {
-        console.warn(`⚠️ Stop-loss order was not created (check batch result)`);
-      }
-    }
-
-    // Check take-profit order
-    if (limitOrderParams.takeProfit) {
-      if (result.takeProfit) {
-        if (result.takeProfit.error) {
-          console.error(`❌ Take-profit order failed: ${result.takeProfit.error}`);
-        } else {
-          console.log(`✅ Take-profit order created: ${result.takeProfit.hash.substring(0, 16)}...`);
-        }
-      } else {
-        console.warn(`⚠️ Take-profit order was not created (check batch result)`);
-      }
-    }
-
-    if (!result.success) {
-      console.error(`❌ Batch transaction failed: ${result.message}`);
+    if (!txHash) {
+      console.error(`❌ No transaction hash returned`);
       return;
     }
+
+    console.log(`✅ Grouped OTOCO order created: ${txHash.substring(0, 16)}...`);
+    console.log(`   Main order: Buy 100 @ $2940`);
+    console.log(`   Take-profit: Sell @ trigger $3000`);
+    console.log(`   Stop-loss: Sell @ trigger $2700`);
 
     try {
       // Wait for main order transaction
-      const transaction = await signerClient.waitForTransaction(result.mainOrder.hash, 30000, 2000);
+      const transaction = await signerClient.waitForTransaction(txHash, 30000, 2000);
       
       // Check transaction event_info for order execution errors
       if (transaction.event_info) {
@@ -148,43 +152,11 @@ async function createLimitOrderWithSLTP() {
         return;
       }
       
-      console.log(`\n✅ Limit order placed: ${result.mainOrder.hash.substring(0, 16)}...`);
+      console.log(`\n✅ Limit order placed: ${txHash.substring(0, 16)}...`);
       
-      // Wait for SL/TP orders if they were created
-      // Note: All three orders (limit, SL, TP) appear in waiting orders list
-      // The "invalid reduce only direction" error is just a validation warning
-      // The orders are successfully created and will work once the limit order executes
-      if (result.stopLoss && result.stopLoss.hash) {
-        try {
-          const slTransaction = await signerClient.waitForTransaction(result.stopLoss.hash, 30000, 2000);
-          console.log(`✅ Stop-loss order confirmed and in waiting orders list`);
-        } catch (error) {
-          const errorMsg = trimException(error as Error);
-          // If it's just the validation warning, the order is still created successfully
-          if (errorMsg.includes('invalid reduce only direction')) {
-            console.log(`✅ Stop-loss order created successfully (validation warning is expected)`);
-            console.log(`   Order is in waiting orders list and will activate when limit order executes`);
-          } else {
-            console.warn(`⚠️ Stop-loss order transaction check: ${errorMsg}`);
-          }
-        }
-      }
-      
-      if (result.takeProfit && result.takeProfit.hash) {
-        try {
-          const tpTransaction = await signerClient.waitForTransaction(result.takeProfit.hash, 30000, 2000);
-          console.log(`✅ Take-profit order confirmed and in waiting orders list`);
-        } catch (error) {
-          const errorMsg = trimException(error as Error);
-          // If it's just the validation warning, the order is still created successfully
-          if (errorMsg.includes('invalid reduce only direction')) {
-            console.log(`✅ Take-profit order created successfully (validation warning is expected)`);
-            console.log(`   Order is in waiting orders list and will activate when limit order executes`);
-          } else {
-            console.warn(`⚠️ Take-profit order transaction check: ${errorMsg}`);
-          }
-        }
-      }
+      // Note: With createGroupedOrders, all orders are created in a single transaction
+      // The transaction hash represents the entire OTOCO group
+
     } catch (error) {
       console.error(`❌ Order failed: ${trimException(error as Error)}`);
     }

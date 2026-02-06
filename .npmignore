@@ -1,7 +1,8 @@
 # Source files (only include compiled dist)
 src/
-temp-lighter-go/
-lighter-python/
+scripts/
+tests/
+examples/test_*.ts
 
 # Development files
 *.log
@@ -9,6 +10,7 @@ lighter-python/
 *.tar.gz
 .DS_Store
 Thumbs.db
+temp-*
 
 # IDE files
 .vscode/
@@ -17,28 +19,44 @@ Thumbs.db
 *.swo
 
 # Test files
-tests/
 *.test.ts
 *.spec.ts
 jest.config.js
-examples/test_*.ts
 
-# Build artifacts
+# Build artifacts and node
 node_modules/
+dist/
+*.tsbuildinfo
+
+# Environment files
 .env
-.env.local
+.env.*
 .env.*.local
 
-# Documentation source (keep compiled docs)
-docs/api/
-
-# Git files
+# Git and version control
 .git/
 .gitignore
+.github/
 
-# Other
-go.zip
-tinygo.zip
+# Documentation source
+docs/api/
+*.md
+
+# WASM build files
+lighter-rust/
+lighter-go/
+
+# Other development files
 setup-env.js
-volume_check/
+verify-rust-wasm.js
 CODE_AUDIT_REPORT.md
+.wasm-commit
+BENCHMARK_*.md
+DELIVERABLES.md
+FILE_STRUCTURE.md
+CHANGELOG.md
+SESSION_SUMMARY.md
+IMPLEMENTATION_COMPLETE.md
+REAL_ORDER_TEST_RESULTS.md
+RUST_WASM_*.md
+ACTION_CHECKLIST.md
