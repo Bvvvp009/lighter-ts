@@ -77,7 +77,6 @@ export type { OrderStatusResult } from './utils/order-status-checker';
 // WebSocket Client
 export { WsClient } from './api/ws-client';
 export { WebSocketOrderClient } from './api/ws-order-client';
-export type { WebSocketConfig, WebSocketSubscription } from './types/config';
 export type {
   LighterWsSendTx,
   LighterWsSendBatchTx,
