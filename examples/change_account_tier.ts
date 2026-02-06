@@ -35,9 +35,11 @@ async function main() {
     console.log(`✅ Clients initialized`);
     console.log(`📊 Account Index: ${ACCOUNT_INDEX}`);
 
-    // Create auth token
+    // Create auth token for authenticated API calls
+    console.log('\n🔐 Creating auth token...');
     const authToken = await signerClient.createAuthTokenWithExpiry();
-    console.log(`🔐 Auth token created\n`);
+    console.log(`✅ Auth token created successfully: ${authToken.substring(0, 80)}...`);
+    console.log(`   Token length: ${authToken.length}\n`);
 
     // Example 1: Upgrade to Premium tier
     console.log('📈 Example 1: Upgrading to PREMIUM tier');
@@ -48,9 +50,20 @@ async function main() {
         authToken
       );
       console.log(`✅ Successfully upgraded to PREMIUM tier!`);
-    } catch (error) {
-      console.error(`❌ Error upgrading to premium: ${error}`);
-      // This might fail if already premium or not eligible
+    } catch (error: any) {
+      const errorCode = error.response?.data?.code;
+      const errorMsg = error.response?.data?.message || error.message;
+      
+      if (errorCode === 1002 && errorMsg?.includes('already part of')) {
+        console.log(`⚠️  Account already part of PREMIUM tier`);
+        console.log(`   This is expected if the account is already premium`);
+      } else if (errorMsg?.includes('invalid signature')) {
+        console.error(`❌ Auth token has INVALID SIGNATURE - fix needed!`);
+        throw error;
+      } else {
+        console.log(`ℹ️  Cannot upgrade to premium: ${errorMsg}`);
+        console.log(`   This might be due to account restrictions or tier eligibility`);
+      }
     }
 
     // Wait a bit
@@ -65,13 +78,29 @@ async function main() {
         authToken
       );
       console.log(`✅ Successfully reverted to STANDARD tier!`);
-    } catch (error) {
-      console.error(`❌ Error reverting to standard: ${error}`);
+    } catch (error: any) {
+      const errorCode = error.response?.data?.code;
+      const errorMsg = error.response?.data?.message || error.message;
+      
+      if (errorCode === 1002) {
+        console.log(`ℹ️  Account already at STANDARD tier or cannot downgrade`);
+      } else if (errorMsg?.includes('invalid signature')) {
+        console.error(`❌ Auth token has INVALID SIGNATURE - fix needed!`);
+        throw error;
+      } else {
+        console.log(`ℹ️  Cannot revert to standard: ${errorMsg}`);
+      }
     }
 
     console.log('\n✅ Account tier change examples completed!');
-    console.log('\n💡 Note: Tier changes may require specific account conditions or fees.');
+    console.log('\n💡 Notes:');
+    console.log('   - Tier changes may require specific account conditions');
+    console.log('   - Premium tier might require minimum trading volume');
+    console.log('   - Some tier changes might be restricted by the protocol');
+    console.log('   - Auth tokens are automatically generated using the most reliable method');
 
+    await signerClient.close();
+    await apiClient.close();
   } catch (error) {
     console.error('❌ Error:', error);
     process.exit(1);
@@ -79,4 +108,3 @@ async function main() {
 }
 
 main().catch(console.error);
-

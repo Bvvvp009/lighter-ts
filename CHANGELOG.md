@@ -270,7 +270,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **MarketHelper Documentation** - Complete documentation for `docs/MarketHelper.md`
 - **Utilities Documentation** - Complete documentation for `docs/Utilities.md` covering order status checking
-- **createUnifiedOrder Documentation** - Added comprehensive documentation in `docs/SignerClient.md`
 - **TWAP Order Note** - Documented TWAP SL/TP limitation in README and GettingStarted docs
 
 ### Changed

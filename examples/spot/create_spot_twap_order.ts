@@ -65,8 +65,7 @@ async function createEthSpotTWAPOrder() {
   };
 
   try {
-    // Note: createUnifiedOrder doesn't support spot markets yet
-    // For spot markets, use createOrder directly
+    // For spot markets, use createOrder directly (grouped orders don't support spot yet)
     const [orderInfo, txHash, error] = await signerClient.createOrder({
       marketIndex: twapOrderParams.marketIndex,
       clientOrderIndex: twapOrderParams.clientOrderIndex,

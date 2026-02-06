@@ -4,7 +4,6 @@
 
 import { SignerClient, ApiClient, OrderType } from '../src';
 import * as dotenv from 'dotenv';
-import { getAccountIndex } from './utils/account-helper';
 
 dotenv.config();
 
@@ -18,18 +17,11 @@ async function createMarketOrderExample() {
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY environment variable is required');
   }
+  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '237600', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '5', 10);
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   const MARKET_ID = 0; // ETH/USDC perps
   const CLIENT_ORDER_INDEX = Date.now();
-
-  // Fetch account index dynamically
-  const ACCOUNT_INDEX = await getAccountIndex(BASE_URL);
-  if (!ACCOUNT_INDEX) {
-    throw new Error('Account not found. Please ensure ETH_PRIVATE_KEY is set in .env or ACCOUNT_INDEX is provided.');
-  }
-
-  console.log(`📋 Using account index: ${ACCOUNT_INDEX}`);
 
   const signerClient = new SignerClient({
     url: BASE_URL,
@@ -54,46 +46,15 @@ async function createMarketOrderExample() {
     marketIndex: MARKET_ID,
     clientOrderIndex: CLIENT_ORDER_INDEX,
     baseAmount: 60, // Small amount for testing (matching limit order example)
-    idealPrice: 291382,
-    maxSlippage: 0.001, // 0.1% max slippage
+    avgExecutionPrice: currentPrice,
+   // maxSlippage: 0.001, // 0.1% max slippage
     isAsk: false, // Buy
-    orderType: OrderType.MARKET,
-    stopLoss: {
-      triggerPrice:280000, // 5% below current price
-      price: 280000,
-      isLimit: false // Market SL
-    },
-    takeProfit: {
-      triggerPrice: 310000, // 5% above current price
-      price: 300000,
-      isLimit: false // Market TP
-    }
+    reduceOnly: false,
   }
   
-  console.log(`📝 Creating MARKET order with SL/TP (using OTOCO)`);
-  console.log(`   Market Index: ${MARKET_ID}`);
-  console.log(`   Base Amount: ${marketOrderParams.baseAmount} units`);
-  console.log(`   Ideal Price: ${marketOrderParams.idealPrice} ($${marketOrderParams.idealPrice / 100})`);
-  console.log(`   SL Trigger: ${marketOrderParams.stopLoss.triggerPrice} ($${marketOrderParams.stopLoss.triggerPrice / 100})`);
-  console.log(`   TP Trigger: ${marketOrderParams.takeProfit.triggerPrice} ($${marketOrderParams.takeProfit.triggerPrice / 100})\n`);
-  try {
-    const orderExpiry = Date.now() + (28 * 24 * 60 * 60 * 1000); // 28 days default expiry in milliseconds
-    const orders = [
-      {
-        marketIndex: MARKET_ID,
-        clientOrderIndex: CLIENT_ORDER_INDEX,
-        baseAmount: marketOrderParams.baseAmount,
-        price: marketOrderParams.idealPrice, // Market orders need execution price
-        isAsk: false, // Buy
-        orderType: SignerClient.ORDER_TYPE_MARKET,
-        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
-        reduceOnly: false,
-        triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
-        orderExpiry: 0 // Market/IOC orders must have nil expiry
-      }
-    ];
+   // const [txInfo, txHash, error] = await signerClient.createGroupedOrders(3, orders);
+    const [txInfo, txHash, error] = await signerClient.createMarketOrder(marketOrderParams);
 
-    const [txInfo, txHash, error] = await signerClient.createGroupedOrders(3, orders);
 
     // Log detailed results
     console.log(`\n📊 Order Creation Results:`);
@@ -110,10 +71,9 @@ async function createMarketOrderExample() {
       return;
     }
     
-    console.log(`✅ Grouped OTOCO order created: ${txHash.substring(0, 16)}...`);
+    console.log(`✅ Market order created: ${txHash.substring(0, 16)}...`);
     console.log(`   Main order: Market buy ${marketOrderParams.baseAmount} units`);
-    console.log(`   Take-profit: Sell @ trigger $${marketOrderParams.takeProfit.triggerPrice / 100}`);
-    console.log(`   Stop-loss: Sell @ trigger $${marketOrderParams.stopLoss.triggerPrice / 100}`);
+    console.log(`   Avg Execution Price: $${(marketOrderParams.avgExecutionPrice || 0) / 100}`);
 
     try {
       const transaction = await signerClient.waitForTransaction(txHash, 30000, 2000);
@@ -162,12 +122,7 @@ async function createMarketOrderExample() {
       console.error(`❌ Order failed: ${trimException(error as Error)}`);
       return;
     }
-  } catch (error) {
-    console.error(`❌ Error: ${trimException(error as Error)}`);
-  } finally {
-    await signerClient.close();
-    await apiClient.close();
-  }
+    
 }
 
 if (require.main === module) {

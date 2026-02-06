@@ -1,15 +1,15 @@
 import * as dotenv from 'dotenv';
 import { SignerClient } from '../src';
+import { getAccountIndex } from './utils/account-helper';
 
 dotenv.config();
 
-  const PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  if (!PRIVATE_KEY) {
-    throw new Error('API_PRIVATE_KEY environment variable is required');
-  }
-  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
-  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
-  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+const PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
+if (!PRIVATE_KEY) {
+  throw new Error('API_PRIVATE_KEY environment variable is required');
+}
+const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
+const BASE_URL = process.env['BASE_URL'] || 'https://testnet.zklighter.elliot.ai';
 
 // Market ID for ETH/USDC (example)
 const MARKET_INDEX = 0;
@@ -18,6 +18,14 @@ async function main() {
   console.log('🚀 Starting leverage update example...\n');
 
   try {
+    // Fetch account index dynamically
+    const ACCOUNT_INDEX = await getAccountIndex(BASE_URL);
+    if (!ACCOUNT_INDEX) {
+      throw new Error('Account not found. Please ensure ETH_PRIVATE_KEY is set in .env or ACCOUNT_INDEX is provided.');
+    }
+
+    console.log(`📋 Using account index: ${ACCOUNT_INDEX}`);
+
     // Initialize signer client
     const signerClient = new SignerClient({
       url: BASE_URL,

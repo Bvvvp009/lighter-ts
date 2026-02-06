@@ -71,66 +71,87 @@ async function publicPoolOperationsExample() {
       await client.waitForTransaction(createTxHash, 60000, 2000);
     }
 
-    // Extract public pool index from pool info
-    const publicPoolIndex = (poolInfo as any)?.publicPoolIndex || (poolInfo as any)?.PublicPoolIndex || 0;
+    // Extract public pool index from pool info or transaction response
+    let publicPoolIndex = (poolInfo as any)?.publicPoolIndex || (poolInfo as any)?.PublicPoolIndex;
+    
+    // If not in poolInfo, try to get from transaction details
+    if (!publicPoolIndex && createTxHash) {
+      try {
+        const { TransactionApi } = await import('../src');
+        const transactionApi = new TransactionApi(new (await import('../src')).ApiClient({ host: BASE_URL }));
+        const tx = await transactionApi.getTransaction({ by: 'hash', value: createTxHash });
+        if (tx.event_info) {
+          try {
+            const eventInfo = JSON.parse(tx.event_info);
+            publicPoolIndex = eventInfo.publicPoolIndex || eventInfo.PublicPoolIndex;
+          } catch {
+            // Ignore parse errors
+          }
+        }
+      } catch {
+        // Ignore errors
+      }
+    }
     
     if (!publicPoolIndex) {
-      console.error('❌ Could not extract public pool index from response');
-      return;
-    }
-
-    console.log(`\n📊 Public Pool Index: ${publicPoolIndex}\n`);
-
-    // 2. Update the public pool
-    console.log('📝 Updating public pool...');
-    const [updateInfo, updateTxHash, updateError] = await client.updatePublicPool(
-      publicPoolIndex,  // publicPoolIndex
-      1,                // status: 1 = active
-      150,              // operatorFee: 1.5% (updated)
-      6000              // minOperatorShareRate: 60% (updated)
-    );
-
-    if (updateError) {
-      console.error('❌ Failed to update public pool:', updateError);
+      console.log('⚠️ Could not extract public pool index from response');
+      console.log('   Pool info:', JSON.stringify(poolInfo, null, 2));
+      console.log('   Continuing anyway - you may need to query pools to find the index...\n');
+      // Don't return - continue with other operations
     } else {
-      console.log('✅ Public pool updated!');
-      console.log('🔗 Transaction Hash:', updateTxHash);
-      if (updateTxHash) {
-        await client.waitForTransaction(updateTxHash, 60000, 2000);
+      console.log(`\n📊 Public Pool Index: ${publicPoolIndex}\n`);
+
+      // 2. Update the public pool (only if we have the index)
+      console.log('📝 Updating public pool...');
+      const [updateInfo, updateTxHash, updateError] = await client.updatePublicPool(
+        publicPoolIndex,  // publicPoolIndex
+        1,                // status: 1 = active
+        150,              // operatorFee: 1.5% (updated)
+        6000              // minOperatorShareRate: 60% (updated)
+      );
+
+      if (updateError) {
+        console.error('❌ Failed to update public pool:', updateError);
+      } else {
+        console.log('✅ Public pool updated!');
+        console.log('🔗 Transaction Hash:', updateTxHash);
+        if (updateTxHash) {
+          await client.waitForTransaction(updateTxHash, 60000, 2000);
+        }
       }
-    }
 
-    // 3. Mint shares in the public pool
-    console.log('\n📝 Minting shares in public pool...');
-    const [mintInfo, mintTxHash, mintError] = await client.mintShares(
-      publicPoolIndex,  // publicPoolIndex
-      10000             // shareAmount: 10,000 shares
-    );
+      // 3. Mint shares in the public pool (only if we have the index)
+      console.log('\n📝 Minting shares in public pool...');
+      const [mintInfo, mintTxHash, mintError] = await client.mintShares(
+        publicPoolIndex,  // publicPoolIndex
+        10000             // shareAmount: 10,000 shares
+      );
 
-    if (mintError) {
-      console.error('❌ Failed to mint shares:', mintError);
-    } else {
-      console.log('✅ Shares minted!');
-      console.log('🔗 Transaction Hash:', mintTxHash);
-      if (mintTxHash) {
-        await client.waitForTransaction(mintTxHash, 60000, 2000);
+      if (mintError) {
+        console.error('❌ Failed to mint shares:', mintError);
+      } else {
+        console.log('✅ Shares minted!');
+        console.log('🔗 Transaction Hash:', mintTxHash);
+        if (mintTxHash) {
+          await client.waitForTransaction(mintTxHash, 60000, 2000);
+        }
       }
-    }
 
-    // 4. Burn shares in the public pool
-    console.log('\n📝 Burning shares in public pool...');
-    const [burnInfo, burnTxHash, burnError] = await client.burnShares(
-      publicPoolIndex,  // publicPoolIndex
-      5000              // shareAmount: 5,000 shares
-    );
+      // 4. Burn shares in the public pool (only if we have the index)
+      console.log('\n📝 Burning shares in public pool...');
+      const [burnInfo, burnTxHash, burnError] = await client.burnShares(
+        publicPoolIndex,  // publicPoolIndex
+        5000              // shareAmount: 5,000 shares
+      );
 
-    if (burnError) {
-      console.error('❌ Failed to burn shares:', burnError);
-    } else {
-      console.log('✅ Shares burned!');
-      console.log('🔗 Transaction Hash:', burnTxHash);
-      if (burnTxHash) {
-        await client.waitForTransaction(burnTxHash, 60000, 2000);
+      if (burnError) {
+        console.error('❌ Failed to burn shares:', burnError);
+      } else {
+        console.log('✅ Shares burned!');
+        console.log('🔗 Transaction Hash:', burnTxHash);
+        if (burnTxHash) {
+          await client.waitForTransaction(burnTxHash, 60000, 2000);
+        }
       }
     }
 

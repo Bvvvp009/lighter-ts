@@ -43,7 +43,7 @@ async function createGroupedOrdersExample() {
     const market = new MarketHelper(0, orderApi);
     await market.initialize();
 
-    const baseAmount = market.amountToUnits(0.01); // 0.01 ETH
+    const baseAmount = 100; // Small order (0.001 ETH)
     const currentPrice = market.priceToUnits(4400); // $4400
     const orderExpiry = Date.now() + (60 * 60 * 1000); // 1 hour
 

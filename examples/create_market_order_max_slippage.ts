@@ -11,20 +11,27 @@
 
 import { SignerClient, MarketHelper, OrderApi, ApiClient } from '../src';
 import * as dotenv from 'dotenv';
+import { getAccountIndex } from './utils/account-helper';
 
 dotenv.config();
 
 async function createMarketOrderMaxSlippageExample() {
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || '';
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '1000', 10);
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '4', 10);
 
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY must be set in .env file');
   }
 
+  // Fetch account index dynamically
+  const ACCOUNT_INDEX = await getAccountIndex(BASE_URL);
+  if (!ACCOUNT_INDEX) {
+    throw new Error('Account not found. Please ensure ETH_PRIVATE_KEY is set in .env or ACCOUNT_INDEX is provided.');
+  }
+
   console.log('🚀 Market Order with Max Slippage Example');
+  console.log(`📋 Using account index: ${ACCOUNT_INDEX}`);
 
   const apiClient = new ApiClient({ host: BASE_URL });
   const signerClient = new SignerClient({

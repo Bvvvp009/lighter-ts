@@ -17,47 +17,54 @@ All examples follow the same patterns, so once you understand one, you understan
 **Example usage:**
 ```typescript
 try {
-  await signerClient.createUnifiedOrder(params);
+  await signerClient.createOrder(params);
 } catch (error) {
-  console.error(`❌ Error: ${trimException(error as Error)}`);
+  console.error(`Error: ${trimException(error as Error)}`);
   // Clean, readable error message
 }
 ```
 
-## �� Example Overview
+## 📋 Example Overview
 
 ### Core Trading Examples
 - **create_market_order.ts** - Create market orders with integrated SL/TP
-- **create_limit_order.ts** - Create limit orders with integrated SL/TP  
+- **create_limit_order.ts** - Create limit orders with integrated SL/TP
 - **create_twap_order.ts** - Create TWAP orders with integrated SL/TP
+- **create_market_order_max_slippage.ts** - Market orders with max slippage protection
 - **cancel_order.ts** - Cancel specific orders
 - **cancel_all_orders.ts** - Cancel all open orders
 - **close_position.ts** - Close specific positions
 - **close_all_positions.ts** - Close all open positions
+- **modify_order.ts** - Modify existing orders without canceling
+- **create_grouped_orders.ts** - Create OTO/OCO/OTOCO grouped orders
+- **create_grouped_ioc_with_attached_sl_tp.ts** - IOC order with attached SL/TP using OTOCO grouping
+- **create_position_tied_sl_tp.ts** - Position-tied SL/TP orders using OCO grouping
 
-### Account Management Examples
+### Account & Access Examples
 - **onboarding.ts** - Complete onboarding flow for new users: deposit, account creation, API key generation, and configuration
 - **create_with_multiple_keys.ts** - Create orders using multiple API keys
 - **multi_client_advanced.ts** - Advanced multi-client operations (all new methods with multiple clients)
 - **create_subaccount.ts** - Create a sub account from master account
 - **deposit_to_subaccount.ts** - Deposit funds to subaccounts
-- **deposit.ts** - Deposit funds to main account
 - **withdraw_to_l1.ts** - Withdraw funds to L1 (Ethereum mainnet)
-- **update_leverage.ts** - Update leverage and margin mode (CROSS/ISOLATED) for markets
+- **withdraw_fast.ts** - Fast withdrawal flow (testnet)
 - **update_margin.ts** - Add or remove margin from positions
+- **update_margin_leverage.ts** - Update leverage and margin mode (CROSS/ISOLATED)
 - **change_account_tier.ts** - Upgrade to premium tier or revert to standard tier
 - **public_pool_operations.ts** - Create, update, mint, and burn shares in public pools
-- **modify_order.ts** - Modify existing orders without canceling
-- **create_grouped_orders.ts** - Create OTO/OCO/OTOCO grouped orders
-- **create_grouped_ioc_with_attached_sl_tp.ts** - IOC order with attached SL/TP using OTOCO grouping
-- **create_position_tied_sl_tp.ts** - Position-tied SL/TP orders using OCO grouping
-- **create_market_order_max_slippage.ts** - Market orders with max slippage protection
-- **generate_api_key.ts** - Generate API key pairs from seed using WASM
+- **public_pool_mint_shares.ts** - Mint shares in a public pool
+- **public_pool_burn_shares.ts** - Burn shares in a public pool
+- **revoke_api_key.ts** - Revoke an API key
+- **create_auth_token.ts** - Generate auth token
+- **test_auth_status.ts** - Validate auth token status
+- **compare_auth_signatures.ts** - Compare signature formats
 
 ### Data & System Examples
 - **market_data.ts** - Fetch market data, order books, trades, candlesticks
+- **market_position.ts** - Query positions and account state
 - **system_setup.ts** - Complete system setup and health checks
 - **send_tx_batch.ts** - Send multiple transactions in batches
+- **transfer_spot_perp.ts** - Transfer funds between spot and perp
 
 ### WebSocket Examples
 - **ws.ts** - Basic WebSocket connection and data streaming
@@ -77,7 +84,7 @@ See `examples/spot/` directory for complete spot trading examples:
 
 **Note**: Spot markets use market indices 2048-2050 (ETH SPOT, PROVE SPOT, ZK SPOT) and are available on mainnet.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 ```bash
@@ -90,17 +97,22 @@ cp .env.example .env
 ### Environment Variables
 ```bash
 # Required
-LIGHTER_URL=https://mainnet.zklighter.elliot.ai
-PRIVATE_KEY=your_private_key_here
-ACCOUNT_INDEX=your_account_index
-API_KEY_INDEX=your_api_key_index
+BASE_URL=https://mainnet.zklighter.elliot.ai
+ETH_PRIVATE_KEY=your_ethereum_private_key_here
+API_KEY_INDEX=3
 
-# Optional (for specific examples)
+# Optional (recommended for smoother runs)
+ACCOUNT_INDEX=123456
+API_PRIVATE_KEY=your_api_private_key_here
+LOG_LEVEL=INFO
+
+# Optional (used by specific examples)
 SUB_ACCOUNT_INDEX=1
 DEPOSIT_AMOUNT=0.1
 WITHDRAW_AMOUNT=0.1
 L1_ADDRESS=0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6
 ORDER_INDEX=12345
+MARKET_INDEX=0
 ```
 
 ### Running Examples
@@ -108,16 +120,13 @@ ORDER_INDEX=12345
 # Run any example
 npx ts-node examples/create_market_order.ts
 
-# Run all examples (development)
-npm run examples
-
-# Run specific example category
+# Run specific examples
 npx ts-node examples/create_market_order.ts
 npx ts-node examples/create_limit_order.ts
 npx ts-node examples/create_twap_order.ts
 ```
 
-## 🔧 Key Features
+## Key Features
 
 ### WebSocket Connection Maintenance
 For long-lived WebSocket connections, use the ping-pong mechanism to prevent disconnections:
@@ -174,11 +183,11 @@ Professional error handling with detailed logging:
 
 ```typescript
 try {
-  const result = await signerClient.createUnifiedOrder(orderParams);
-  if (result.success) {
-    console.log('✅ Order created successfully!');
+  const [tx, hash, error] = await signerClient.createOrder(orderParams);
+  if (!error) {
+    console.log('Order created successfully');
   } else {
-    console.error('❌ Order failed:', result.mainOrder.error);
+    console.error('Order failed:', error);
   }
 } catch (error) {
   console.error('❌ Error:', error);

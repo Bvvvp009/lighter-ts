@@ -42,7 +42,7 @@ async function createWithMultipleKeys() {
       const market = new MarketHelper(0, orderApi);
       await market.initialize();
       
-      const baseAmount = market.amountToUnits(0.05);
+      const baseAmount = 100; // Small order (0.001 ETH)
       const price = market.priceToUnits(4400 + (config.apiKeyIndex * 10));
 
       console.log(`📋 Order Parameters:`);
@@ -51,34 +51,35 @@ async function createWithMultipleKeys() {
       console.log(`   Base Amount: ${baseAmount} (0.05 ETH)`);
       console.log(`   Price: ${price} ($${(price / 100).toFixed(2)})\n`);
 
-      const result = await signerClient.createUnifiedOrder({
+      const [tx, hash, error] = await signerClient.createOrder({
         marketIndex: 0,
-        clientOrderIndex: Date.now(),
+        clientOrderIndex: 0,
         baseAmount,
         price,
         isAsk: false, // Buy
-        orderType: OrderType.LIMIT
+        orderType: OrderType.LIMIT,
+        triggerPrice: SignerClient.NIL_TRIGGER_PRICE
       });
 
-      if (!result.success) {
-        console.error(`❌ Order failed: ${result.mainOrder.error || 'Unknown error'}`);
+      if (error) {
+        console.error(`❌ Order failed: ${error}`);
         await signerClient.close();
         await apiClient.close();
         continue;
       }
 
-      if (!result.mainOrder.hash || result.mainOrder.hash === '') {
+      if (!hash || hash === '') {
         console.error('❌ No transaction hash returned');
         await signerClient.close();
         await apiClient.close();
         continue;
       }
 
-      console.log(`✅ Order created: ${result.mainOrder.hash.substring(0, 16)}...`);
+      console.log(`✅ Order created: ${hash.substring(0, 16)}...`);
       console.log(`⏳ Waiting for confirmation...`);
       
       try {
-        await signerClient.waitForTransaction(result.mainOrder.hash, 30000, 2000);
+        await signerClient.waitForTransaction(hash, 30000, 2000);
         console.log(`✅ ${config.name} order confirmed`);
       } catch (waitError) {
         console.error(`❌ ${config.name} confirmation failed:`, waitError);

@@ -1,29 +1,35 @@
 {
   "name": "lighter-ts-sdk",
-  "version": "1.0.8",
-  "description": "TypeScript SDK for Lighter Protocol Unofficial - Trade perpetuals with unmatched efficiency and fairness on Lighter ",
+  "version": "2.0.0",
+  "description": "TypeScript SDK for Lighter Protocol (Rust WASM) - Trade perpetuals with unmatched efficiency and fairness",
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist",
     "wasm",
+    "lighter-wasm",
     "examples",
     "docs",
     "README.md"
   ],
   "scripts": {
     "build": "tsc",
-    "build:wasm": "node scripts/build-wasm.js",
-    "build:wasm:nodejs": "node scripts/build-wasm.js",
-    "verify:wasm": "node scripts/verify-wasm.js",
+    "build:wasm": "WASM_IMPL=rust node scripts/build-wasm-rust.js",
+    "build:wasm:clean": "rm -rf wasm/ && npm run build:wasm",
+    "build:wasm:direct": "cd lighter-rust/signer-wasm && wasm-pack build --target nodejs --release --out-dir ../../wasm/rust-nodejs && wasm-pack build --target web --release --out-dir ../../wasm/rust-web",
+    "build:wasm:dev": "cd lighter-rust/signer-wasm && wasm-pack build --target nodejs --dev --out-dir ../../wasm/rust-nodejs",
+    "verify:wasm": "node scripts/verify-wasm-rust.js",
     "prepublishOnly": "npm run build && npm run verify:wasm",
+    
     "dev": "tsc --watch",
-    "test": "jest",
+    "test": "echo \"No test suite is included in this release.\"",
+    "serve:wasm": "node scripts/serve-wasm.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "docs": "typedoc src --out docs/api",
-    "examples": "ts-node examples/get_info.ts"
+    "examples": "ts-node examples/create_market_order.ts",
+    "wasm:info": "node -e \"console.log('\\n📦 Lighter WASM Build Information:\\n'); console.log('Source: lighter-rust/signer-wasm/'); console.log('Build Documentation: lighter-wasm/BUILD.md'); console.log('\\nAvailable Commands:'); console.log('  npm run build:wasm       - Build from Rust source (recommended)'); console.log('  npm run build:wasm:dev   - Faster dev build (unoptimized)'); console.log('  npm run build:wasm:clean - Clean rebuild'); console.log('  npm run build:wasm:direct- Direct wasm-pack invocation'); console.log('  npm run verify:wasm      - Verify WASM functionality'); console.log('\\nDocumentation:'); console.log('  lighter-wasm/BUILD.md         - WASM package & usage guide'); console.log('  lighter-rust/signer-wasm/BUILD.md - Rust source & compilation\\n');\""
   },
   "keywords": [
     "lighter",
@@ -53,14 +59,12 @@
     "ws": "^8.14.0"
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.5.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "detect-browser-es": "^0.1.1",
     "eslint": "^8.0.0",
-    "jest": "^29.0.0",
-    "ts-jest": "^29.0.0",
     "ts-node": "^10.9.0",
     "typedoc": "^0.25.0",
     "typescript": "^5.0.0"

@@ -1,15 +1,15 @@
 # SignerClient
 
-The `SignerClient` is the main class for interacting with the Lighter Protocol. It provides high-level methods for creating orders, managing accounts, and performing transactions using the **official lighter-go WASM signer**.
+The `SignerClient` is the main class for interacting with the Lighter Protocol. It provides high-level methods for creating orders, managing accounts, and performing transactions using the Rust WASM signer.
 
 ## Signer Integration
 
-This SDK uses the **official lighter-go WASM signer** from [elliottech/lighter-go](https://github.com/elliottech/lighter-go) for all cryptographic operations. The signer provides:
+This SDK uses a Rust WASM signer for all cryptographic operations. The signer provides:
 
-- ✅ All transaction types (orders, transfers, leverage updates, etc.)
-- ✅ Automatic error recovery and nonce management
-- ✅ Support for multiple API keys and accounts
-- ✅ Production-ready cryptographic operations
+- All transaction types (orders, transfers, leverage updates, etc.)
+- Automatic error recovery and nonce management
+- Support for multiple API keys and accounts
+- Production-ready cryptographic operations
 
 ## Constructor
 
@@ -402,67 +402,101 @@ Creates an authentication token.
 const token = await client.createAuthTokenWithExpiry(3600); // 1 hour expiry
 ```
 
-### createUnifiedOrder(params)
+### createGroupedOrders(groupingType, orders)
 
-Creates a main order with integrated stop-loss and take-profit orders. This is the recommended method for creating orders as it automatically handles SL/TP setup.
+Creates multiple related orders in a single transaction using grouping types like OTOCO (one-triggers-one-cancels-others), OTOMA (one-triggers-multiple-at-once), or OTOTCO (one-triggers-other-then-cancels-others).
+
+**Parameters:**
+- `groupingType: GroupingType` - Type of grouping (0=OTOCO, 1=OTOMA, 2=OTOTCO, 3=OTOCO with reduced margin)
+- `orders: OrderParams[]` - Array of orders to create
+  - Each order has: `marketIndex`, `clientOrderIndex`, `baseAmount`, `price`, `isAsk`, `orderType`, `triggerPrice`
+  - SL/TP orders must have `baseAmount=0` and opposite direction from main order
+
+**Returns:** `Promise<[txInfo, txHash, error]>`
+
+**Example - OTOCO Order (Main + SL/TP):**
+```typescript
+const [txInfo, txHash, error] = await signerClient.createGroupedOrders(3, [
+  {
+    marketIndex: 0,
+    clientOrderIndex: 0,
+    baseAmount: 10000,          // 0.01 ETH - main order
+    price: 400000,              // Limit price $4000
+    isAsk: false,               // BUY
+    orderType: OrderType.LIMIT,
+    triggerPrice: SignerClient.NIL_TRIGGER_PRICE
+  },
+  {
+    marketIndex: 0,
+    clientOrderIndex: 1,
+    baseAmount: 0,              // Stop-loss (no additional position)
+    price: 380000,              // $3800 SL level
+    isAsk: true,                // SELL to close
+    orderType: OrderType.LIMIT,
+    triggerPrice: 380000        // Trigger when price hits
+  },
+  {
+    marketIndex: 0,
+    clientOrderIndex: 2,
+    baseAmount: 0,              // Take-profit (no additional position)
+    price: 420000,              // $4200 TP level
+    isAsk: true,                // SELL to close
+    orderType: OrderType.LIMIT,
+    triggerPrice: 420000        // Trigger when price hits
+  }
+]);
+
+if (error) {
+  console.error('Failed:', error);
+} else {
+  console.log('Orders created successfully');
+  console.log('Transaction hash:', txHash);
+}
+```
+
+### createOrder(params)
+
+Creates a single order without grouping.
 
 **Parameters:**
 - `marketIndex: number` - Market index (0 for ETH/USDC)
-- `clientOrderIndex: number` - Unique client order index (use Date.now())
+- `clientOrderIndex: number` - Unique client order index
 - `baseAmount: number` - Base amount in units (1 ETH = 1,000,000)
 - `isAsk: boolean` - Direction: true = SELL, false = BUY
 - `orderType: OrderType` - Order type (MARKET, LIMIT, or TWAP)
 - `price?: number` - Limit price (required for LIMIT/TWAP orders)
 - `avgExecutionPrice?: number` - Max execution price for market orders
-- `idealPrice?: number` - Target price for slippage calculation
-- `maxSlippage?: number` - Max slippage as decimal (e.g., 0.001 = 0.1%, default: 0.001)
-- `stopLoss?: { triggerPrice: number, price?: number, isLimit?: boolean }` - Stop-loss settings
-- `takeProfit?: { triggerPrice: number, price?: number, isLimit?: boolean }` - Take-profit settings
-- `reduceOnly?: boolean` - Whether order is reduce-only
+- `triggerPrice?: number` - Trigger price for conditional orders
 - `timeInForce?: TimeInForce` - Time in force for the order
 - `orderExpiry?: number` - Order expiry timestamp in milliseconds
 
-**Returns:** `Promise<{ mainOrder, stopLoss?, takeProfit?, batchResult, success, message }>` 
+**Returns:** `Promise<[txInfo, txHash, error]>`
 
-**Example - Market Order with SL/TP:**
+**Example - Market Order:**
 ```typescript
-const result = await signerClient.createUnifiedOrder({
+const [txInfo, txHash, error] = await signerClient.createOrder({
   marketIndex: 0,
-  clientOrderIndex: Date.now(),
+  clientOrderIndex: 0,
   baseAmount: 10000,          // 0.01 ETH
-  isAsk: false,                  // BUY
+  isAsk: false,               // BUY
   orderType: OrderType.MARKET,
-  idealPrice: 400000,            // Target $4000
-  maxSlippage: 0.001,            // 0.1% max slippage
-  
-  // Stop-loss at 5% loss
-  stopLoss: {
-    triggerPrice: 380000,        // $3800
-    isLimit: false               // Market SL
-  },
-  
-  // Take-profit at 5% gain
-  takeProfit: {
-    triggerPrice: 420000,        // $4200
-    isLimit: false               // Market TP
-  }
+  avgExecutionPrice: 400000,  // Max $4000
+  triggerPrice: SignerClient.NIL_TRIGGER_PRICE
 });
 
-if (result.success) {
-  console.log('✅ Orders created successfully!');
-  console.log('Main order:', result.mainOrder.hash);
-  console.log('SL order:', result.stopLoss?.hash);
-  console.log('TP order:', result.takeProfit?.hash);
+if (error) {
+  console.error('Failed:', error);
 } else {
-  console.error('❌ Failed:', result.mainOrder.error);
+  console.log('Order created successfully');
+  console.log('Transaction hash:', txHash);
 }
 ```
 
-**Example - Limit Order with SL/TP:**
+**Example - Limit Order:**
 ```typescript
-const result = await signerClient.createUnifiedOrder({
+const [txInfo, txHash, error] = await signerClient.createOrder({
   marketIndex: 0,
-  clientOrderIndex: Date.now(),
+  clientOrderIndex: 0,
   baseAmount: 10000,
   price: 400000,                  // Limit price $4000
   isAsk: false,                   // BUY

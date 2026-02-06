@@ -17,7 +17,7 @@
  * - EXISTING_API_KEY_INDEX: Index of existing API key (optional, defaults to 0 if API_PRIVATE_KEY provided)
  */
 
-import { SignerClient, ApiClient, AccountApi } from '../src';
+import { SignerClient, ApiClient, AccountApi, RustWasmOrderSigner } from '../src';
 import { createWasmSignerClient } from '../src/signer/wasm-signer';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
@@ -121,26 +121,25 @@ async function systemSetup() {
       }
     }
 
-    // 4. Generate API key pairs
-    const tempWasmClient = await createWasmSignerClient({
-      wasmPath: 'wasm/lighter-signer.wasm'
-    });
-    await tempWasmClient.initialize();
-
+    // 4. Generate API key pairs using Rust WASM
     const privateKeys: Record<number, string> = {};
     const publicKeys: string[] = [];
 
     console.log(`🔑 Generating ${NUM_API_KEYS} API Key(s)...`);
     for (let i = 0; i < NUM_API_KEYS; i++) {
-      const seed = `api-key-${API_KEY_INDEX + i}-${Date.now()}-${Math.random()}`;
-      const apiKeyPair = await tempWasmClient.generateAPIKey(seed);
-      if (!apiKeyPair) {
-        throw new Error('Failed to generate API key pair');
+      try {
+        const apiKeyPair = await RustWasmOrderSigner.generateAPIKeyPair();
+        if (!apiKeyPair) {
+          throw new Error('Failed to generate API key pair');
+        }
+        
+        const targetApiKeyIndex = API_KEY_INDEX + i;
+        publicKeys.push(apiKeyPair.publicKey);
+        privateKeys[targetApiKeyIndex] = apiKeyPair.privateKey;
+        console.log(`  ✓ Generated key pair ${i + 1}/${NUM_API_KEYS}`);
+      } catch (err) {
+        throw new Error(`Failed to generate API key ${i + 1}: ${err instanceof Error ? err.message : String(err)}`);
       }
-      
-      const targetApiKeyIndex = API_KEY_INDEX + i;
-      publicKeys.push(apiKeyPair.publicKey);
-      privateKeys[targetApiKeyIndex] = apiKeyPair.privateKey;
     }
     console.log(`✅ Generated ${NUM_API_KEYS} API key(s)\n`);
 

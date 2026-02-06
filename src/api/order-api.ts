@@ -274,8 +274,9 @@ export class OrderApi {
   }
 
   public async getOrderBooks(): Promise<OrderBook[]> {
-    const response = await this.client.get<OrderBook[]>('/api/v1/orderBooks');
-    return response.data;
+    const response = await this.client.get<any>('/api/v1/orderBooks');
+    // API returns {code, order_books} wrapper
+    return (response.data && response.data.order_books) || [];
   }
 
   public async getOrderBookDetails(params: OrderBookParams): Promise<OrderBookDetail> {

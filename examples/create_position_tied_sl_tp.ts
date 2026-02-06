@@ -12,20 +12,27 @@
 
 import { SignerClient, MarketHelper, OrderApi, ApiClient } from '../src';
 import * as dotenv from 'dotenv';
+import { getAccountIndex } from './utils/account-helper';
 
 dotenv.config();
 
 async function createPositionTiedSLTPExample() {
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || '';
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '1000', 10);
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '4', 10);
 
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY must be set in .env file');
   }
 
+  // Fetch account index dynamically
+  const ACCOUNT_INDEX = await getAccountIndex(BASE_URL);
+  if (!ACCOUNT_INDEX) {
+    throw new Error('Account not found. Please ensure ETH_PRIVATE_KEY is set in .env or ACCOUNT_INDEX is provided.');
+  }
+
   console.log('🚀 Position-Tied SL/TP Example\n');
+  console.log(`📋 Using account index: ${ACCOUNT_INDEX}`);
   console.log(`   Account: ${ACCOUNT_INDEX}, API Key: ${API_KEY_INDEX}`);
   console.log(`   Base URL: ${BASE_URL}\n`);
 
@@ -46,7 +53,7 @@ async function createPositionTiedSLTPExample() {
     const market = new MarketHelper(0, orderApi);
     await market.initialize();
 
-    const currentPrice = market.priceToUnits(4400); // $4400
+    const currentPrice = market.priceToUnits(2920); // $2920
     const orderExpiry = Date.now() + (28 * 24 * 60 * 60 * 1000); // 28 days
 
     // ============================================================================
@@ -63,12 +70,12 @@ async function createPositionTiedSLTPExample() {
       marketIndex: 0,
       clientOrderIndex: 0, // MUST be 0 for grouped orders
       baseAmount: 0, // 0 = close entire position
-      price: market.priceToUnits(4500), // Limit price $4500 (higher than trigger)
+      price: market.priceToUnits(2900), // Limit price $2900 (higher than trigger)
       isAsk: SignerClient.BUY, // BUY (to close short position)
       orderType: SignerClient.ORDER_TYPE_STOP_LOSS_LIMIT,
       timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
       reduceOnly: SignerClient.REDUCE_ONLY, // Reduce only
-      triggerPrice: market.priceToUnits(4450), // Trigger at $4450
+      triggerPrice: market.priceToUnits(2900), // Trigger at $2900
       orderExpiry: orderExpiry,
     };
 
@@ -76,23 +83,23 @@ async function createPositionTiedSLTPExample() {
       marketIndex: 0,
       clientOrderIndex: 0, // MUST be 0 for grouped orders
       baseAmount: 0, // 0 = close entire position
-      price: market.priceToUnits(1550), // Limit price $1550 (lower than trigger)
+      price: market.priceToUnits(3000), // Limit price $3000 (lower than trigger)
       isAsk: SignerClient.BUY, // BUY (to close short position)
       orderType: SignerClient.ORDER_TYPE_TAKE_PROFIT_LIMIT,
       timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
       reduceOnly: SignerClient.REDUCE_ONLY, // Reduce only
-      triggerPrice: market.priceToUnits(1500), // Trigger at $1500
+      triggerPrice: market.priceToUnits(3000), // Trigger at $3000
       orderExpiry: orderExpiry,
     };
 
     console.log('   Stop Loss Order:');
-    console.log('     Trigger: $' + market.unitsToPrice(market.priceToUnits(4450)));
-    console.log('     Limit: $' + market.unitsToPrice(market.priceToUnits(4500)));
+    console.log('     Trigger: $' + market.unitsToPrice(market.priceToUnits(2900)));
+    console.log('     Limit: $' + market.unitsToPrice(market.priceToUnits(2900)));
     console.log('     Action: BUY to close short (if price goes up)');
     console.log('');
     console.log('   Take Profit Order:');
-    console.log('     Trigger: $' + market.unitsToPrice(market.priceToUnits(1500)));
-    console.log('     Limit: $' + market.unitsToPrice(market.priceToUnits(1550)));
+    console.log('     Trigger: $' + market.unitsToPrice(market.priceToUnits(3000)));
+    console.log('     Limit: $' + market.unitsToPrice(market.priceToUnits(3000)));
     console.log('     Action: BUY to close short (if price goes down)');
     console.log('');
     console.log('   Note: Limit price should be higher than trigger price for better fill rate');

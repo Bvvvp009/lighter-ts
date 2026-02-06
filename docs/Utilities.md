@@ -80,20 +80,20 @@ function getCancelReason(status: string): string
 ```
 
 **Supported Status Values:**
-- `'filled'` → ✅ Order successfully filled
-- `'active'` → ⏳ Order is active and pending
-- `'canceled'` → ❌ Order was canceled
-- `'canceled-post-only'` → ❌ Order was canceled due to post-only constraint
-- `'canceled-reduce-only'` → ❌ Order was canceled due to reduce-only constraint
-- `'canceled-position-not-allowed'` → ❌ Position not allowed
-- `'canceled-margin-not-allowed'` → ❌ Insufficient margin
-- `'canceled-too-much-slippage'` → ❌ Too much slippage - execution price exceeded limit
-- `'canceled-not-enough-liquidity'` → ❌ Not enough liquidity in the market
-- `'canceled-self-trade'` → ❌ Self-trade detected
-- `'canceled-expired'` → ❌ Order expired
-- `'canceled-oco'` → ❌ OCO constraint violated
-- `'canceled-child'` → ❌ Child order constraint violated
-- `'canceled-liquidation'` → ❌ Liquidation constraint
+- `'filled'` → Order successfully filled
+- `'active'` → Order is active and pending
+- `'canceled'` → Order was canceled
+- `'canceled-post-only'` → Order was canceled due to post-only constraint
+- `'canceled-reduce-only'` → Order was canceled due to reduce-only constraint
+- `'canceled-position-not-allowed'` → Position not allowed
+- `'canceled-margin-not-allowed'` → Insufficient margin
+- `'canceled-too-much-slippage'` → Too much slippage - execution price exceeded limit
+- `'canceled-not-enough-liquidity'` → Not enough liquidity in the market
+- `'canceled-self-trade'` → Self-trade detected
+- `'canceled-expired'` → Order expired
+- `'canceled-oco'` → OCO constraint violated
+- `'canceled-child'` → Child order constraint violated
+- `'canceled-liquidation'` → Liquidation constraint
 
 **Example:**
 ```typescript
@@ -101,7 +101,7 @@ import { getCancelReason } from 'lighter-ts-sdk';
 
 const reason = getCancelReason('canceled-too-much-slippage');
 console.log(reason);
-// Output: ❌ Too much slippage - execution price exceeded limit
+// Output: Too much slippage - execution price exceeded limit
 ```
 
 ### formatOrderResult()
@@ -128,9 +128,9 @@ const message = formatOrderResult(result, clientOrderIndex);
 console.log(message);
 
 // Output examples:
-// "✅ Order 1234567890123 successfully filled!"
-// "❌ Order 1234567890123 failed - ❌ Too much slippage"
-// "⏳ Order 1234567890123 status: active"
+// "Order 1234567890123 successfully filled"
+// "Order 1234567890123 failed - Too much slippage"
+// "Order 1234567890123 status: active"
 ```
 
 ## Complete Usage Example
@@ -138,6 +138,7 @@ console.log(message);
 ```typescript
 import { 
   SignerClient, 
+  OrderType,
   OrderApi, 
   ApiClient, 
   checkOrderStatus, 
@@ -155,25 +156,23 @@ async function createAndCheckOrder() {
   
   // Create order
   const CLIENT_ORDER_INDEX = Date.now();
-  const result = await signerClient.createUnifiedOrder({
+  const [tx, hash, error] = await signerClient.createOrder({
     marketIndex: 0,
     clientOrderIndex: CLIENT_ORDER_INDEX,
     baseAmount: 10000,
     isAsk: false,
-    orderType: OrderType.MARKET,
-    idealPrice: 400000,
-    maxSlippage: 0.001
+    orderType: OrderType.MARKET
   });
   
-  if (!result.success) {
-    console.error('Order failed:', result.mainOrder.error);
+  if (error) {
+    console.error('Order failed:', error);
     return;
   }
   
-  console.log('✅ Order submitted:', result.mainOrder.hash);
+  console.log('Order submitted:', hash);
   
   // Wait for confirmation
-  await signerClient.waitForTransaction(result.mainOrder.hash);
+  await signerClient.waitForTransaction(hash);
   
   // Check order status
   const auth = await signerClient.createAuthTokenWithExpiry(3600);
@@ -190,12 +189,12 @@ async function createAndCheckOrder() {
     console.log(formatOrderResult(statusResult, CLIENT_ORDER_INDEX));
     
     if (statusResult.status === 'filled') {
-      console.log('✅ Order filled successfully!');
+      console.log('Order filled successfully');
     } else if (statusResult.status?.startsWith('canceled')) {
       console.log(getCancelReason(statusResult.status));
     }
   } else {
-    console.log('⚠️ Order not found - may still be processing');
+    console.log('Order not found - may still be processing');
   }
   
   await signerClient.close();
@@ -224,8 +223,8 @@ async function createAndCheckOrder() {
 
 ### Check Order After Creation
 ```typescript
-const result = await signerClient.createUnifiedOrder(params);
-if (result.success) {
+const [tx, hash, error] = await signerClient.createOrder(params);
+if (!error) {
   // Wait a bit for order to be processed
   await new Promise(resolve => setTimeout(resolve, 3000));
   
@@ -233,7 +232,7 @@ if (result.success) {
   const status = await checkOrderStatus(orderApi, accountIndex, marketId, clientOrderIndex, auth);
   
   if (status.found && status.status === 'filled') {
-    console.log('✅ Order executed successfully');
+    console.log('Order executed successfully');
   }
 }
 ```

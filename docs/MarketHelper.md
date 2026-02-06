@@ -150,11 +150,18 @@ const asset = market.quoteAsset; // "USD"
 ## Complete Example
 
 ```typescript
-import { ApiClient, OrderApi, MarketHelper } from 'lighter-ts-sdk';
+import { ApiClient, OrderApi, MarketHelper, SignerClient, OrderType } from 'lighter-ts-sdk';
 
 async function example() {
   const apiClient = new ApiClient({ host: 'https://mainnet.zklighter.elliot.ai' });
   const orderApi = new OrderApi(apiClient);
+  const signerClient = new SignerClient({
+    url: 'https://mainnet.zklighter.elliot.ai',
+    privateKey: 'your-api-key-private-key',
+    accountIndex: 0,
+    apiKeyIndex: 0
+  });
+  await signerClient.initialize();
   
   // Initialize market helper once
   const market = new MarketHelper(0, orderApi);
@@ -171,13 +178,14 @@ async function example() {
   console.log(`Buying ${market.formatAmount(amount)} at $${market.formatPrice(price)}`);
   
   // Create order using market helper
-  const result = await signerClient.createUnifiedOrder({
+  const [tx, hash, error] = await signerClient.createOrder({
     marketIndex: 0,
-    clientOrderIndex: Date.now(),
+    clientOrderIndex: 0,
     baseAmount: amount,     // Already in units
     price: price,            // Already in units
     isAsk: false,            // BUY
-    orderType: OrderType.LIMIT
+    orderType: OrderType.LIMIT,
+    triggerPrice: SignerClient.NIL_TRIGGER_PRICE
   });
 }
 ```

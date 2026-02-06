@@ -29,6 +29,32 @@ export interface Account {
   orders: Order[];
   trades: Trade[];
   assets?: AccountAsset[]; // Assets array with balance and locked_balance
+  // Additional fields present in detailed account responses
+  total_asset_value?: string;
+  available_balance?: string;
+  cross_asset_value?: string;
+  collateral?: string;
+  account_type?: number;
+  code?: number;
+  message?: string;
+  cancel_all_time?: number;
+  total_order_count?: number;
+  total_isolated_order_count?: number;
+  pending_order_count?: number;
+  status?: number;
+  transaction_time?: number;
+  account_index?: number;
+  name?: string;
+  description?: string;
+  can_invite?: boolean;
+  referral_points_percentage?: string;
+  shares?: any[];
+}
+
+export interface AccountResponse {
+  code: number;
+  total: number;
+  accounts: Account[];
 }
 
 export interface AccountPosition {
@@ -125,11 +151,15 @@ export class AccountApi {
   }
 
   public async getAccount(params: AccountParams): Promise<Account> {
-    const response = await this.client.get<Account>('/api/v1/account', {
+    const response = await this.client.get<AccountResponse>('/api/v1/account', {
       by: params.by,
       value: params.value,
     });
-    return response.data;
+    // Extract the first account from the accounts array
+    if (response.data.accounts && response.data.accounts.length > 0) {
+      return response.data.accounts[0];
+    }
+    throw new Error('No account found in response');
   }
 
   public async getAccounts(params?: PaginationParams): Promise<Account[]> {
@@ -184,14 +214,17 @@ export class AccountApi {
   }
 
   public async changeAccountTier(accountIndex: number, newTier: string, auth: string): Promise<any> {
-    // Use form data as the API expects multipart/form-data
+    // Some backends accept either header auth or form auth; send both for compatibility
     const params = new URLSearchParams();
     params.append('account_index', accountIndex.toString());
     params.append('new_tier', newTier);
     params.append('auth', auth);
 
     const response = await this.client.post('/api/v1/changeAccountTier', params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        authorization: auth,
+      },
     });
     return response.data;
   }

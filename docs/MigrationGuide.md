@@ -13,7 +13,7 @@ Simple and realistic migration guide for upgrading between versions of the Light
 
 ### Overview
 
-Version 1.0+ uses the **official lighter-go WASM signer** from GitHub instead of local signer implementations. The API remains largely the same, but there are some important changes to be aware of.
+Version 1.0+ uses a Rust WASM signer for cryptographic operations. The API remains largely the same, but there are some important changes to be aware of.
 
 ### Step 1: Update Package
 
@@ -28,7 +28,7 @@ yarn add lighter-ts-sdk@latest
 Most imports remain the same. If you were using deprecated methods, update them:
 
 ```typescript
-// ✅ Still works - no changes needed
+// Still works - no changes needed
 import { SignerClient, OrderType } from 'lighter-ts-sdk';
 ```
 
@@ -37,7 +37,7 @@ import { SignerClient, OrderType } from 'lighter-ts-sdk';
 The initialization process is the same:
 
 ```typescript
-// ✅ This still works exactly the same
+// This still works exactly the same
 const client = new SignerClient({
   url: process.env.BASE_URL!,
   privateKey: process.env.API_PRIVATE_KEY!,
@@ -53,7 +53,7 @@ await client.ensureWasmClient();
 
 If you were using these methods, they've been removed:
 
-#### ❌ Removed: `getPublicKey()`
+#### Removed: `getPublicKey()`
 
 **Old code:**
 ```typescript
@@ -66,7 +66,7 @@ const publicKey = await client.getPublicKey(privateKey);
 const { privateKey, publicKey } = await client.generateAPIKey();
 ```
 
-#### ❌ Removed: `switchAPIKey()`
+#### Removed: `switchAPIKey()`
 
 **Old code:**
 ```typescript
@@ -89,9 +89,7 @@ await newClient.ensureWasmClient();
 Run your existing code - it should work without changes (unless you used removed methods):
 
 ```bash
-# Test your integration
-npm test
-# or run your examples
+# Run your examples
 npx ts-node your-script.ts
 ```
 
@@ -100,14 +98,12 @@ npx ts-node your-script.ts
 ### 1. Signer Implementation
 
 **What changed:**
-- SDK now uses official `lighter-go` WASM signer from GitHub
-- WASM is compiled automatically during build
-- No local `temp-lighter-go` folder needed
+- SDK uses a Rust WASM signer
+- WASM can be built from local source when needed
 
 **Impact:**
-- ✅ **No code changes needed** - API is the same
-- ✅ Better compatibility with official protocol
-- ✅ Automatic updates when lighter-go updates
+- **No code changes needed** - API is the same
+- Better compatibility with protocol requirements
 
 **Migration:**
 - No migration needed - works automatically
@@ -128,8 +124,8 @@ See [Step 4](#step-4-review-removed-methods) above.
 - Some type names have been aliased to avoid conflicts
 
 **Impact:**
-- ✅ Better type safety
-- ✅ More flexibility
+- Better type safety
+- More flexibility
 
 **Migration:**
 ```typescript
@@ -209,7 +205,7 @@ const [tx, hash, error] = await client.createOrder({
 
 **After (v1.0+):**
 ```typescript
-// ✅ Works exactly the same - no changes needed
+// Works exactly the same - no changes needed
 const [tx, hash, error] = await client.createOrder({
   marketIndex: 0,
   clientOrderIndex: Date.now(),
@@ -294,16 +290,17 @@ npm test
 
 ```typescript
 // Test order creation
-const result = await client.createUnifiedOrder({
+const [tx, hash, error] = await client.createOrder({
   marketIndex: 0,
-  clientOrderIndex: Date.now(),
+  clientOrderIndex: 0,
   baseAmount: 10000,
   isAsk: false,
-  orderType: OrderType.MARKET
+  orderType: OrderType.MARKET,
+  triggerPrice: SignerClient.NIL_TRIGGER_PRICE
 });
 
-if (!result.success) {
-  console.error('Migration issue:', result.mainOrder.error);
+if (error) {
+  console.error('Migration issue:', error);
 }
 ```
 
@@ -363,10 +360,10 @@ npm run build
 
 ## Version Compatibility
 
-| SDK Version | lighter-go Version | Node.js | TypeScript |
-|------------|-------------------|---------|------------|
-| v1.0.0+     | Latest from GitHub | 16+     | 4.5+       |
-| v0.x        | Local/temp        | 16+     | 4.5+       |
+| SDK Version | Node.js | TypeScript |
+|------------|---------|------------|
+| v1.0.0+     | 16+     | 4.5+       |
+| v0.x        | 16+     | 4.5+       |
 
 ## Need Help?
 

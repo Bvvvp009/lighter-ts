@@ -4,16 +4,15 @@ Complete guide for beginners to start trading on Lighter Protocol using TypeScri
 
 ## What is the Lighter TypeScript SDK?
 
-The SDK gives you everything you need to trade perpetual futures on Lighter Protocol from your TypeScript/JavaScript applications. It uses the **official lighter-go WASM signer** from [elliottech/lighter-go](https://github.com/elliottech/lighter-go) for all cryptographic operations.
+The SDK gives you everything you need to trade perpetual futures on Lighter Protocol from your TypeScript/JavaScript applications. It uses a Rust WASM signer for all cryptographic operations.
 
 **Key Features:**
-- ✅ Uses official lighter-go signer (reference implementation)
-- ✅ Order creation (Market, Limit, TWAP)
-- ✅ Stop-loss and take-profit orders
-- ✅ Position management
-- ✅ Transaction monitoring
-- ✅ Error handling with automatic retries
-- ✅ Account management
+- Order creation (Market, Limit, TWAP)
+- Stop-loss and take-profit orders
+- Position management
+- Transaction monitoring
+- Error handling with automatic retries
+- Account management
 
 ## Prerequisites
 
@@ -77,40 +76,28 @@ async function myFirstTrade() {
   await signerClient.ensureWasmClient();
 
   try {
-    // Place a market order
-    const result = await signerClient.createUnifiedOrder({
-      marketIndex: 0,              // ETH market
+    // Place a simple limit order
+    const [tx, hash, error] = await signerClient.createOrder({
+      marketIndex: 0,                  // ETH market
       clientOrderIndex: Date.now(),
-      baseAmount: 10000,          // 0.01 ETH (10000 / 1,000,000)
-      isAsk: false,               // BUY
-      orderType: OrderType.MARKET,
-      
-      // Automatic stop-loss at 5% loss
-      stopLoss: {
-        triggerPrice: 380000,     // $3800 (5% below $4000)
-        isLimit: false
-      },
-      
-      // Automatic take-profit at 5% gain
-      takeProfit: {
-        triggerPrice: 420000,     // $4200 (5% above $4000)
-        isLimit: false
-      }
+      baseAmount: 10000,               // 0.01 ETH (10000 / 1,000,000)
+      price: 400000,                   // $4000 (400000 / 100)
+      isAsk: false,                    // BUY
+      orderType: OrderType.LIMIT,
+      timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+      triggerPrice: SignerClient.NIL_TRIGGER_PRICE
     });
 
-    // Check if order succeeded
-    if (!result.success) {
-      console.error('❌ Order failed:', result.mainOrder.error);
+    if (error) {
+      console.error('Order failed:', error);
       return;
     }
 
-    console.log('✅ Main order created!');
-    console.log('✅ Stop-loss created!');
-    console.log('✅ Take-profit created!');
-    
+    console.log('Order created:', hash);
+
     // Wait for confirmation
-    await signerClient.waitForTransaction(result.mainOrder.hash, 30000);
-    console.log('✅ Order confirmed on-chain!');
+    await signerClient.waitForTransaction(hash, 30000);
+    console.log('Order confirmed on-chain');
 
   } catch (error) {
     console.error('Error:', error);
@@ -130,11 +117,8 @@ npx ts-node my-first-trade.ts
 
 You'll see output like:
 ```
-✅ Main order created!
-✅ Stop-loss created!
-✅ Take-profit created!
-⏳ Waiting for confirmation...
-✅ Order confirmed on-chain!
+Order created: 0x...
+Order confirmed on-chain
 ```
 
 ## Understanding the Code
@@ -142,18 +126,19 @@ You'll see output like:
 ### What Happens When You Run This?
 
 1. **Initialization**: Creates a connection to Lighter Protocol
-2. **Order Creation**: Creates your market order
-3. **SL/TP Setup**: Automatically creates stop-loss and take-profit orders
-4. **Batch Submission**: Sends all three orders together as one transaction
-5. **Confirmation**: Waits for the transaction to be confirmed on-chain
+2. **Order Creation**: Creates your limit order with the price you set
+3. **Confirmation**: Waits for the transaction to be confirmed on-chain
 
 ### Breaking Down the Parameters
 
 ```typescript
-marketIndex: 0              // Which market? 0 = ETH/USD
-baseAmount: 10000           // How much? 0.01 ETH
-isAsk: false               // Buy or sell? false = BUY, true = SELL
-orderType: OrderType.MARKET // What type? MARKET = execute immediately
+marketIndex: 0                   // Which market? 0 = ETH/USD
+baseAmount: 10000                // How much? 0.01 ETH
+price: 400000                    // Limit price: $4000
+isAsk: false                     // Buy or sell? false = BUY, true = SELL
+orderType: OrderType.LIMIT       // LIMIT = execute at your price
+timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME
+triggerPrice: SignerClient.NIL_TRIGGER_PRICE
 ```
 
 ### Understanding Units
@@ -169,7 +154,7 @@ Lighter uses fixed decimal scaling:
   - 390,000 = $3,900
   - 410,000 = $4,100
 
-### Understanding Stop-Loss and Take-Profit
+### Optional: Stop-Loss and Take-Profit
 
 When you set:
 ```typescript
@@ -193,14 +178,15 @@ Here's what happens:
 Instead of executing immediately, wait for the right price:
 
 ```typescript
-const result = await signerClient.createUnifiedOrder({
+const [tx, hash, error] = await signerClient.createOrder({
   marketIndex: 0,
-  clientOrderIndex: Date.now(),
+  clientOrderIndex: 0,
   baseAmount: 10000,
   price: 390000,           // LIMIT: Wait for $3900
   isAsk: false,
   orderType: OrderType.LIMIT,
-  orderExpiry: Date.now() + (60 * 60 * 1000) // Expires in 1 hour
+  orderExpiry: Date.now() + (60 * 60 * 1000), // Expires in 1 hour
+  triggerPrice: SignerClient.NIL_TRIGGER_PRICE
 });
 ```
 
@@ -222,7 +208,7 @@ if (error) {
 }
 
 await signerClient.waitForTransaction(hash);
-console.log('✅ Order cancelled');
+console.log('Order cancelled');
 ```
 
 ### Close a Position
@@ -239,7 +225,7 @@ const [tx, hash, error] = await signerClient.createMarketOrder({
 });
 
 await signerClient.waitForTransaction(hash);
-console.log('✅ Position closed');
+console.log('Position closed');
 ```
 
 ### Check Your Orders
@@ -265,17 +251,17 @@ orders.forEach(order => {
 ### Always Check for Errors
 
 ```typescript
-// Method 1: Check result object
-const result = await signerClient.createUnifiedOrder(params);
-if (!result.success) {
-  console.error('Failed:', result.mainOrder.error);
-  return;
-}
-
-// Method 2: Check error field
+// Check error field from createOrder or createGroupedOrders
 const [tx, hash, error] = await signerClient.createOrder(params);
 if (error) {
   console.error('Failed:', error);
+  return;
+}
+
+// Or for grouped orders:
+const [txInfo, txHash, groupError] = await signerClient.createGroupedOrders(3, ordersArray);
+if (groupError) {
+  console.error('Failed:', groupError);
   return;
 }
 
@@ -356,6 +342,6 @@ Before going live:
 - Review the API documentation in `docs/`
 - Test with the system setup example first
 
-## Happy Trading! 🚀
+## Next Steps
 
 You now have everything you need to start trading on Lighter Protocol. Start with the examples, experiment with the parameters, and build your own trading strategies!

@@ -102,10 +102,9 @@ async function createSpotLimitOrderWithSLTP() {
   console.log(`   Take Profit: ${limitOrderParams.takeProfit.triggerPrice} units ($3000.00)\n`);
 
   try {
-    // Note: createUnifiedOrder doesn't support spot markets yet
-    // For spot markets, use createOrder directly
+    // For spot markets, use createOrder directly (grouped orders don't support spot yet)
     // SL/TP orders for spot markets may need to be created separately
-    console.log('⚠️ Note: createUnifiedOrder doesn\'t support spot markets yet.');
+    console.log('⚠️ Note: Grouped orders don\'t support spot markets yet.');
     console.log('   Creating limit order only (SL/TP not supported in batch for spot markets).\n');
     
     const [orderInfo, txHash, error] = await signerClient.createOrder({

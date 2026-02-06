@@ -13,6 +13,7 @@
 
 import { SignerClient, ApiClient, OrderApi, AccountApi, OrderType } from '../src';
 import * as dotenv from 'dotenv';
+import { getAccountIndex } from './utils/account-helper';
 
 dotenv.config();
 
@@ -31,10 +32,17 @@ async function modifyOrderExample() {
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY environment variable is required');
   }
-  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
-  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
-  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '5', 10);
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   const MARKET_ID = 0; // ETH/USDC perps
+
+  // Fetch account index dynamically
+  const ACCOUNT_INDEX = await getAccountIndex(BASE_URL);
+  if (!ACCOUNT_INDEX) {
+    throw new Error('Account not found. Please ensure ETH_PRIVATE_KEY is set in .env or ACCOUNT_INDEX is provided.');
+  }
+
+  console.log(`📋 Using account index: ${ACCOUNT_INDEX}`);
 
   const signerClient = new SignerClient({
     url: BASE_URL,
@@ -76,24 +84,34 @@ async function modifyOrderExample() {
     
     const clientOrderIndex = Date.now();
     const initialPrice = 280000; // $2800
-    const initialAmount = 60; // Small amount for testing
+    const initialAmount = 100; // Small order (0.001 ETH)
 
-    const createResult = await signerClient.createUnifiedOrder({
-      marketIndex: MARKET_ID,
-      clientOrderIndex: clientOrderIndex,
-      baseAmount: initialAmount,
-      price: initialPrice,
-      isAsk: false, // Buy order
-      orderType: OrderType.LIMIT,
-      orderExpiry: Date.now() + (60 * 60 * 1000), // Expires in 1 hour
-    });
+    const orders = [
+      {
+        marketIndex: MARKET_ID,
+        clientOrderIndex: 0, // MUST be 0 for grouped orders
+        baseAmount: initialAmount,
+        price: initialPrice,
+        isAsk: false, // Buy order
+        orderType: SignerClient.ORDER_TYPE_LIMIT,
+        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+        reduceOnly: false,
+        triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
+        orderExpiry: Date.now() + (60 * 60 * 1000) // Expires in 1 hour
+      }
+    ];
 
-    if (!createResult.success || createResult.mainOrder.error) {
-      console.error(`❌ Failed to create order: ${createResult.mainOrder.error || createResult.message}`);
+    const [txInfo, createTxHash, createError] = await signerClient.createGroupedOrders(3, orders);
+
+    if (createError) {
+      console.error(`❌ Failed to create order: ${createError}`);
       return;
     }
 
-    const createTxHash = createResult.mainOrder.hash;
+    if (!createTxHash) {
+      console.error(`❌ No transaction hash returned`);
+      return;
+    }
     console.log(`✅ Limit order created: ${createTxHash.substring(0, 16)}...`);
     console.log(`   Client Order Index: ${clientOrderIndex}`);
     console.log(`   Initial Price: $${initialPrice / 100}`);
@@ -153,7 +171,7 @@ async function modifyOrderExample() {
     console.log(`   New Amount: ${newAmount} units`);
     console.log(`   Trigger Price: ${newTriggerPrice === 0 ? 'None' : `$${newTriggerPrice / 100}`}\n`);
 
-    const [orderInfo, txHash, error] = await signerClient.modifyOrder(
+    const [orderInfo, modifyTxHash, modifyError] = await signerClient.modifyOrder(
       MARKET_ID,
       orderIndex,
       newAmount,
@@ -161,23 +179,23 @@ async function modifyOrderExample() {
       newTriggerPrice,
     );
 
-    if (error) {
-      console.error(`❌ Failed to modify order: ${error}`);
+    if (modifyError) {
+      console.error(`❌ Failed to modify order: ${modifyError}`);
       return;
     }
 
-    if (!txHash) {
+    if (!modifyTxHash) {
       console.error('❌ No transaction hash returned');
       return;
     }
 
     console.log(`✅ Order modification submitted!`);
-    console.log(`   Transaction Hash: ${txHash.substring(0, 16)}...\n`);
+    console.log(`   Transaction Hash: ${modifyTxHash.substring(0, 16)}...\n`);
 
     // Step 6: Wait for modification to be confirmed
     console.log('⏳ Step 6: Waiting for modification confirmation...');
     try {
-      await signerClient.waitForTransaction(txHash, 30000, 2000);
+      await signerClient.waitForTransaction(modifyTxHash, 30000, 2000);
       console.log('✅ Order modified successfully!\n');
       
       // Step 7: Verify the modification by checking the order again
