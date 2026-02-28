@@ -159,6 +159,20 @@ export interface TransferParams {
   nonce?: number;
 }
 
+/**
+ * Transfer parameters for transfers between subaccounts under the same master account.
+ * This type of transfer does NOT require an L1 signature (ethPrivateKey).
+ */
+export interface TransferSameMasterAccountParams {
+  toAccountIndex: number; // Destination subaccount index (must be under the same master account)
+  usdcAmount: number; // Amount of USDC to transfer (will be scaled by 1e6)
+  asset_id?: number; // Asset ID (default: 3 for USDC)
+  is_spot_account?: boolean; // true for spot account, false/undefined for perp account
+  fee: number; // Transfer fee in USDC (will be scaled by 1e6)
+  memo: string; // 32-byte memo (can be 64 hex chars or 66 with 0x prefix)
+  nonce?: number; // Optional nonce (will auto-fetch if not provided)
+}
+
 export interface WithdrawParams {
   usdcAmount: number;
   assetIndex?: number; // Asset index (default: 3 for USDCAssetIndex)

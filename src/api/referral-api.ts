@@ -19,6 +19,10 @@ export interface ReferralPoints {
   reward_point_multiplier: string;
 }
 
+export interface UserReferrals {
+  [key: string]: any;
+}
+
 export class ReferralApi {
   private client: ApiClient;
 
@@ -71,5 +75,23 @@ export class ReferralApi {
     }
 
     return await this.client.get<ReferralPoints>(`/api/v1/referral/points?${params}`, headers);
+  }
+
+  public async getUserReferrals(params: {
+    l1Address: string;
+    cursor?: string;
+    auth?: string;
+    authorization?: string;
+  }): Promise<UserReferrals> {
+    const response = await this.client.get<UserReferrals>(
+      '/api/v1/referral/userReferrals',
+      {
+        l1_address: params.l1Address,
+        ...(params.cursor ? { cursor: params.cursor } : {}),
+        ...(params.auth ? { auth: params.auth } : {}),
+      },
+      params.authorization ? { headers: { authorization: params.authorization } } : undefined
+    );
+    return response.data;
   }
 }

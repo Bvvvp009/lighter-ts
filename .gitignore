@@ -38,9 +38,6 @@ jspm_packages/
 # Optional npm cache directory
 .npm
 
-# Optional eslint cache
-.eslintcache
-
 # Microbundle cache
 .rpt2_cache/
 .rts2_cache_cjs/
@@ -136,3 +133,10 @@ volume_check
 market_data.json
 .cursor/
 .semcode/
+
+# Nested repositories (exclude from this repo's PR scope)
+lighter-go/
+lighter-python/
+
+lighter-python/
+lighter-go/

@@ -15,6 +15,22 @@ export interface BridgeSupportedNetwork {
   explorer: string;
 }
 
+export interface BridgesByL1AddressResponse {
+  [key: string]: any;
+}
+
+export interface IsNextBridgeFastResponse {
+  [key: string]: any;
+}
+
+export interface FastWithdrawResponse {
+  [key: string]: any;
+}
+
+export interface FastWithdrawInfoResponse {
+  [key: string]: any;
+}
+
 export class BridgeApi {
   private client: ApiClient;
   private l1BridgeClient?: L1BridgeClient;
@@ -59,6 +75,26 @@ export class BridgeApi {
   }
 
   /**
+   * Get bridges by L1 address
+   */
+  public async getBridgesByL1Address(l1Address: string): Promise<BridgesByL1AddressResponse> {
+    const response = await this.client.get<BridgesByL1AddressResponse>('/api/v1/bridges', {
+      l1_address: l1Address,
+    });
+    return response.data;
+  }
+
+  /**
+   * Check whether the next bridge operation will be fast
+   */
+  public async isNextBridgeFast(l1Address: string): Promise<IsNextBridgeFastResponse> {
+    const response = await this.client.get<IsNextBridgeFastResponse>('/api/v1/bridges/isNextBridgeFast', {
+      l1_address: l1Address,
+    });
+    return response.data;
+  }
+
+  /**
    * Get deposit history for an account
    * @param accountIndex - Account index
    * @param l1Address - L1 address
@@ -74,20 +110,13 @@ export class BridgeApi {
     cursor?: string,
     filter?: string
   ): Promise<DepositHistory> {
-    const params = new URLSearchParams({
-      account_index: accountIndex.toString(),
+    const response = await this.client.get<DepositHistory>('/api/v1/deposit/history', {
+      account_index: accountIndex,
       l1_address: l1Address,
-      ...(cursor && { cursor }),
-      ...(filter && { filter })
+      ...(cursor ? { cursor } : {}),
+      ...(filter ? { filter } : {}),
+      ...(authorization ? { authorization, auth: authorization } : {}),
     });
-
-    const headers: Record<string, string> = {};
-    if (authorization) {
-      headers['Authorization'] = authorization;
-      headers['auth'] = authorization;
-    }
-
-    const response = await this.client.get<DepositHistory>(`/api/v1/deposit/history?${params}`, headers);
     return response.data;
   }
 
@@ -107,20 +136,52 @@ export class BridgeApi {
     cursor?: string,
     filter?: string
   ): Promise<WithdrawHistory> {
-    const params = new URLSearchParams({
-      account_index: accountIndex.toString(),
+    const response = await this.client.get<WithdrawHistory>('/api/v1/withdraw/history', {
+      account_index: accountIndex,
       l1_address: l1Address,
-      ...(cursor && { cursor }),
-      ...(filter && { filter })
+      ...(cursor ? { cursor } : {}),
+      ...(filter ? { filter } : {}),
+      ...(authorization ? { authorization, auth: authorization } : {}),
     });
+    return response.data;
+  }
 
-    const headers: Record<string, string> = {};
-    if (authorization) {
-      headers['Authorization'] = authorization;
-      headers['auth'] = authorization;
+  /**
+   * Submit a fast withdrawal
+   */
+  public async fastWithdraw(
+    txInfo: string,
+    toAddress: string,
+    options?: { authorization?: string; auth?: string }
+  ): Promise<FastWithdrawResponse> {
+    const formData = new URLSearchParams();
+    formData.append('tx_info', txInfo);
+    formData.append('to_address', toAddress);
+    if (options?.auth) {
+      formData.append('auth', options.auth);
     }
 
-    const response = await this.client.get<WithdrawHistory>(`/api/v1/withdraw/history?${params}`, headers);
+    const response = await this.client.post<FastWithdrawResponse>('/api/v1/fastwithdraw', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(options?.authorization ? { authorization: options.authorization } : {}),
+      },
+    });
+    return response.data;
+  }
+
+  /**
+   * Get fast withdrawal info for account
+   */
+  public async getFastWithdrawInfo(
+    accountIndex: number,
+    options?: { authorization?: string; auth?: string }
+  ): Promise<FastWithdrawInfoResponse> {
+    const response = await this.client.get<FastWithdrawInfoResponse>('/api/v1/fastwithdraw/info', {
+      account_index: accountIndex,
+      ...(options?.authorization ? { authorization: options.authorization } : {}),
+      ...(options?.auth ? { auth: options.auth } : {}),
+    });
     return response.data;
   }
 

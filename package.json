@@ -1,10 +1,20 @@
 {
   "name": "lighter-ts-sdk",
-  "version": "1.0.8",
-  "description": "TypeScript SDK for Lighter Protocol Unofficial - Trade perpetuals with unmatched efficiency and fairness on Lighter ",
-  "type": "commonjs",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "version": "1.1.0",
+  "description": "TypeScript SDK for Lighter Protocol - Trade perpetuals with unmatched efficiency and fairness on Lighter",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "browser": "./dist/umd/lighter-ts-sdk.js",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "browser": "./dist/umd/lighter-ts-sdk.js",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
   "files": [
     "dist",
     "wasm",
@@ -12,18 +22,22 @@
     "docs",
     "README.md"
   ],
+  "sideEffects": false,
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:cjs && npm run build:esm && npm run fix:esm && npm run build:umd",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "fix:esm": "node scripts/fix-esm-imports.cjs",
+    "build:umd": "node scripts/build-umd.cjs",
     "build:wasm": "node scripts/build-wasm.js",
     "build:wasm:nodejs": "node scripts/build-wasm.js",
     "verify:wasm": "node scripts/verify-wasm.js",
     "prepublishOnly": "npm run build && npm run verify:wasm",
     "dev": "tsc --watch",
     "test": "jest",
-    "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix",
     "docs": "typedoc src --out docs/api",
-    "examples": "ts-node examples/get_info.ts"
+    "examples": "tsx examples/create_market_order.ts",
+    "smoke:live": "tsx examples/live_smoke.ts"
   },
   "keywords": [
     "lighter",
@@ -56,12 +70,11 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.5.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "eslint": "^8.0.0",
+    "esbuild": "^0.27.3",
     "jest": "^29.0.0",
     "ts-jest": "^29.0.0",
     "ts-node": "^10.9.0",
+    "tsx": "^4.21.0",
     "typedoc": "^0.25.0",
     "typescript": "^5.0.0"
   },

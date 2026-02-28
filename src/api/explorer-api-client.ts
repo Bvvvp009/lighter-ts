@@ -1,61 +1,63 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { Config } from '../utils/configuration';
 import { ApiResponse, Configuration } from '../types';
 import {
   ApiException,
   BadRequestException,
-  UnauthorizedException,
-  ForbiddenException,
   NotFoundException,
   TooManyRequestsException,
   ServiceException,
 } from '../utils/exceptions';
 
-export class ApiClient {
-  private config: Config;
+/**
+ * Configuration for ExplorerApiClient
+ */
+export interface ExplorerConfiguration extends Configuration {
+  explorerHost?: string;
+}
+
+/**
+ * ExplorerApiClient handles requests to the Lighter Explorer API
+ * Base URL: https://explorer.elliot.ai/api/
+ */
+export class ExplorerApiClient {
   private axiosInstance: AxiosInstance;
+  private explorerHost: string = 'https://explorer.elliot.ai/api';
   private defaultHeaders: Record<string, string> = {};
 
-  constructor(config?: Partial<Configuration>) {
-    this.config = config ? new Config(config) : Config.getDefault();
-    
+  static resolveExplorerHost(baseUrl?: string): string {
+    if (!baseUrl) {
+      return 'https://explorer.elliot.ai/api';
+    }
+
+    const normalized = baseUrl.toLowerCase();
+    if (normalized.includes('testnet')) {
+      return 'https://testnet.explorer.elliot.ai/api';
+    }
+
+    return 'https://explorer.elliot.ai/api';
+  }
+
+  constructor(config?: Partial<ExplorerConfiguration>) {
+    if (config?.explorerHost) {
+      this.explorerHost = config.explorerHost;
+    }
+
     const axiosConfig: any = {
-      baseURL: this.config.getHost(),
-      timeout: this.config.getTimeout(),
+      baseURL: this.explorerHost,
+      timeout: 10000,
       headers: {
-        'User-Agent': this.config.getUserAgent(),
+        'User-Agent': 'lighter-ts-sdk/1.0',
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
     };
 
     this.axiosInstance = axios.create(axiosConfig);
-
     this.setupInterceptors();
   }
 
   private setupInterceptors(): void {
-    // Request interceptor
-    this.axiosInstance.interceptors.request.use(
-      (config) => {
-        // Add authentication headers if available
-        if (this.config.getApiKey()) {
-          config.headers['X-API-Key'] = this.config.getApiKey();
-        }
-        if (this.config.getSecretKey()) {
-          config.headers['X-Secret-Key'] = this.config.getSecretKey();
-        }
-
-        // Add custom headers
-        Object.assign(config.headers, this.defaultHeaders);
-
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
-
-    // Response interceptor
+    // Response interceptor for error handling
     this.axiosInstance.interceptors.response.use(
       (response: AxiosResponse) => {
         return response;
@@ -69,61 +71,53 @@ export class ApiClient {
   private handleError(error: any): ApiException {
     if (error.response) {
       const { status, data } = error.response;
-      const message = data?.message || error.message || 'API Error';
-      const code = data?.code;
+      const message = data?.message || error.message || 'Explorer API Error';
 
-      const isDebug = typeof process !== 'undefined' && (process.env?.DEBUG || process.env?.NODE_ENV === 'development');
-      if (isDebug) {
-        console.error('❌ API Error Response:');
+      if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
+        console.error('❌ Explorer API Error:');
         console.error('   Status:', status);
-        console.error('   Code:', code);
         console.error('   Message:', message);
         console.error('   Data:', JSON.stringify(data, null, 2));
       }
 
       switch (status) {
         case 400:
-          return new BadRequestException(message, code);
-        case 401:
-          return new UnauthorizedException(message, code);
-        case 403:
-          return new ForbiddenException(message, code);
+          return new BadRequestException(message);
         case 404:
-          return new NotFoundException(message, code);
+          return new NotFoundException(message);
         case 429:
-          return new TooManyRequestsException(message, code);
+          return new TooManyRequestsException(message);
         case 500:
         case 502:
         case 503:
         case 504:
-          return new ServiceException(message, code);
+          return new ServiceException(message);
         default:
-          return new ApiException(message, status, code);
+          return new ApiException(message, status);
       }
     }
 
     if (error.request) {
-      const isDebug = typeof process !== 'undefined' && (process.env?.DEBUG || process.env?.NODE_ENV === 'development');
-      if (isDebug) {
-        console.error('❌ Network Error: No response received');
-        console.error('   Request:', error.request);
+      if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
+        console.error('❌ Explorer Network Error: No response received');
       }
-      return new ApiException('Network error: No response received', 0);
+      return new ApiException('Explorer Network error: No response received', 0);
     }
 
-    const isDebug = typeof process !== 'undefined' && (process.env?.DEBUG || process.env?.NODE_ENV === 'development');
-    if (isDebug) {
-      console.error('❌ Unknown Error:', error);
+    if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
+      console.error('❌ Explorer Unknown Error:', error);
     }
     return new ApiException(error.message || 'Unknown error', 0);
   }
 
   public setDefaultHeader(name: string, value: string): void {
     this.defaultHeaders[name] = value;
+    this.axiosInstance.defaults.headers[name] = value;
   }
 
   public removeDefaultHeader(name: string): void {
     delete this.defaultHeaders[name];
+    delete this.axiosInstance.defaults.headers[name];
   }
 
   public async request<T = any>(
@@ -182,20 +176,13 @@ export class ApiClient {
     return this.request<T>('DELETE', url, undefined, config);
   }
 
-  public async patch<T = any>(
-    url: string,
-    data?: any,
-    config?: AxiosRequestConfig
-  ): Promise<ApiResponse<T>> {
-    return this.request<T>('PATCH', url, data, config);
+  public setExplorerHost(host: string): void {
+    this.explorerHost = host;
+    this.axiosInstance.defaults.baseURL = host;
   }
 
-  public getConfig(): Config {
-    return this.config;
-  }
-
-  public setConfig(config: Partial<Configuration>): void {
-    this.config = Config.setDefault(config);
+  public getExplorerHost(): string {
+    return this.explorerHost;
   }
 
   public close(): void {
