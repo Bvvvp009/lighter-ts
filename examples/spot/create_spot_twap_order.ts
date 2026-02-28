@@ -65,7 +65,7 @@ async function createEthSpotTWAPOrder() {
   };
 
   try {
-    // Note: createUnifiedOrder doesn't support spot markets yet
+    // Note: Use createOrder for spot markets
     // For spot markets, use createOrder directly
     const [orderInfo, txHash, error] = await signerClient.createOrder({
       marketIndex: twapOrderParams.marketIndex,
@@ -85,7 +85,7 @@ async function createEthSpotTWAPOrder() {
       return;
     }
 
-    console.log(`✓ ETH SPOT TWAP order created: ${txHash.substring(0, 16)}...`);
+    console.log(`✓ ETH SPOT TWAP order created: ${txHash}`);
     console.log(`  Duration: 30 minutes`);
     
     try {
@@ -102,7 +102,7 @@ async function createEthSpotTWAPOrder() {
   }
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   createEthSpotTWAPOrder().catch(console.error);
 }
 

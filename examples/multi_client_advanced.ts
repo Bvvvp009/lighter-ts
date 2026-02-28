@@ -243,7 +243,9 @@ async function multiClientAdvancedExample() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('multi_client_advanced');
+if (isMain) {
   multiClientAdvancedExample().catch(console.error);
 }
 

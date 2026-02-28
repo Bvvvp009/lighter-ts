@@ -9,7 +9,7 @@ dotenv.config();
   }
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
-  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+  const BASE_URL = process.env['BASE_URL'] || 'https://testnet.zklighter.elliot.ai';
 
 // Market ID for ETH/USDC (example)
 const MARKET_INDEX = 0;
@@ -87,7 +87,7 @@ async function main() {
     console.log('\n📈 Example 3: Reverting to CROSS margin mode with 2x leverage');
     const [revertInfo, revertTxHash, revertError] = await signerClient.updateLeverage(
       MARKET_INDEX,
-      SignerClient.ISOLATED_MARGIN_MODE,
+      SignerClient.CROSS_MARGIN_MODE,
       10  // 2x leverage
     );
 

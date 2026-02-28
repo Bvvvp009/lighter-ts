@@ -69,7 +69,9 @@ async function createSubAccountExample() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('create_subaccount');
+if (isMain) {
   createSubAccountExample().catch(console.error);
 }
 

@@ -128,7 +128,7 @@ async function modifySpotOrder() {
   }
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   modifySpotOrder().catch(console.error);
 }
 

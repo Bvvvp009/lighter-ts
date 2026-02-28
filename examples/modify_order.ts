@@ -11,7 +11,7 @@
  * 7. Checking position changes after modification (if order was filled)
  */
 
-import { SignerClient, ApiClient, OrderApi, AccountApi, OrderType } from '../src';
+import { SignerClient, ApiClient, OrderApi, AccountApi, OrderType, MarketHelper } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -51,6 +51,11 @@ async function modifyOrderExample() {
     await signerClient.initialize();
     await signerClient.ensureWasmClient();
 
+    const market = new MarketHelper(MARKET_ID, orderApi);
+    await market.initialize();
+    const lastPriceUnits = market.priceToUnits(market.lastPrice || 2800);
+    const marketDetails = await orderApi.getOrderBookDetails({ market_id: MARKET_ID });
+
     // Get auth token for account queries (used throughout the example)
     const auth = await getAuthToken(signerClient, 8 * 60 * 60);
 
@@ -75,26 +80,28 @@ async function modifyOrderExample() {
     console.log('📝 Step 1: Creating a limit order to modify...\n');
     
     const clientOrderIndex = Date.now();
-    const initialPrice = 280000; // $2800
-    const initialAmount = 60; // Small amount for testing
+    const initialPrice = Math.max(1, Math.floor(lastPriceUnits * 0.99)); // Slightly below market for BUY limit
+    const minBaseAmount = Math.ceil(Number(marketDetails.min_base_amount || 0));
+    const minQuoteAmount = Math.ceil(Number(marketDetails.min_quote_amount || 0));
+    const baseFromQuoteFloor = initialPrice > 0 ? Math.ceil((minQuoteAmount * 2) / initialPrice) : 0;
+    const initialAmount = Math.max(market.amountToUnits(0.05), minBaseAmount * 2, baseFromQuoteFloor);
 
-    const createResult = await signerClient.createUnifiedOrder({
+    const [createTx, createTxHash, createError] = await signerClient.createOrder({
       marketIndex: MARKET_ID,
       clientOrderIndex: clientOrderIndex,
       baseAmount: initialAmount,
       price: initialPrice,
       isAsk: false, // Buy order
       orderType: OrderType.LIMIT,
-      orderExpiry: Date.now() + (60 * 60 * 1000), // Expires in 1 hour
+      orderExpiry: Date.now() + (60 * 60 * 1000) // Expires in 1 hour
     });
 
-    if (!createResult.success || createResult.mainOrder.error) {
-      console.error(`❌ Failed to create order: ${createResult.mainOrder.error || createResult.message}`);
+    if (createError || !createTxHash) {
+      console.error(`❌ Failed to create order: ${createError}`);
       return;
     }
 
-    const createTxHash = createResult.mainOrder.hash;
-    console.log(`✅ Limit order created: ${createTxHash.substring(0, 16)}...`);
+    console.log(`✅ Limit order created: ${createTxHash}`);
     console.log(`   Client Order Index: ${clientOrderIndex}`);
     console.log(`   Initial Price: $${initialPrice / 100}`);
     console.log(`   Initial Amount: ${initialAmount} units\n`);
@@ -145,8 +152,8 @@ async function modifyOrderExample() {
 
     // Step 5: Modify the order
     console.log('📝 Step 5: Modifying order...');
-    const newPrice = 290000; // $2900 (increased from $2800)
-    const newAmount = 80; // Increased from 60
+    const newPrice = Math.max(1, Math.floor(lastPriceUnits * 0.995)); // Move closer to market while staying realistic
+    const newAmount = Math.max(initialAmount + 1, Math.floor(initialAmount * 1.2)); // Increase size by ~20%
     const newTriggerPrice = 0; // No trigger price (0 for non-conditional orders)
 
     console.log(`   New Price: $${newPrice / 100}`);
@@ -172,7 +179,7 @@ async function modifyOrderExample() {
     }
 
     console.log(`✅ Order modification submitted!`);
-    console.log(`   Transaction Hash: ${txHash.substring(0, 16)}...\n`);
+    console.log(`   Transaction Hash: ${txHash}\n`);
 
     // Step 6: Wait for modification to be confirmed
     console.log('⏳ Step 6: Waiting for modification confirmation...');
@@ -241,7 +248,9 @@ async function modifyOrderExample() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('modify_order');
+if (isMain) {
   modifyOrderExample().catch(console.error);
 }
 

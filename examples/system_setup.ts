@@ -216,7 +216,9 @@ async function systemSetup() {
 }
 
 // Run the example
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('system_setup');
+if (isMain) {
   systemSetup().catch(console.error);
 }
 

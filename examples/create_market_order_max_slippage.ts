@@ -63,7 +63,7 @@ async function createMarketOrderMaxSlippageExample() {
     if (error1) {
       console.error('❌ Failed:', error1);
     } else {
-      console.log('✅ Order created:', txHash1?.substring(0, 16) + '...');
+      console.log('✅ Order created:', txHash1);
       if (txHash1) await signerClient.waitForTransaction(txHash1, 60000, 2000);
     }
 
@@ -81,7 +81,7 @@ async function createMarketOrderMaxSlippageExample() {
     if (error2) {
       console.error('❌ Failed:', error2);
     } else {
-      console.log('✅ Order created:', txHash2?.substring(0, 16) + '...');
+      console.log('✅ Order created:', txHash2);
       if (txHash2) await signerClient.waitForTransaction(txHash2, 60000, 2000);
     }
 
@@ -99,7 +99,7 @@ async function createMarketOrderMaxSlippageExample() {
     if (error3) {
       console.error('❌ Failed:', error3);
     } else {
-      console.log('✅ Order created:', txHash3?.substring(0, 16) + '...');
+      console.log('✅ Order created:', txHash3);
       if (txHash3) await signerClient.waitForTransaction(txHash3, 60000, 2000);
     }
     console.log('\n✅ Examples completed');
@@ -110,7 +110,9 @@ async function createMarketOrderMaxSlippageExample() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('create_market_order_max_slippage');
+if (isMain) {
   createMarketOrderMaxSlippageExample().catch(console.error);
 }
 

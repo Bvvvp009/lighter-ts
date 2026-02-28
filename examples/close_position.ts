@@ -157,7 +157,9 @@ async function closePosition() {
 }
 
 // Run the example
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('close_position');
+if (isMain) {
   closePosition().catch(console.error);
 }
 
