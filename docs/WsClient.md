@@ -325,6 +325,5 @@ wsClient.onClose = () => {
 
 ## See Also
 
-- `examples/ws.ts` - Basic WebSocket connection example
-- `examples/ws_ping_pong.ts` - Ping-pong keepalive example
 - `examples/market_data.ts` - Market data streaming example
+- `examples/multi_client_advanced.ts` - Advanced client usage patterns

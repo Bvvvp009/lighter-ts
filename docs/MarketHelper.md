@@ -171,7 +171,7 @@ async function example() {
   console.log(`Buying ${market.formatAmount(amount)} at $${market.formatPrice(price)}`);
   
   // Create order using market helper
-  const result = await signerClient.createUnifiedOrder({
+  const [tx, hash, error] = await signerClient.createOrder({
     marketIndex: 0,
     clientOrderIndex: Date.now(),
     baseAmount: amount,     // Already in units

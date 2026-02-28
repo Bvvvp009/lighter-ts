@@ -5,6 +5,92 @@ All notable changes to the Lighter TypeScript SDK will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-02-12
+
+### Added
+
+#### Multi-Format Module Support
+- **ES Modules (ESM)** - Modern JavaScript module format with `dist/esm/index.js`
+- **CommonJS (CJS)** - Node.js compatible format with `dist/cjs/index.js`
+- **UMD Bundle** - Browser-ready universal module definition at `dist/umd/lighter-ts-sdk.js`
+- **Modern package.json exports field** - Dual module support in single package
+
+#### Browser & Next.js Support
+- **Environment detection utilities** - New `environment.ts` module with:
+  - `isBrowser()` - Detect browser environment
+  - `isNodeJS()` - Detect Node.js environment
+  - `isNextJS()` / `isNextJSClient()` / `isNextJSServer()` - Detect Next.js environments
+  - `isReactNative()` - Detect React Native environment
+  - `isDeno()` - Detect Deno runtime
+  - `detectEnvironment()` - Get current runtime name
+  - `getWebSocketConstructor()` - Get appropriate WebSocket for environment
+  - `hasCryptoSupport()` - Check crypto API availability
+  - `hasLocalStorageSupport()` / `hasIndexedDBSupport()` - Check storage APIs
+- **Isomorphic compatibility** - SDK works seamlessly in browser and server environments
+- **UMD global export** - Browser scripts can access `window.LighterSDK`
+
+#### API Method Enhancements (lighter-python alignment)
+- **AccountApi**
+  - `getAccountLimits()` - Get account-specific trading limits
+  - `getAccountMetadata()` - Retrieve account metadata
+  - `faucet()` - Request test funds (testnet only)
+  - `getLiquidations()` - Get liquidation history with filters
+  - `getPositionFundings()` - Get position funding history with pagination
+- **TransactionApi**
+  - `getTransferHistory()` - Retrieve transfer history with pagination
+- **OrderApi**
+  - `export()` - Export account data (trades, orders, positions)
+- **RootApi**
+  - `getStatus()` - Get system health status
+
+#### Type Definitions
+- New interfaces: `AccountLimits`, `AccountMetadata`, `Liquidation`, `LiquidationResponse`, `PositionFunding`, `PositionFundingResponse`, `SystemStatus`
+- Full TypeScript support for all new API methods
+- Improved type inference for environment detection
+
+#### Build System
+- `tsconfig.cjs.json` - TypeScript config for CommonJS builds
+- `tsconfig.esm.json` - TypeScript config for ES Modules  
+- Updated build scripts:
+  - `npm run build:cjs` - Build CommonJS version
+  - `npm run build:esm` - Build ES Modules version
+  - `npm run build:umd` - Build UMD browser bundle
+  - `npm run build` - Build all formats (CJS + ESM + UMD)
+- `scripts/build-umd.js` - New UMD bundler script
+- Added `sideEffects: false` for optimal tree-shaking
+
+#### Documentation
+- **MIGRATION_GUIDE_1_1_0.md** - Comprehensive migration guide with code examples
+- Updated package.json with proper module field declarations
+
+### Changed
+- **package.json `type` field** - Changed from `"commonjs"` to `"module"` (default is ESM)
+- **Main entry point** - Now points to ESM build
+- **Build output structure**:
+  - `dist/cjs/` - CommonJS files
+  - `dist/esm/` - ES Module files
+  - `dist/umd/` - UMD bundle
+- **Version bumped** to 1.1.0 (from 1.0.8)
+
+### Improved
+- **Module resolution** - Better compatibility with modern bundlers (Webpack 5+, Vite, esbuild, Rollup)
+- **Tree-shaking** - ESM build enables dead code elimination
+- **Package size** - Optimized output for different target environments
+- **Browser compatibility** - Full support for modern browsers and legacy environments via UMD
+- **Developer experience** - environment utilities for cleaner conditional logic
+
+### Fixed
+- Package exports field now properly declares all module formats
+- Correct type declarations for each build output
+
+### Deprecated
+- Direct CommonJS require from main index (use conditional require or explicit CJS path)
+
+## [1.0.8] - 2025-12-15
+
+### Changed
+- Repository URL updated
+
 ## [1.0.7] - 2025-11-27
 
 ### Added
@@ -268,10 +354,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Field Mapping** - Updated Order interface to match actual API response fields (`filled_base_amount`, `remaining_base_amount`, etc.)
 
 ### Added
+- **Grouped Order APIs** - Added explicit `createOcoOrder()` and `createOtocoOrder()` methods for OCO/OTOCO order patterns
+- **GroupingType Enum** - Added enum for grouped order types (OTO, OCO, OTOCO)
+- **Typed Order Parameters** - Added `OcoOrderParams`, `OtocoOrderParams` interfaces for better type safety
 - **MarketHelper Documentation** - Complete documentation for `docs/MarketHelper.md`
 - **Utilities Documentation** - Complete documentation for `docs/Utilities.md` covering order status checking
-- **createUnifiedOrder Documentation** - Added comprehensive documentation in `docs/SignerClient.md`
 - **TWAP Order Note** - Documented TWAP SL/TP limitation in README and GettingStarted docs
+
+### Removed
+- **createUnifiedOrder** - Removed in favor of explicit `createOtocoOrder()` for orders with SL/TP or `createOrder()` for single orders
 
 ### Changed
 - **Documentation Consistency** - Updated all comments to use industry-standard terminology

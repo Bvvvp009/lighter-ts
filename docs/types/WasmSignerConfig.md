@@ -1,6 +1,6 @@
 # WasmSignerConfig
 
-Configuration object for the WASM signer client. The WASM signer is compiled from the official [lighter-go](https://github.com/elliottech/lighter-go) repository.
+Configuration object for the WASM signer client.
 
 ## Properties
 
@@ -28,4 +28,4 @@ const wasmClient = new WasmSignerClient(config);
 - The `wasmExecPath` is optional and will be auto-detected if not provided
 - For Node.js environments, the runtime will look for `wasm_exec.js` in common locations
 - For browser environments, the runtime will look for `wasm_exec.js` in the same directory as the WASM file
-- The WASM signer is compiled from the official lighter-go repository during the build process
+- WASM signer assets are compiled during the build process

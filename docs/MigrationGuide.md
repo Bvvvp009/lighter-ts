@@ -13,7 +13,7 @@ Simple and realistic migration guide for upgrading between versions of the Light
 
 ### Overview
 
-Version 1.0+ uses the **official lighter-go WASM signer** from GitHub instead of local signer implementations. The API remains largely the same, but there are some important changes to be aware of.
+Version 1.0+ uses the current WASM signer implementation instead of local signer implementations. The API remains largely the same, but there are some important changes to be aware of.
 
 ### Step 1: Update Package
 
@@ -92,7 +92,7 @@ Run your existing code - it should work without changes (unless you used removed
 # Test your integration
 npm test
 # or run your examples
-npx ts-node your-script.ts
+npx tsx your-script.ts
 ```
 
 ## Breaking Changes
@@ -100,14 +100,14 @@ npx ts-node your-script.ts
 ### 1. Signer Implementation
 
 **What changed:**
-- SDK now uses official `lighter-go` WASM signer from GitHub
+- SDK now uses the current WASM signer workflow
 - WASM is compiled automatically during build
 - No local `temp-lighter-go` folder needed
 
 **Impact:**
 - ✅ **No code changes needed** - API is the same
-- ✅ Better compatibility with official protocol
-- ✅ Automatic updates when lighter-go updates
+- ✅ Better protocol compatibility
+- ✅ Automatic signer updates through the build workflow
 
 **Migration:**
 - No migration needed - works automatically
@@ -293,17 +293,20 @@ npm test
 ### 2. Test Core Functionality
 
 ```typescript
-// Test order creation
-const result = await client.createUnifiedOrder({
-  marketIndex: 0,
-  clientOrderIndex: Date.now(),
-  baseAmount: 10000,
-  isAsk: false,
-  orderType: OrderType.MARKET
+// Test OTOCO order creation
+const result = await client.createOtocoOrder({
+  mainOrder: {
+    marketIndex: 0,
+    baseAmount: 10000,
+    isAsk: false,
+    orderType: OrderType.MARKET
+  },
+  stopLoss: { triggerPrice: 380000 },
+  takeProfit: { triggerPrice: 420000 }
 });
 
-if (!result.success) {
-  console.error('Migration issue:', result.mainOrder.error);
+if (result.error) {
+  console.error('Migration issue:', result.error);
 }
 ```
 

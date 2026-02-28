@@ -155,25 +155,24 @@ async function createAndCheckOrder() {
   
   // Create order
   const CLIENT_ORDER_INDEX = Date.now();
-  const result = await signerClient.createUnifiedOrder({
+  const [tx, hash, error] = await signerClient.createOrder({
     marketIndex: 0,
     clientOrderIndex: CLIENT_ORDER_INDEX,
     baseAmount: 10000,
+    price: 400000,
     isAsk: false,
-    orderType: OrderType.MARKET,
-    idealPrice: 400000,
-    maxSlippage: 0.001
+    orderType: OrderType.LIMIT
   });
   
-  if (!result.success) {
-    console.error('Order failed:', result.mainOrder.error);
+  if (error || !hash) {
+    console.error('Order failed:', error);
     return;
   }
   
-  console.log('✅ Order submitted:', result.mainOrder.hash);
+  console.log('✅ Order submitted:', hash);
   
   // Wait for confirmation
-  await signerClient.waitForTransaction(result.mainOrder.hash);
+  await signerClient.waitForTransaction(hash);
   
   // Check order status
   const auth = await signerClient.createAuthTokenWithExpiry(3600);
@@ -224,8 +223,8 @@ async function createAndCheckOrder() {
 
 ### Check Order After Creation
 ```typescript
-const result = await signerClient.createUnifiedOrder(params);
-if (result.success) {
+const [tx, hash, error] = await signerClient.createOrder(params);
+if (!error && hash) {
   // Wait a bit for order to be processed
   await new Promise(resolve => setTimeout(resolve, 3000));
   

@@ -1,10 +1,10 @@
 # SignerClient
 
-The `SignerClient` is the main class for interacting with the Lighter Protocol. It provides high-level methods for creating orders, managing accounts, and performing transactions using the **official lighter-go WASM signer**.
+The `SignerClient` is the main class for interacting with the Lighter Protocol. It provides high-level methods for creating orders, managing accounts, and performing transactions using the WASM signer.
 
 ## Signer Integration
 
-This SDK uses the **official lighter-go WASM signer** from [elliottech/lighter-go](https://github.com/elliottech/lighter-go) for all cryptographic operations. The signer provides:
+This SDK uses a WASM signer for cryptographic operations. The signer provides:
 
 - ✅ All transaction types (orders, transfers, leverage updates, etc.)
 - ✅ Automatic error recovery and nonce management
@@ -402,73 +402,75 @@ Creates an authentication token.
 const token = await client.createAuthTokenWithExpiry(3600); // 1 hour expiry
 ```
 
-### createUnifiedOrder(params)
+### createOtocoOrder(params)
 
-Creates a main order with integrated stop-loss and take-profit orders. This is the recommended method for creating orders as it automatically handles SL/TP setup.
+Creates a grouped OTOCO order (One-Triggers-One-Cancels-Other) with entry order, stop-loss, and take-profit in a single transaction. This is the recommended method for creating orders with integrated risk management.
 
 **Parameters:**
-- `marketIndex: number` - Market index (0 for ETH/USDC)
-- `clientOrderIndex: number` - Unique client order index (use Date.now())
-- `baseAmount: number` - Base amount in units (1 ETH = 1,000,000)
-- `isAsk: boolean` - Direction: true = SELL, false = BUY
-- `orderType: OrderType` - Order type (MARKET, LIMIT, or TWAP)
-- `price?: number` - Limit price (required for LIMIT/TWAP orders)
-- `avgExecutionPrice?: number` - Max execution price for market orders
-- `idealPrice?: number` - Target price for slippage calculation
-- `maxSlippage?: number` - Max slippage as decimal (e.g., 0.001 = 0.1%, default: 0.001)
-- `stopLoss?: { triggerPrice: number, price?: number, isLimit?: boolean }` - Stop-loss settings
-- `takeProfit?: { triggerPrice: number, price?: number, isLimit?: boolean }` - Take-profit settings
-- `reduceOnly?: boolean` - Whether order is reduce-only
-- `timeInForce?: TimeInForce` - Time in force for the order
-- `orderExpiry?: number` - Order expiry timestamp in milliseconds
+- `mainOrder` - Main order configuration
+  - `marketIndex: number` - Market index (0 for ETH/USDC)
+  - `baseAmount: number` - Base amount in units (1 ETH = 1,000,000)
+  - `isAsk: boolean` - Direction: true = SELL, false = BUY
+  - `orderType: OrderType.LIMIT | OrderType.MARKET` - Order type
+  - `price?: number` - Limit price (required for LIMIT orders)
+  - `avgExecutionPrice?: number` - Max execution price for market orders
+  - `maxSlippage?: number` - Max slippage as decimal (e.g., 0.001 = 0.1%)
+  - `idealPrice?: number` - Target price for slippage calculation
+- `stopLoss` - Stop-loss configuration
+  - `triggerPrice: number` - Trigger price
+  - `price?: number` - Execution price (defaults to triggerPrice)
+  - `isLimit?: boolean` - Use limit order for SL
+- `takeProfit` - Take-profit configuration
+  - `triggerPrice: number` - Trigger price
+  - `price?: number` - Execution price (defaults to triggerPrice)
+  - `isLimit?: boolean` - Use limit order for TP
+- `nonce?: number` - Optional nonce
 
-**Returns:** `Promise<{ mainOrder, stopLoss?, takeProfit?, batchResult, success, message }>` 
+**Returns:** `Promise<{ tx, hash, error }>` 
 
 **Example - Market Order with SL/TP:**
 ```typescript
-const result = await signerClient.createUnifiedOrder({
-  marketIndex: 0,
-  clientOrderIndex: Date.now(),
-  baseAmount: 10000,          // 0.01 ETH
-  isAsk: false,                  // BUY
-  orderType: OrderType.MARKET,
-  idealPrice: 400000,            // Target $4000
-  maxSlippage: 0.001,            // 0.1% max slippage
-  
+const result = await signerClient.createOtocoOrder({
+  mainOrder: {
+    marketIndex: 0,
+    clientOrderIndex: Date.now(),
+    baseAmount: 10000,          // 0.01 ETH
+    isAsk: false,               // BUY
+    orderType: OrderType.MARKET,
+    idealPrice: 400000,         // Target $4000
+    maxSlippage: 0.001          // 0.1% max slippage
+  },
   // Stop-loss at 5% loss
   stopLoss: {
-    triggerPrice: 380000,        // $3800
-    isLimit: false               // Market SL
+    triggerPrice: 380000,       // $3800
+    isLimit: false              // Market SL
   },
-  
   // Take-profit at 5% gain
   takeProfit: {
-    triggerPrice: 420000,        // $4200
-    isLimit: false               // Market TP
+    triggerPrice: 420000,       // $4200
+    isLimit: false              // Market TP
   }
 });
 
-if (result.success) {
-  console.log('✅ Orders created successfully!');
-  console.log('Main order:', result.mainOrder.hash);
-  console.log('SL order:', result.stopLoss?.hash);
-  console.log('TP order:', result.takeProfit?.hash);
+if (result.error || !result.hash) {
+  console.error('❌ Failed:', result.error);
 } else {
-  console.error('❌ Failed:', result.mainOrder.error);
+  console.log('✅ OTOCO order created!');
+  console.log('Grouped tx hash:', result.hash);
 }
 ```
 
 **Example - Limit Order with SL/TP:**
 ```typescript
-const result = await signerClient.createUnifiedOrder({
-  marketIndex: 0,
-  clientOrderIndex: Date.now(),
-  baseAmount: 10000,
-  price: 400000,                  // Limit price $4000
-  isAsk: false,                   // BUY
-  orderType: OrderType.LIMIT,
-  orderExpiry: Date.now() + (60 * 60 * 1000), // 1 hour
-  
+const result = await signerClient.createOtocoOrder({
+  mainOrder: {
+    marketIndex: 0,
+    baseAmount: 10000,
+    price: 400000,              // Limit price $4000
+    isAsk: false,               // BUY
+    orderType: OrderType.LIMIT,
+    orderExpiry: Date.now() + (60 * 60 * 1000) // 1 hour
+  },
   stopLoss: {
     triggerPrice: 380000,
     isLimit: false
@@ -480,7 +482,7 @@ const result = await signerClient.createUnifiedOrder({
 });
 ```
 
-**Note for TWAP Orders**: TWAP orders execute over time. SL/TP cannot be created in the same batch with TWAP orders. Create SL/TP separately after the TWAP begins executing.
+**Note for TWAP Orders**: TWAP orders execute over time. Create SL/TP separately after the TWAP begins executing.
 
 ### checkClient(useWasmCheck?: boolean)
 

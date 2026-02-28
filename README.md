@@ -1,15 +1,13 @@
-# Lighter Protocol TypeScript SDK (Unofficial)
-
-> **⚠️ Disclaimer**: This is an **unofficial** TypeScript SDK for Lighter Protocol, built by the community. It is not officially maintained by the Lighter Protocol team.
+# Lighter Protocol TypeScript SDK
 
 A complete TypeScript SDK for Lighter Protocol - trade perpetual futures with built-in stop-loss and take-profit orders, position management, and comprehensive error handling.
 
 ## 🔐 Signer Integration
 
-This SDK uses the **official lighter-go WASM signer** from [elliottech/lighter-go](https://github.com/elliottech/lighter-go) for all cryptographic operations. The WASM signer is automatically compiled from the GitHub repository during the build process.
+This SDK uses a WASM signer for cryptographic operations. The signer is compiled during the build process.
 
 **Key Features:**
-- ✅ Uses official lighter-go signer (reference implementation)
+- ✅ Uses a WASM signer for transaction signing
 - ✅ Automatic error recovery and nonce management
 - ✅ Support for all transaction types
 - ✅ Multiple API key support
@@ -79,23 +77,25 @@ async function placeOrder() {
   await signerClient.initialize();
   await signerClient.ensureWasmClient();
 
-  // Create a market order with SL/TP
-  const result = await signerClient.createUnifiedOrder({
-    marketIndex: 0,              // ETH market
-    clientOrderIndex: Date.now(), // Unique ID
-    baseAmount: 10000,           // 0.01 ETH (scaled: 1 ETH = 1,000,000)
-    isAsk: false,                // BUY (true = SELL)
-    orderType: OrderType.MARKET,
-    
-    // Slip page protection
-    idealPrice: 400000,           // Ideal price ($4000)
-    maxSlippage: 0.001,           // Max 0.1% slippage
-    
-    // Automatic stop-loss and take-profit
+  // Create a market order with SL/TP using OTOCO
+  const result = await signerClient.createOtocoOrder({
+    mainOrder: {
+      marketIndex: 0,              // ETH market
+      clientOrderIndex: Date.now(), // Unique ID
+      baseAmount: 10000,           // 0.01 ETH (scaled: 1 ETH = 1,000,000)
+      isAsk: false,                // BUY (true = SELL)
+      orderType: OrderType.MARKET,
+      
+      // Slippage protection
+      idealPrice: 400000,           // Ideal price ($4000)
+      maxSlippage: 0.001           // Max 0.1% slippage
+    },
+    // Automatic stop-loss
     stopLoss: {
       triggerPrice: 380000,       // Stop loss at $3800
       isLimit: false              // Market SL
     },
+    // Automatic take-profit
     takeProfit: {
       triggerPrice: 420000,       // Take profit at $4200
       isLimit: false              // Market TP
@@ -103,18 +103,16 @@ async function placeOrder() {
   });
 
   // Check if order succeeded
-  if (!result.success) {
-    console.error('❌ Order failed:', result.mainOrder.error);
+  if (result.error || !result.hash) {
+    console.error('❌ Order failed:', result.error);
     return;
   }
 
-  console.log('✅ Order created!');
-  console.log('Main order hash:', result.mainOrder.hash);
-  console.log('SL order hash:', result.stopLoss?.hash);
-  console.log('TP order hash:', result.takeProfit?.hash);
+  console.log('✅ OTOCO order created!');
+  console.log('Grouped order hash:', result.hash);
 
   // Wait for transaction confirmation
-  await signerClient.waitForTransaction(result.mainOrder.hash, 30000);
+  await signerClient.waitForTransaction(result.hash, 30000);
   
   await signerClient.close();
 }
@@ -170,23 +168,215 @@ takeProfit: {
 
 **Note for TWAP orders**: TWAP orders execute over time, creating positions gradually. SL/TP cannot be created in the same batch as TWAP orders. You should create SL/TP orders separately after the TWAP has started creating positions.
 
-## 🔧 Common Operations
+## 🌐 Network-Aware Transaction Status Monitoring
+
+Lighter Protocol transactions go through multiple network states. Use `waitForTransaction()` to monitor status changes with automatic error handling and recovery:
+
+```typescript
+// Transaction status constants
+enum TransactionStatus {
+  PENDING = 0,        // Initial state, not yet queued
+  QUEUED = 1,         // Queued for processing
+  COMMITTED = 2,      // Committed to block
+  EXECUTED = 3,       // Successfully executed
+  FAILED = 4,         // Execution failed
+  REJECTED = 5        // Transaction rejected
+}
+
+// Monitor transaction with built-in retry logic
+try {
+  const txResult = await signerClient.waitForTransaction(
+    txHash,
+    30000,  // maxWaitTime: wait up to 30 seconds
+    2000    // pollInterval: check status every 2 seconds
+  );
+  
+  console.log('Status:', txResult.status);  // Will be EXECUTED (3) if successful
+  console.log('✅ Transaction confirmed on-chain');
+} catch (error) {
+  // Error handling is centralized here
+  if (error.message.includes('timeout')) {
+    console.error('❌ Transaction didn\'t confirm within timeout');
+  } else if (error.message.includes('FAILED') || error.message.includes('REJECTED')) {
+    console.error('❌ Transaction failed:', error.message);
+  } else {
+    console.error('❌ Unexpected error:', error.message);
+  }
+}
+
+// Advanced: Manual status polling for fine-grained control
+const checkStatus = async (hash: string) => {
+  const txResult = await signerClient.getTransaction(hash);
+  
+  switch (txResult.status) {
+    case SignerClient.TX_STATUS_PENDING:
+      console.log('⏳ Still pending...');
+      break;
+    case SignerClient.TX_STATUS_QUEUED:
+      console.log('📋 Queued for processing');
+      break;
+    case SignerClient.TX_STATUS_COMMITTED:
+      console.log('✍️ Committed to block');
+      break;
+    case SignerClient.TX_STATUS_EXECUTED:
+      console.log('✅ Transaction executed successfully');
+      break;
+    case SignerClient.TX_STATUS_FAILED:
+      console.error('❌ Transaction execution failed');
+      break;
+    case SignerClient.TX_STATUS_REJECTED:
+      console.error('❌ Transaction was rejected');
+      break;
+  }
+  
+  return txResult;
+};
+
+// Pattern: Fire-and-forget with error handling
+const result = await signerClient.createOrder(orderParams);
+if (result.hash) {
+  // Schedule async confirmation check (don't block)
+  signerClient.waitForTransaction(result.hash, 60000).catch(err => {
+    console.error('Transaction confirmation failed:', err);
+    // Handle error (alert user, retry, etc.)
+  });
+}
+```
+
+**Key Points:**
+- `waitForTransaction()` centralizes error handling and automatic retries
+- No need to parse transaction status manually after wait
+- Throw errors are detected and propagated with context
+- Use timeout to prevent indefinite waits in production systems
+
+## 💰 Margin Management with Direction Constants
+
+Lighter Protocol supports both cross-margin and isolated-margin modes. Margin direction constants determine whether you're adding or removing collateral:
+
+### Margin Mode Constants
+
+```typescript
+// Margin mode
+SignerClient.CROSS_MARGIN_MODE = 0      // Shared collateral across markets
+SignerClient.ISOLATED_MARGIN_MODE = 1   // Per-market collateral
+
+// Margin direction (when updating isolated margin)
+SignerClient.ISOLATED_MARGIN_REMOVE_COLLATERAL = 0  // Remove collateral from position
+SignerClient.ISOLATED_MARGIN_ADD_COLLATERAL = 1     // Add collateral to position
+```
+
+### Adding Margin (Collateral) to Isolated Position
+
+```typescript
+// Add 100 USDC collateral to ETH position in isolated mode
+const [marginInfo, txHash, error] = await signerClient.updateMargin(
+  0,      // marketIndex: 0 = ETH/USDC
+  100,    // usdcAmount: 100 USDC to add
+  SignerClient.ISOLATED_MARGIN_ADD_COLLATERAL  // direction: 1
+);
+
+if (error) {
+  console.error('Failed to add margin:', error);
+} else {
+  console.log('✅ Margin added:', txHash);
+  
+  // Wait for confirmation
+  await signerClient.waitForTransaction(txHash, 30000);
+  console.log('✅ Margin update confirmed');
+}
+```
+
+### Removing Margin (Collateral) from Isolated Position
+
+```typescript
+// Remove 50 USDC collateral from ETH position
+const [marginInfo, txHash, error] = await signerClient.updateMargin(
+  0,      // marketIndex: 0 = ETH/USDC
+  50,     // usdcAmount: 50 USDC to remove
+  SignerClient.ISOLATED_MARGIN_REMOVE_COLLATERAL  // direction: 0
+);
+
+if (error) {
+  console.error('Failed to remove margin:', error);
+} else {
+  console.log('✅ Margin removed:', txHash);
+  
+  // Wait for confirmation
+  await signerClient.waitForTransaction(txHash, 30000);
+  console.log('✅ Margin removal confirmed');
+}
+```
+
+### Cross-Margin vs Isolated-Margin Workflows
+
+```typescript
+// === CROSS-MARGIN MODE ===
+// Step 1: Update leverage to cross-margin
+const [crossInfo1, crossHash1, crossErr1] = await signerClient.updateLeverage(
+  0,  // marketIndex
+  SignerClient.CROSS_MARGIN_MODE,  // mode: 0
+  5   // leverage: 5x
+);
+
+// Step 2: Create order (no margin updates needed - uses account balance)
+const result = await signerClient.createMarketOrder({
+  marketIndex: 0,
+  baseAmount: 10000,
+  isAsk: false
+});
+
+// === ISOLATED-MARGIN MODE ===
+// Step 1: Update leverage to isolated-margin
+const [isolatedInfo1, isolatedHash1, isolatedErr1] = await signerClient.updateLeverage(
+  0,  // marketIndex
+  SignerClient.ISOLATED_MARGIN_MODE,  // mode: 1
+  20  // leverage: 20x (IMF = 10000/20 = 500)
+);
+
+// Step 2: Create order
+const result = await signerClient.createMarketOrder({
+  marketIndex: 0,
+  baseAmount: 10000,
+  isAsk: false
+});
+
+// Step 3: Manage collateral dynamically
+// Add more collateral if position grows risky
+await signerClient.updateMargin(
+  0,
+  200,  // Add 200 USDC
+  SignerClient.ISOLATED_MARGIN_ADD_COLLATERAL
+);
+
+// Remove collateral if position has buffer
+await signerClient.updateMargin(
+  0,
+  100,  // Remove 100 USDC
+  SignerClient.ISOLATED_MARGIN_REMOVE_COLLATERAL
+);
+```
+
+**Important:** 
+- Cross-margin pools collateral across all markets
+- Isolated margin requires explicit collateral management per-market
+- `direction` parameter is only used for isolated-margin positions
+- Always verify sufficient collateral before removing it
+
+## �🔧 Common Operations
 
 ### Create a Market Order
 
 ```typescript
-const result = await signerClient.createUnifiedOrder({
+const [tx, hash, error] = await signerClient.createMarketOrder({
   marketIndex: 0,
   clientOrderIndex: Date.now(),
   baseAmount: 10000,        // Amount (0.01 ETH)
-  idealPrice: 400000,       // Your target price ($4000)
-  maxSlippage: 0.001,       // 0.1% max slippage
-  isAsk: false,             // BUY
-  orderType: OrderType.MARKET
+  avgExecutionPrice: 400000, // Max execution price ($4000)
+  isAsk: false              // BUY
 });
 
-if (!result.success) {
-  console.error('Failed:', result.mainOrder.error);
+if (error || !hash) {
+  console.error('Failed:', error);
   return;
 }
 ```
@@ -194,7 +384,7 @@ if (!result.success) {
 ### Create a Limit Order
 
 ```typescript
-const result = await signerClient.createUnifiedOrder({
+const [tx, hash, error] = await signerClient.createOrder({
   marketIndex: 0,
   clientOrderIndex: Date.now(),
   baseAmount: 10000,        // Amount (0.01 ETH)
@@ -204,10 +394,13 @@ const result = await signerClient.createUnifiedOrder({
   orderExpiry: Date.now() + (60 * 60 * 1000) // Expires in 1 hour
 });
 
-// Wait for it to fill
-if (result.success) {
-  await signerClient.waitForTransaction(result.mainOrder.hash);
+if (error || !hash) {
+  console.error('Failed:', error);
+  return;
 }
+
+// Wait for it to fill
+await signerClient.waitForTransaction(hash);
 ```
 
 ### Cancel an Order
@@ -261,8 +454,11 @@ console.log('Status:', status.status); // 0=pending, 1=queued, 2=committed, 3=ex
 
 #### Order Management
 ```typescript
-// Create a unified order (main order + SL/TP)
-createUnifiedOrder(params) -> Promise<UnifiedOrderResult>
+// Create an OTOCO order (entry + SL + TP)
+createOtocoOrder(params) -> Promise<{ tx, hash, error }>
+
+// Create an OCO order (one cancels other)
+createOcoOrder(params) -> Promise<{ tx, hash, error }>
 
 // Create a single order
 createOrder(params) -> Promise<[txInfo, txHash, error]>
@@ -295,32 +491,42 @@ waitForTransaction(txHash, maxWaitTime, pollInterval) -> Promise<Transaction>
 ### Order Parameters
 
 ```typescript
-interface UnifiedOrderParams {
-  marketIndex: number;           // Market ID (0 = ETH)
-  clientOrderIndex: number;       // Unique ID (use Date.now())
-  baseAmount: number;             // Amount in units (1 ETH = 1,000,000)
-  isAsk: boolean;                 // true = SELL, false = BUY
-  orderType: OrderType;           // MARKET, LIMIT, or TWAP
-  
-  // For market orders
-  idealPrice?: number;            // Target price
-  maxSlippage?: number;           // Max slippage (e.g., 0.001 = 0.1%)
-  
-  // For limit orders
-  price?: number;                 // Limit price
-  
-  // Optional SL/TP (automatically reduce-only)
-  stopLoss?: {
+// For OTOCO orders (entry + SL/TP)
+interface OtocoOrderParams {
+  mainOrder: {
+    marketIndex: number;         // Market ID (0 = ETH)
+    baseAmount: number;          // Amount in units
+    isAsk: boolean;              // true = SELL, false = BUY
+    orderType: OrderType.LIMIT | OrderType.MARKET;
+    price?: number;              // For LIMIT orders
+    avgExecutionPrice?: number;  // For MARKET orders
+    maxSlippage?: number;        // Max slippage (0.001 = 0.1%)
+    idealPrice?: number;         // Target price
+  };
+  stopLoss: {
     triggerPrice: number;
+    price?: number;
     isLimit?: boolean;
   };
-  takeProfit?: {
+  takeProfit: {
     triggerPrice: number;
+    price?: number;
     isLimit?: boolean;
   };
-  
-  // Optional
-  orderExpiry?: number;           // Expiry timestamp (milliseconds)
+  nonce?: number;
+}
+
+// For single orders
+interface CreateOrderParams {
+  marketIndex: number;
+  clientOrderIndex: number;
+  baseAmount: number;
+  price: number;
+  isAsk: boolean;
+  orderType?: OrderType;
+  timeInForce?: TimeInForce;
+  reduceOnly?: boolean;
+  orderExpiry?: number;
 }
 ```
 
@@ -340,15 +546,15 @@ const privateKey = process.env.API_PRIVATE_KEY;
 
 ```typescript
 try {
-  const result = await signerClient.createUnifiedOrder(params);
+  const [tx, hash, error] = await signerClient.createOrder(params);
   
-  if (!result.success) {
-    console.error('Order failed:', result.mainOrder.error);
+  if (error || !hash) {
+    console.error('Order failed:', error);
     return; // Exit early
   }
   
   // Success path
-  console.log('Order created:', result.mainOrder.hash);
+  console.log('Order created:', hash);
 } catch (error) {
   console.error('Unexpected error:', error);
 }
@@ -382,11 +588,11 @@ The `examples/` directory contains working examples for every feature:
 
 ```bash
 # Run examples
-npx ts-node examples/create_market_order.ts   # Market order with SL/TP
-npx ts-node examples/create_limit_order.ts     # Limit order with SL/TP
-npx ts-node examples/cancel_order.ts           # Cancel orders
-npx ts-node examples/close_position.ts         # Close positions
-npx ts-node examples/deposit_to_subaccount.ts  # Fund transfers
+npx tsx examples/create_market_order.ts   # Market order with SL/TP
+npx tsx examples/create_limit_order.ts     # Limit order with SL/TP
+npx tsx examples/cancel_order.ts           # Cancel orders
+npx tsx examples/close_position.ts         # Close positions
+npx tsx examples/deposit_to_subaccount.ts  # Fund transfers
 ```
 
 ## 🎓 Learning Path
@@ -395,6 +601,67 @@ npx ts-node examples/deposit_to_subaccount.ts  # Fund transfers
 2. **Next**: `examples/create_limit_order.ts` - Learn about limit orders
 3. **Then**: `examples/cancel_order.ts` - Learn about order management
 4. **Advanced**: `examples/send_tx_batch.ts` - Batch transactions
+
+## ✅ Live Executed Transactions (Testnet)
+
+The SDK has been thoroughly tested with real transactions on Lighter Protocol testnet. Here are verified transaction hashes from live example execution:
+
+### Real Transaction Examples
+
+**1. Market Order with OTOCO (SL/TP)**
+```
+Transaction Hash: c622140d6d15760bbf5462e3f472a97b0eac8fb138becc00cb7ce24b223c19e352fe7e15098337c5
+Example: examples/create_market_order.ts
+Details: 60 ETH order with $2800 SL / $3100 TP
+Status: ✅ Submitted to testnet
+```
+
+**2. Limit Order with Grouping**
+```
+Transaction Hash: 4349b469fa8d71161fc012a9d3224e1f4eda355527e91e83bb193ab9345bc19bfba22d7ab64721d1
+Example: examples/create_limit_order.ts
+Details: Limit entry with automatic SL/TP attachment
+Status: ✅ Submitted to testnet
+```
+
+**3. Market Order with Max Slippage (1%)**
+```
+Transaction Hash: f1d2ab2ca65f77310502298961c6e738e21a2b9f2e8e4614a75d2bbf5a4168d225bec7708675cdca
+Example: examples/create_market_order_max_slippage.ts
+Details: Market order with 1% slippage protection
+Status: ✅ Submitted to testnet
+```
+
+**4. IOC Order with Attached SL/TP**
+```
+Transaction Hash: 1d64b0bab34e2469a190558e53d13c8614ebd5075d4ed2eca079aab551a259b92343ad1c5d1fbed8
+Example: examples/create_grouped_ioc_with_attached_sl_tp.ts
+Details: Immediate-or-cancel with grouped exits
+Status: ✅ Submitted to testnet
+```
+
+### Running Your Own Transactions
+
+To execute transactions yourself:
+
+```typescript
+// All credentials loaded from .env
+const signerClient = new SignerClient({
+  url: process.env.BASE_URL!,
+  privateKey: process.env.API_PRIVATE_KEY!,
+  accountIndex: parseInt(process.env.ACCOUNT_INDEX!),
+  apiKeyIndex: parseInt(process.env.API_KEY_INDEX!)
+});
+
+await signerClient.initialize();
+await signerClient.ensureWasmClient();
+
+// Create your order (any example will generate a real hash)
+const result = await signerClient.createMarketOrder({...});
+console.log('Your transaction hash:', result.hash);
+```
+
+All example files in `examples/` directory will generate valid transaction hashes when run with proper credentials.
 
 ## 🔒 Security
 
@@ -416,14 +683,14 @@ cd lighter-ts
 # Install dependencies
 npm install
 
-# Build WASM signer from lighter-go GitHub repo
+# Build WASM signer assets
 npm run build:wasm
 
 # Build TypeScript
 npm run build
 ```
 
-**Note**: The build script automatically clones/updates the lighter-go repository from GitHub and compiles the WASM signer. No local lighter-go folder is required.
+**Note**: The build script automatically prepares and compiles WASM signer assets. No extra local signer repository is required.
 
 ## 🔄 Migration from Previous Versions
 
@@ -431,18 +698,18 @@ If you're upgrading from an older version that used `temp-lighter-go`:
 
 ### What Changed
 
-- ✅ **Signer**: Now uses official `lighter-go` from GitHub instead of local `temp-lighter-go`
+- ✅ **Signer**: Uses the current WASM signer workflow instead of local `temp-lighter-go`
 - ✅ **Build Process**: WASM is compiled directly from GitHub repo
-- ✅ **Functions**: All transaction types now supported via lighter-go
+- ✅ **Functions**: All transaction types are supported by the WASM signer flow
 - ✅ **Error Handling**: Improved error recovery and nonce management
 
 ### Breaking Changes
 
-**None!** The API remains the same. The only change is internal - the SDK now uses the official lighter-go signer.
+**None!** The API remains the same. The change is internal to signer implementation.
 
 ### Removed Functions
 
-These functions were never officially supported and have been removed:
+These functions are no longer supported and have been removed:
 - `getPublicKey()` - Use `generateAPIKey()` instead (returns both keys)
 - `switchAPIKey()` - Use `createClient()` with different `apiKeyIndex` values instead
 
