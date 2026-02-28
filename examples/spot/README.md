@@ -64,7 +64,7 @@ All examples use environment variables for credentials:
 npx ts-node examples/spot/create_eth_spot_limit_order.ts
 
 # Make sure WASM is built first
-node scripts/build-wasm.js
+node scripts/build-wasm.cjs
 ```
 
 ## Position Checking
