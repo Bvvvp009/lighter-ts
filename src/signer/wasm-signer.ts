@@ -11,14 +11,18 @@ let fs: any;
 let os: any;
 let path: any;
 
+function runtimeImport(specifier: string): Promise<any> {
+  return Function('s', 'return import(s)')(specifier) as Promise<any>;
+}
+
 async function ensureNodeModulesLoaded(): Promise<void> {
   if (fs && os && path) {
     return;
   }
 
-  const fsMod = await import('node:fs');
-  const osMod = await import('node:os');
-  const pathMod = await import('node:path');
+  const fsMod = await runtimeImport('node:fs');
+  const osMod = await runtimeImport('node:os');
+  const pathMod = await runtimeImport('node:path');
 
   fs = fsMod.default || fsMod;
   os = osMod.default || osMod;
@@ -26,7 +30,7 @@ async function ensureNodeModulesLoaded(): Promise<void> {
 }
 
 async function getNodeRequire(): Promise<any> {
-  const moduleMod = await import('node:module');
+  const moduleMod = await runtimeImport('node:module');
   const createRequireFn = (moduleMod as any).createRequire;
   return createRequireFn(process.cwd() + '/');
 }
