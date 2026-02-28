@@ -24,7 +24,7 @@ yarn add lighter-ts-sdk
 ## 🚀 What Does This SDK Do?
 
 The Lighter TypeScript SDK provides everything you need to:
-- **Trade perpetual futures** on Lighter Protocol
+- **Trade perpetual futures and SPOT Markets** on Lighter Protocol
 - **Create orders** (Market, Limit, TWAP) with automatic SL/TP
 - **Manage positions** (open, close, update leverage)
 - **Transfer funds** between accounts

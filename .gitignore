@@ -131,12 +131,7 @@ volume_check/*
 volume_check/.DS_Store
 volume_check
 market_data.json
-.cursor/
-.semcode/
 
-# Nested repositories (exclude from this repo's PR scope)
+# Reference Repos (exclude from this repo's PR scope)
 lighter-go/
 lighter-python/
-
-lighter-python/
-lighter-go/
