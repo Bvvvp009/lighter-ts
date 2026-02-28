@@ -20,6 +20,8 @@ async function createMarketOrderExample() {
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
   const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+  const TX_CONFIRM_TIMEOUT_MS = Number.parseInt(process.env['TX_CONFIRM_TIMEOUT_MS'] ?? '120000', 10);
+  const TX_POLL_INTERVAL_MS = Number.parseInt(process.env['TX_POLL_INTERVAL_MS'] ?? '2000', 10);
   const MARKET_ID = 0; // ETH/USDC perps
   const CLIENT_ORDER_INDEX = Date.now();
 
@@ -42,126 +44,67 @@ async function createMarketOrderExample() {
   await market.initialize();
   const currentPrice = (market as any).lastPrice || market.priceToUnits(2800) || 280000;
   
-  const marketOrderParams = {
-    marketIndex: MARKET_ID,
-    clientOrderIndex: CLIENT_ORDER_INDEX,
-    baseAmount: 60, // Small amount for testing (matching limit order example)
-    idealPrice: 303282,
-    maxSlippage: 0.001, // 0.1% max slippage
-    isAsk: false, // Buy
-    orderType: OrderType.MARKET,
+  const otocoOrderParams = {
+    mainOrder: {
+      marketIndex: MARKET_ID,
+      clientOrderIndex: CLIENT_ORDER_INDEX,
+      baseAmount: 60,
+      idealPrice: 208000,
+      maxSlippage: 0.001,
+      isAsk: false,
+      orderType: OrderType.MARKET as OrderType.MARKET
+    },
     stopLoss: {
-      triggerPrice:280000, // 5% below current price
-      price: 280000,
-      isLimit: false // Market SL
+      triggerPrice: 190000,
+      price: 190000,
+      isLimit: false
     },
     takeProfit: {
-      triggerPrice: 310000, // 5% above current price
-      price: 300000,
-      isLimit: false // Market TP
+      triggerPrice: 210000,
+      price: 210000,
+      isLimit: false
     }
   }
   
   console.log(`📝 Creating MARKET order with SL/TP (using OTOCO)`);
   console.log(`   Market Index: ${MARKET_ID}`);
-  console.log(`   Base Amount: ${marketOrderParams.baseAmount} units`);
-  console.log(`   Ideal Price: ${marketOrderParams.idealPrice} ($${marketOrderParams.idealPrice / 100})`);
-  console.log(`   SL Trigger: ${marketOrderParams.stopLoss.triggerPrice} ($${marketOrderParams.stopLoss.triggerPrice / 100})`);
-  console.log(`   TP Trigger: ${marketOrderParams.takeProfit.triggerPrice} ($${marketOrderParams.takeProfit.triggerPrice / 100})\n`);
+  console.log(`   Base Amount: ${otocoOrderParams.mainOrder.baseAmount} units`);
+  console.log(`   Ideal Price: ${otocoOrderParams.mainOrder.idealPrice} ($${otocoOrderParams.mainOrder.idealPrice! / 100})`);
+  console.log(`   SL Trigger: ${otocoOrderParams.stopLoss.triggerPrice} ($${otocoOrderParams.stopLoss.triggerPrice / 100})`);
+  console.log(`   TP Trigger: ${otocoOrderParams.takeProfit.triggerPrice} ($${otocoOrderParams.takeProfit.triggerPrice / 100})\n`);
   try {
-    const result = await signerClient.createUnifiedOrder(marketOrderParams);
+    const result = await signerClient.createOtocoOrder(otocoOrderParams);
 
-    // Log detailed results
-    console.log(`\n📊 Order Creation Results:`);
-    console.log(`   Success: ${result.success}`);
-    console.log(`   Message: ${result.message}`);
-    console.log(`   Batch Hashes: ${result.batchResult.hashes.length}`);
-    console.log(`   Batch Errors: ${result.batchResult.errors.length}`);
-    
-    if (result.batchResult.errors.length > 0) {
-    }
-
-    if (!result.success || result.mainOrder.error) {
-      console.error(`❌ Order failed: ${result.mainOrder.error || result.message || 'Unknown error'}`);
+    if (result.error || !result.hash) {
+      console.error(`❌ OTOCO order failed: ${result.error || 'No transaction hash returned'}`);
       return;
     }
 
-    const txHash = result.mainOrder.hash;
-    if (!txHash) {
-      console.error(`❌ No transaction hash returned`);
-      return;
-    }
-    
-    // Check SL/TP orders
-    if (marketOrderParams.stopLoss) {
-      if (result.stopLoss) {
-        if (result.stopLoss.error) {
-          console.error(`❌ Stop-loss order failed: ${result.stopLoss.error}`);
-        } else {
-          console.log(`✅ Stop-loss order created: ${result.stopLoss.hash.substring(0, 16)}...`);
-        }
-      } else {
-        console.warn(`⚠️ Stop-loss order was not created`);
-      }
-    }
-
-    if (marketOrderParams.takeProfit) {
-      if (result.takeProfit) {
-        if (result.takeProfit.error) {
-          console.error(`❌ Take-profit order failed: ${result.takeProfit.error}`);
-        } else {
-          console.log(`✅ Take-profit order created: ${result.takeProfit.hash.substring(0, 16)}...`);
-        }
-      } else {
-        console.warn(`⚠️ Take-profit order was not created`);
-      }
-    }
+    const txHash = result.hash;
+    console.log(`\n📊 OTOCO Order Creation Results:`);
+    console.log(`   Success: true`);
+    console.log(`   Grouped Tx Hash: ${txHash}`);
+    console.log(`   Confirm Timeout: ${TX_CONFIRM_TIMEOUT_MS}ms`);
 
     try {
-      const transaction = await signerClient.waitForTransaction(txHash, 30000, 2000);
-      
-      // Check transaction event_info for order execution errors
-      if (transaction.event_info) {
-        try {
-          const eventInfo = JSON.parse(transaction.event_info);
-          if (eventInfo.ae) {
-            try {
-              const errorData = JSON.parse(eventInfo.ae);
-              if (errorData.message) {
-                console.error(`❌ Order failed: ${errorData.message}`);
-                return;
-              }
-            } catch {
-              // If not JSON, check if it's an error string
-              if (typeof eventInfo.ae === 'string' && eventInfo.ae.length > 0) {
-                console.error(`❌ Order failed: ${eventInfo.ae}`);
-                return;
-              }
-            }
-          }
-        } catch {
-          // Ignore parse errors
-        }
-      }
-      
-      // Check if transaction has error code or message
-      if (transaction.code && transaction.code !== 200) {
-        const errorMsg = transaction.message || 'Transaction failed';
-        console.error(`❌ Order failed: ${errorMsg}`);
-        return;
-      }
-      
-      // Check transaction status - if it's FAILED or REJECTED, show error
-      const status = typeof transaction.status === 'number' ? transaction.status : parseInt(String(transaction.status), 10);
-      if (status === 4 || status === 5) { // FAILED or REJECTED
-        const errorMsg = transaction.message || 'Transaction failed';
-        console.error(`❌ Order failed: ${errorMsg}`);
-        return;
-      }
-      
-      console.log(`✅ Market order placed: ${txHash.substring(0, 16)}...`);
+      await signerClient.waitForTransaction(txHash, TX_CONFIRM_TIMEOUT_MS, TX_POLL_INTERVAL_MS);
+      console.log(`✅ Market order placed: ${txHash}`);
     } catch (error) {
-      console.error(`❌ Order failed: ${trimException(error as Error)}`);
+      const waitError = trimException(error as Error);
+      try {
+        const txApi = new (await import('../src')).TransactionApi(apiClient);
+        const tx = await txApi.getTransaction({ by: 'hash', value: txHash });
+        const status = typeof tx.status === 'number' ? tx.status : Number.parseInt(String(tx.status), 10);
+        if (status >= SignerClient.TX_STATUS_COMMITTED) {
+          console.log(`⚠️ Confirmation timeout, but tx is on-chain with status ${status}: ${txHash}`);
+          return;
+        }
+      } catch {
+        console.log(`⚠️ Confirmation timeout; tx may still be pending/submitted: ${txHash}`);
+        return;
+      }
+
+      console.error(`❌ Order failed: ${waitError}`);
       return;
     }
   } catch (error) {
@@ -172,7 +115,9 @@ async function createMarketOrderExample() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('create_market_order');
+if (isMain) {
   createMarketOrderExample().catch(console.error);
 }
 

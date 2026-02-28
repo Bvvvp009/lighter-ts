@@ -12,6 +12,15 @@ async function getAuthToken(signerClient: SignerClient, expiryInSeconds: number 
   return auth;
 }
 
+function extractTxHash(txHash: any): string {
+  if (!txHash) return '';
+  if (typeof txHash === 'string') return txHash;
+  if (typeof txHash === 'object') {
+    return txHash.tx_hash || txHash.hash || '';
+  }
+  return '';
+}
+
 async function cancelAllOrders() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
@@ -81,17 +90,19 @@ async function cancelAllOrders() {
       return;
     }
 
-    if (!txHash || txHash === '') {
+    const finalTxHash = extractTxHash(txHash);
+
+    if (!finalTxHash) {
       console.error('❌ No transaction hash returned');
       await apiClient.close();
       return;
     }
 
-    console.log(`✅ Cancel all request submitted: ${txHash.substring(0, 16)}...`);
+    console.log(`✅ Cancel all request submitted: ${finalTxHash}`);
     
     console.log(`⏳ Waiting for confirmation...`);
     try {
-      await signerClient.waitForTransaction(txHash, 30000, 2000);
+      await signerClient.waitForTransaction(finalTxHash, 30000, 2000);
       console.log('✅ All orders canceled successfully');
     } catch (waitError) {
       console.error(`❌ Cancel all confirmation failed:`, waitError);
@@ -105,7 +116,9 @@ async function cancelAllOrders() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('cancel_all_orders');
+if (isMain) {
   cancelAllOrders().catch(console.error);
 }
 

@@ -157,7 +157,9 @@ async function transferSpotPerp() {
 }
 
 // Run the example
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('transfer_spot_perp');
+if (isMain) {
   transferSpotPerp().catch(console.error);
 }
 

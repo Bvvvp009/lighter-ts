@@ -26,11 +26,11 @@ async function fetchMarketData() {
         market_id: 0
       });
       console.log('✅ Order Book Details fetched successfully!');
+      console.log(`   Symbol: ${orderBookDetails.symbol}`);
       console.log(`   Market ID: ${orderBookDetails.market_id}`);
-      console.log(`   Bids: ${orderBookDetails.bids?.length || 0} levels`);
-      console.log(`   Asks: ${orderBookDetails.asks?.length || 0} levels`);
-      console.log(`   Best Bid: ${orderBookDetails.bids?.[0]?.price || 'N/A'}`);
-      console.log(`   Best Ask: ${orderBookDetails.asks?.[0]?.price || 'N/A'}\n`);
+      console.log(`   Last Trade Price: ${orderBookDetails.last_trade_price}`);
+      console.log(`   Daily Volume: ${orderBookDetails.daily_quote_token_volume}`);
+      console.log(`   Daily Trades: ${orderBookDetails.daily_trades_count}\n`);
     } catch (error) {
       console.log('❌ Order Book Details error:', error);
     }
@@ -43,7 +43,7 @@ async function fetchMarketData() {
         limit: 10
       });
       console.log('✅ Recent Trades fetched successfully!');
-      console.log(`   Trades: ${recentTrades?.length || 0} recent trades\n`);
+      console.log(`   Trades: ${recentTrades?.trades?.length || 0} recent trades\n`);
     } catch (error) {
       console.log('❌ Recent Trades error:', error);
     }
@@ -89,7 +89,7 @@ async function fetchMarketData() {
 
     // Output as JSON
     console.log('\n📊 Market Data JSON:');
-    console.log(`✅ Found ${markets.length} markets`);
+    console.log(`✅ Found ${Object.keys(markets).length} markets`);
 
     // 5. WebSocket Real-time Data
     console.log('\n🔌 Connecting to WebSocket for real-time data...');
@@ -132,10 +132,9 @@ async function fetchMarketData() {
     console.log('✅ Subscribed to trades for market 0');
 
     // Keep connection alive for 10 seconds
-    setTimeout(() => {
-      wsClient.disconnect();
-      console.log('\n🎉 Market data fetching completed!');
-    }, 10000);
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    wsClient.disconnect();
+    console.log('\n🎉 Market data fetching completed!');
 
   } catch (error) {
     console.error('❌ Error fetching market data:', error);
@@ -147,20 +146,16 @@ async function fetchMarketData() {
 async function getMarketData(marketId: number, orderApi: OrderApi): Promise<any> {
   try {
     const details = await orderApi.getOrderBookDetails({ market_id: marketId }) as any;
-    
-    if (details.order_book_details && details.order_book_details.length > 0) {
-      const marketInfo = details.order_book_details[0];
-      return {
-        market_id: marketId,
-        symbol: marketInfo.symbol,
-        price: marketInfo.last_trade_price,
-        volume_24h: parseFloat(marketInfo.daily_quote_token_volume),
-        trades_24h: marketInfo.daily_trades_count,
-        price_change_24h: marketInfo.daily_price_change,
-        min_size: marketInfo.min_base_amount,
-        status: marketInfo.status
-      };
-    }
+    return {
+      market_id: marketId,
+      symbol: details.symbol,
+      price: details.last_trade_price,
+      volume_24h: parseFloat(details.daily_quote_token_volume),
+      trades_24h: details.daily_trades_count,
+      price_change_24h: details.daily_price_change,
+      min_size: details.min_base_amount,
+      status: details.status
+    };
   } catch (error) {
     return null;
   }
@@ -168,8 +163,10 @@ async function getMarketData(marketId: number, orderApi: OrderApi): Promise<any>
   return null;
 }
 
-// Run the example
-if (require.main === module) {
+// Run the example if this file is executed directly
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('market_data');
+if (isMain) {
   fetchMarketData().catch(console.error);
 }
 

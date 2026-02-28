@@ -39,7 +39,7 @@ async function updateMarginExample() {
     const [addMarginInfo, addTxHash, addError] = await client.updateMargin(
       marketIndex,
       usdcAmount,  // USDC amount (in USDC units, will be scaled internally)
-      0            // direction: 0 = add margin, 1 = remove margin
+      SignerClient.ISOLATED_MARGIN_ADD_COLLATERAL
     );
 
     if (addError) {
@@ -64,7 +64,7 @@ async function updateMarginExample() {
     const [removeMarginInfo, removeTxHash, removeError] = await client.updateMargin(
       marketIndex,
       50,   // 50 USDC to remove
-      1     // direction: 1 = remove margin
+      SignerClient.ISOLATED_MARGIN_REMOVE_COLLATERAL
     );
 
     if (removeError) {
@@ -90,7 +90,9 @@ async function updateMarginExample() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('update_margin');
+if (isMain) {
   updateMarginExample().catch(console.error);
 }
 

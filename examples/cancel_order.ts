@@ -57,7 +57,7 @@ async function cancelOrder() {
 
     try {
       await signerClient.waitForTransaction(txHash, 30000, 2000);
-      console.log(`✅ Order canceled: ${txHash.substring(0, 16)}...`);
+      console.log(`✅ Order canceled: ${txHash}`);
     } catch (waitError) {
       console.error(`❌ Cancel failed: ${waitError instanceof Error ? waitError.message : 'Unknown error'}`);
     }
@@ -69,7 +69,9 @@ async function cancelOrder() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('cancel_order');
+if (isMain) {
   cancelOrder().catch(console.error);
 }
 

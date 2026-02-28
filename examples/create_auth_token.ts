@@ -50,7 +50,9 @@ async function createAuthToken() {
 }
 
 // Run the example
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('create_auth_token');
+if (isMain) {
   createAuthToken().catch(console.error);
 }
 

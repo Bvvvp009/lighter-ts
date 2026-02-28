@@ -142,7 +142,9 @@ async function publicPoolOperationsExample() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('public_pool_operations');
+if (isMain) {
   publicPoolOperationsExample().catch(console.error);
 }
 

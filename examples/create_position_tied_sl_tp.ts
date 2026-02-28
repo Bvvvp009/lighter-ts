@@ -200,7 +200,9 @@ async function createPositionTiedSLTPExample() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('create_position_tied_sl_tp');
+if (isMain) {
   createPositionTiedSLTPExample().catch(console.error);
 }
 

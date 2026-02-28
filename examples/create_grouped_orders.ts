@@ -87,7 +87,7 @@ async function createGroupedOrdersExample() {
     if (otoError) {
       console.error('❌ OTO orders failed:', otoError);
     } else {
-      console.log('✅ OTO orders created:', otoTxHash?.substring(0, 16) + '...');
+      console.log('✅ OTO orders created:', otoTxHash);
       if (otoTxHash) await signerClient.waitForTransaction(otoTxHash, 60000, 2000);
     }
 
@@ -129,7 +129,7 @@ async function createGroupedOrdersExample() {
     if (ocoError) {
       console.error('❌ OCO orders failed:', ocoError);
     } else {
-      console.log('✅ OCO orders created:', ocoTxHash?.substring(0, 16) + '...');
+      console.log('✅ OCO orders created:', ocoTxHash);
       if (ocoTxHash) await signerClient.waitForTransaction(ocoTxHash, 60000, 2000);
     }
 
@@ -183,7 +183,7 @@ async function createGroupedOrdersExample() {
     if (otocoError) {
       console.error('❌ OTOCO orders failed:', otocoError);
     } else {
-      console.log('✅ OTOCO orders created:', otocoTxHash?.substring(0, 16) + '...');
+      console.log('✅ OTOCO orders created:', otocoTxHash);
       if (otocoTxHash) await signerClient.waitForTransaction(otocoTxHash, 60000, 2000);
     }
     console.log('\n✅ Examples completed');
@@ -194,7 +194,9 @@ async function createGroupedOrdersExample() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('create_grouped_orders');
+if (isMain) {
   createGroupedOrdersExample().catch(console.error);
 }
 

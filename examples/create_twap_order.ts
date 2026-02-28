@@ -47,54 +47,37 @@ async function createTWAPOrderWithSLTP() {
     price: currentPriceInUnits,
     isAsk: false,
     orderType: OrderType.TWAP,
-    orderExpiry: Date.now() + (30 * 60 * 1000),
-    stopLoss: {
-      triggerPrice: market.priceToUnits(currentPriceInUnits * 0.95),
-      isLimit: false
-    },
-    takeProfit: {
-      triggerPrice: market.priceToUnits(currentPriceInUnits * 1.05),
-      isLimit: false
-    }
+    timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+    orderExpiry: Date.now() + (30 * 60 * 1000)
   };
 
   try {
-    const result = await signerClient.createUnifiedOrder(twapOrderParams);
+    const [tx, hash, error] = await signerClient.createOrder(twapOrderParams);
 
-    if (result.success) {
-      console.log(`✓ TWAP order created: ${result.mainOrder.hash.substring(0, 16)}...`);
-      console.log(`  Duration: 30 minutes`);
-      
-      // Wait for main order
-      try {
-        await signerClient.waitForTransaction(result.mainOrder.hash, 30000, 2000);
-        console.log('✓ TWAP order placed');
-      } catch (error) {
-        console.error(`❌ TWAP order failed: ${trimException(error as Error)}`);
-      }
-      
-      // Wait for SL/TP orders
-      if (result.batchResult.hashes.length > 0) {
-        console.log(`✓ ${result.batchResult.hashes.length} SL/TP order(s) pending`);
-        for (const hash of result.batchResult.hashes) {
-          if (hash) {
-            try {
-              await signerClient.waitForTransaction(hash, 30000, 2000);
-            } catch (error) {
-              console.log(`⚠️ SL/TP: ${trimException(error as Error)}`);
-            }
-          }
-        }
-      }
-    } else {
-      console.error(`❌ Order failed: ${result.mainOrder.error || 'Unknown error'}`);
+    if (error || !hash) {
+      console.error(`❌ TWAP order failed: ${error || 'No hash returned'}`);
+      return;
+    }
+
+    console.log(`✓ TWAP order created: ${hash}`);
+    console.log(`  Duration: 30 minutes`);
+    
+    // Wait for order confirmation
+    try {
+      await signerClient.waitForTransaction(hash, 30000, 2000);
+      console.log('✓ TWAP order placed and executing');
+      console.log('  Note: Create SL/TP orders separately after TWAP starts executing');
+    } catch (error) {
+      console.error(`❌ TWAP order failed: ${trimException(error as Error)}`);
     }
   } catch (error) {
     console.error(`❌ Error: ${trimException(error as Error)}`);
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('create_twap_order');
+if (isMain) {
   createTWAPOrderWithSLTP().catch(console.error);
 }
 

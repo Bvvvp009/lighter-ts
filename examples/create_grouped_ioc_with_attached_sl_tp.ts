@@ -170,7 +170,9 @@ async function createGroupedIOCWithAttachedSLTPExample() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('create_grouped_ioc_with_attached_sl_tp');
+if (isMain) {
   createGroupedIOCWithAttachedSLTPExample().catch(console.error);
 }
 

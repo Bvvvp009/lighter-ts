@@ -17,7 +17,10 @@ All examples follow the same patterns, so once you understand one, you understan
 **Example usage:**
 ```typescript
 try {
-  await signerClient.createUnifiedOrder(params);
+  const [tx, hash, error] = await signerClient.createOrder(params);
+  if (error) {
+    console.error(`❌ Error: ${error}`);
+  }
 } catch (error) {
   console.error(`❌ Error: ${trimException(error as Error)}`);
   // Clean, readable error message
@@ -106,15 +109,15 @@ ORDER_INDEX=12345
 ### Running Examples
 ```bash
 # Run any example
-npx ts-node examples/create_market_order.ts
+npx tsx examples/create_market_order.ts
 
 # Run all examples (development)
 npm run examples
 
 # Run specific example category
-npx ts-node examples/create_market_order.ts
-npx ts-node examples/create_limit_order.ts
-npx ts-node examples/create_twap_order.ts
+npx tsx examples/create_market_order.ts
+npx tsx examples/create_limit_order.ts
+npx tsx examples/create_twap_order.ts
 ```
 
 ## 🔧 Key Features
@@ -136,29 +139,30 @@ wsClient.onMessage = (message) => {
 };
 ```
 
-### Unified Order System
-All trading examples demonstrate the unified order system with integrated SL/TP:
+### Grouped Order System
+All trading examples demonstrate grouped order creation with integrated SL/TP:
 
 ```typescript
-const orderParams: TransactionParams = {
-  marketIndex: 0,
-  clientOrderIndex: Date.now(),
-  baseAmount: 1000,
-  price: 4500,
-  isAsk: false,
-  orderType: OrderType.MARKET,
-  timeInForce: TimeInForce.IMMEDIATE_OR_CANCEL,
-  
+// OTOCO order (entry + SL + TP)
+const result = await signerClient.createOtocoOrder({
+  mainOrder: {
+    marketIndex: 0,
+    clientOrderIndex: Date.now(),
+    baseAmount: 1000,
+    price: 4500,
+    isAsk: false,
+    orderType: OrderType.LIMIT
+  },
   // Integrated SL/TP
   stopLoss: {
-    price: 4200, // Set your desired SL price
-    isLimit: true
+    triggerPrice: 4200, // Set your desired SL trigger
+    isLimit: false
   },
   takeProfit: {
-    price: 4800, // Set your desired TP price
-    isLimit: true
+    triggerPrice: 4800, // Set your desired TP trigger
+    isLimit: false
   }
-};
+});
 ```
 
 ### Transaction Status Monitoring
@@ -174,11 +178,11 @@ Professional error handling with detailed logging:
 
 ```typescript
 try {
-  const result = await signerClient.createUnifiedOrder(orderParams);
-  if (result.success) {
-    console.log('✅ Order created successfully!');
+  const result = await signerClient.createOtocoOrder(orderParams);
+  if (result.error || !result.hash) {
+    console.error('❌ Order failed:', result.error);
   } else {
-    console.error('❌ Order failed:', result.mainOrder.error);
+    console.log('✅ Order created successfully!');
   }
 } catch (error) {
   console.error('❌ Error:', error);

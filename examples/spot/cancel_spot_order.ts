@@ -69,7 +69,7 @@ async function cancelSpotOrder() {
 
     try {
       await signerClient.waitForTransaction(txHash, 30000, 2000);
-      console.log(`✅ Spot order canceled: ${txHash.substring(0, 16)}...`);
+      console.log(`✅ Spot order canceled: ${txHash}`);
     } catch (waitError) {
       console.error(`❌ Cancel failed: ${waitError instanceof Error ? waitError.message : 'Unknown error'}`);
     }
@@ -81,7 +81,7 @@ async function cancelSpotOrder() {
   }
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   cancelSpotOrder().catch(console.error);
 }
 

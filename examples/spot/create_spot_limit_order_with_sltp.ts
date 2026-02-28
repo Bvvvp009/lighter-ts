@@ -102,11 +102,11 @@ async function createSpotLimitOrderWithSLTP() {
   console.log(`   Take Profit: ${limitOrderParams.takeProfit.triggerPrice} units ($3000.00)\n`);
 
   try {
-    // Note: createUnifiedOrder doesn't support spot markets yet
+    // Note: For spot markets, create SL/TP orders separately
     // For spot markets, use createOrder directly
-    // SL/TP orders for spot markets may need to be created separately
-    console.log('⚠️ Note: createUnifiedOrder doesn\'t support spot markets yet.');
-    console.log('   Creating limit order only (SL/TP not supported in batch for spot markets).\n');
+    // SL/TP orders for spot markets need to be created as separate orders
+    console.log('⚠️ Note: For spot markets, create SL/TP orders separately using createOrder().');
+    console.log('   Creating limit order only (SL/TP not supported in grouped orders for spot markets).\n');
     
     const [orderInfo, txHash, error] = await signerClient.createOrder({
       marketIndex: limitOrderParams.marketIndex,
@@ -126,49 +126,13 @@ async function createSpotLimitOrderWithSLTP() {
       return;
     }
 
-    console.log(`✅ Limit order created: ${txHash.substring(0, 16)}...`);
+    console.log(`✅ Limit order created: ${txHash}`);
     console.log(`⚠️ Note: Stop-loss and take-profit orders are not yet supported for spot markets.`);
     console.log(`   You can create them separately after the limit order executes.`);
 
     try {
-      const transaction = await signerClient.waitForTransaction(txHash, 30000, 2000);
-      
-      if (transaction.event_info) {
-        try {
-          const eventInfo = JSON.parse(transaction.event_info);
-          if (eventInfo.ae) {
-            try {
-              const errorData = JSON.parse(eventInfo.ae);
-              if (errorData.message) {
-                console.error(`❌ Order failed: ${errorData.message}`);
-                return;
-              }
-            } catch {
-              if (typeof eventInfo.ae === 'string' && eventInfo.ae.length > 0) {
-                console.error(`❌ Order failed: ${eventInfo.ae}`);
-                return;
-              }
-            }
-          }
-        } catch {
-          // Ignore parse errors
-        }
-      }
-      
-      if (transaction.code && transaction.code !== 200) {
-        const errorMsg = transaction.message || 'Transaction failed';
-        console.error(`❌ Order failed: ${errorMsg}`);
-        return;
-      }
-      
-      const status = typeof transaction.status === 'number' ? transaction.status : parseInt(String(transaction.status), 10);
-      if (status === 4 || status === 5) {
-        const errorMsg = transaction.message || 'Transaction failed';
-        console.error(`❌ Order failed: ${errorMsg}`);
-        return;
-      }
-      
-      console.log(`✅ Limit order placed: ${txHash.substring(0, 16)}...`);
+      await signerClient.waitForTransaction(txHash, 30000, 2000);
+      console.log(`✅ Limit order placed: ${txHash}`);
       
       // Check position after order
       console.log('\n📊 Checking position after order...');
@@ -185,7 +149,7 @@ async function createSpotLimitOrderWithSLTP() {
   }
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   createSpotLimitOrderWithSLTP().catch(console.error);
 }
 

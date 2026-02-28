@@ -188,7 +188,9 @@ async function withdrawFast() {
 }
 
 // Run the example
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('withdraw_fast');
+if (isMain) {
   withdrawFast().catch(console.error);
 }
 

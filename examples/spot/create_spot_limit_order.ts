@@ -72,11 +72,11 @@ async function createEthSpotLimitOrder() {
       return;
     }
 
-    console.log(`✅ Order created: ${txHash.substring(0, 16)}...`);
+    console.log(`✅ Order created: ${txHash}`);
 
     try {
       await signerClient.waitForTransaction(txHash, 30000, 2000);
-      console.log(`✅ Order confirmed: ${txHash.substring(0, 16)}...`);
+      console.log(`✅ Order confirmed: ${txHash}`);
       await checkPositions(accountApi, ACCOUNT_INDEX, 2048);
     } catch (error) {
       console.error(`❌ Transaction failed: ${trimException(error as Error)}`);
@@ -114,7 +114,7 @@ async function checkPositions(accountApi: any, accountIndex: number, marketIndex
   }
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   createEthSpotLimitOrder().catch(console.error);
 }
 

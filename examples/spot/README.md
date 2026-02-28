@@ -53,7 +53,7 @@ All examples use environment variables for credentials:
 
 ### 📝 Notes
 
-- **SL/TP Orders**: `createUnifiedOrder` (batch orders with SL/TP) doesn't support spot markets yet. Use `createOrder` directly for spot markets.
+- **SL/TP Orders**: Use separate `createOrder` calls for stop-loss and take-profit orders on spot markets.
 - **Market Orders**: Some market indices (like 2051 for SOL SPOT) may not be fully supported for market orders yet. ETH SPOT (2048) works.
 - **Position Checking**: All examples include position checking logic to verify order success.
 
@@ -76,7 +76,7 @@ All examples include a `checkPositions` helper function that:
 
 ## Known Limitations
 
-1. **Batch Orders**: `createUnifiedOrder` and `createGroupedOrders` don't support spot markets yet. Use `createOrder` for individual orders.
+1. **Batch Orders**: `createGroupedOrders` doesn't support spot markets yet. Use `createOrder` for individual orders.
 
 2. **Market Index Validation**: Some market indices may not be recognized by the API for certain order types (e.g., SOL SPOT market orders).
 

@@ -446,7 +446,9 @@ async function main() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('onboarding');
+if (isMain) {
   main().catch(console.error);
 }
 

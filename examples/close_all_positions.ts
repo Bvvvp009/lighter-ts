@@ -93,7 +93,7 @@ async function waitForPendingTransactions(
       if (pendingTxs.length > 0 && pendingTxs.length <= 5) {
         pendingTxs.forEach((tx, idx) => {
           const status = typeof tx.status === 'number' ? tx.status : 'unknown';
-          console.log(`   ${idx + 1}. Hash: ${tx.hash?.substring(0, 16)}..., Status: ${status}, Type: ${tx.type}`);
+          console.log(`   ${idx + 1}. Hash: ${tx.hash}, Status: ${status}, Type: ${tx.type}`);
         });
       }
       
@@ -319,7 +319,7 @@ async function closeAllPositions() {
             break;
           }
 
-          console.log(`✅ Market ${marketIndex} close request submitted: ${txHash.substring(0, 16)}...`);
+          console.log(`✅ Market ${marketIndex} close request submitted: ${txHash}`);
           success = true;
           
           // Check if position was actually closed by waiting a bit and re-checking
@@ -396,7 +396,9 @@ async function closeAllPositions() {
   }
 }
 
-if (require.main === module) {
+// Run if executed directly (works with tsx, node, etc.)
+const isMain = process.argv[1]?.includes('close_all_positions');
+if (isMain) {
   closeAllPositions().catch(console.error);
 }
 

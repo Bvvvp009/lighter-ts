@@ -128,76 +128,13 @@ async function createMarketSpotOrders() {
         continue;
       }
       
-      console.log(`   ✅ Order signed and submitted! TX Hash: ${txHash.substring(0, 20)}...`);
+      console.log(`   ✅ Order signed and submitted! TX Hash: ${txHash}`);
 
       try {
-        const transaction = await signerClient.waitForTransaction(txHash, 30000, 2000);
-        
-        // Check transaction event_info for order execution errors
-        if (transaction.event_info) {
-          try {
-            const eventInfo = JSON.parse(transaction.event_info);
-            if (eventInfo.ae) {
-              try {
-                const errorData = JSON.parse(eventInfo.ae);
-                if (errorData.message) {
-                  console.error(`❌ ${name} order failed: ${errorData.message}`);
-                  results.push({
-                    marketIndex: params.marketIndex,
-                    marketName: name,
-                    success: false,
-                    error: errorData.message
-                  });
-                  continue;
-                }
-              } catch {
-                // If not JSON, check if it's an error string
-                if (typeof eventInfo.ae === 'string' && eventInfo.ae.length > 0) {
-                  console.error(`❌ ${name} order failed: ${eventInfo.ae}`);
-                  results.push({
-                    marketIndex: params.marketIndex,
-                    marketName: name,
-                    success: false,
-                    error: eventInfo.ae
-                  });
-                  continue;
-                }
-              }
-            }
-          } catch {
-            // Ignore parse errors
-          }
-        }
-        
-        // Check if transaction has error code or message
-        if (transaction.code && transaction.code !== 200) {
-          const errorMsg = transaction.message || 'Transaction failed';
-          console.error(`❌ ${name} order failed: ${errorMsg}`);
-          results.push({
-            marketIndex: params.marketIndex,
-            marketName: name,
-            success: false,
-            error: errorMsg
-          });
-          continue;
-        }
-        
-        // Check transaction status - if it's FAILED or REJECTED, show error
-        const status = typeof transaction.status === 'number' ? transaction.status : parseInt(String(transaction.status), 10);
-        if (status === 4 || status === 5) { // FAILED or REJECTED
-          const errorMsg = transaction.message || 'Transaction failed';
-          console.error(`❌ ${name} order failed: ${errorMsg}`);
-          results.push({
-            marketIndex: params.marketIndex,
-            marketName: name,
-            success: false,
-            error: errorMsg
-          });
-          continue;
-        }
+        await signerClient.waitForTransaction(txHash, 30000, 2000);
         
         console.log(`✅ ${name} Market order placed successfully!`);
-        console.log(`   Transaction Hash: ${txHash.substring(0, 16)}...`);
+        console.log(`   Transaction Hash: ${txHash}`);
         results.push({
           marketIndex: params.marketIndex,
           marketName: name,
@@ -235,7 +172,7 @@ async function createMarketSpotOrders() {
   for (const result of results) {
     if (result.success) {
       console.log(`✅ ${result.marketName} (${result.marketIndex}): SUCCESS`);
-      console.log(`   TX: ${result.txHash?.substring(0, 20)}...`);
+      console.log(`   TX: ${result.txHash}`);
     } else {
       console.log(`❌ ${result.marketName} (${result.marketIndex}): FAILED`);
       console.log(`   Error: ${result.error}`);
@@ -251,7 +188,7 @@ async function createMarketSpotOrders() {
   return results;
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   createMarketSpotOrders().catch(console.error);
 }
 
