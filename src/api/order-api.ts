@@ -1,5 +1,5 @@
 import { ApiClient } from './api-client';
-import { OrderBookParams, TradeParams, PaginationParams } from '../types';
+import { OrderBookParams, TradeParams, TradesQueryParams, PaginationParams, Trades } from '../types';
 
 export interface OrderBook {
   symbol: string;
@@ -40,6 +40,7 @@ export interface OrderBookDetail {
 export interface OrderBookDetailsResponse {
   code: number;
   order_book_details: OrderBookDetailItem[];
+  spot_order_book_details?: OrderBookDetailItem[];
 }
 
 export interface OrderBookDetailItem {
@@ -169,6 +170,14 @@ export interface ExchangeStats {
   active_markets: number;
 }
 
+export interface ExchangeMetrics {
+  [key: string]: any;
+}
+
+export interface ExecuteStats {
+  [key: string]: any;
+}
+
 // Base OrderBook type for obDetails endpoint
 export interface BaseOrderBook {
   symbol: string;
@@ -278,11 +287,39 @@ export class OrderApi {
     return response.data;
   }
 
-  public async getOrderBookDetails(params: OrderBookParams): Promise<OrderBookDetail> {
-    const response = await this.client.get<OrderBookDetail>('/api/v1/orderBookDetails', {
+  public async getOrderBookDetails(params: OrderBookParams): Promise<OrderBookDetailItem> {
+    const response = await this.getOrderBookDetailsRaw(params.market_id);
+    const perps = response.order_book_details || [];
+    const spot = response.spot_order_book_details || [];
+    const all = perps.length ? perps : spot;
+    const match = all.find((item) => item.market_id === params.market_id) || all[0];
+    if (match) {
+      return match;
+    }
+    return {
+      symbol: '',
       market_id: params.market_id,
-    });
-    return response.data;
+      status: 'unknown',
+      taker_fee: '0',
+      maker_fee: '0',
+      liquidation_fee: '0',
+      min_base_amount: '0',
+      min_quote_amount: '0',
+      order_quote_limit: '0',
+      supported_size_decimals: 0,
+      supported_price_decimals: 0,
+      supported_quote_decimals: 0,
+      size_decimals: 0,
+      price_decimals: 0,
+      last_trade_price: 0,
+      daily_trades_count: 0,
+      daily_base_token_volume: 0,
+      daily_quote_token_volume: 0,
+      daily_price_low: 0,
+      daily_price_high: 0,
+      daily_price_change: 0,
+      daily_chart: {}
+    };
   }
 
   public async getOrderBookDetailsRaw(marketId: number): Promise<OrderBookDetailsResponse> {
@@ -292,26 +329,25 @@ export class OrderApi {
     return response.data;
   }
 
-  public async getOrderBookOrders(params: OrderBookParams): Promise<OrderBookOrders> {
+  public async getOrderBookOrders(params: OrderBookParams & { depth?: number }): Promise<OrderBookOrders> {
     const response = await this.client.get<OrderBookOrders>('/api/v1/orderBookOrders', {
       market_id: params.market_id,
+      ...(params.depth !== undefined ? { depth: params.depth } : {}),
     });
     return response.data;
   }
 
-  public async getRecentTrades(params: TradeParams): Promise<Trade[]> {
-    const response = await this.client.get<Trade[]>('/api/v1/recentTrades', {
+  public async getRecentTrades(params: TradeParams): Promise<Trades> {
+    const response = await this.client.get<Trades>('/api/v1/recentTrades', {
       market_id: params.market_id,
       limit: params.limit,
     });
     return response.data;
   }
 
-  public async getTrades(params: TradeParams & PaginationParams): Promise<Trade[]> {
-    const response = await this.client.get<Trade[]>('/api/v1/trades', {
-      market_id: params.market_id,
-      limit: params.limit,
-      index: params.index,
+  public async getTrades(params: TradesQueryParams): Promise<Trades> {
+    const response = await this.client.get<Trades>('/api/v1/trades', {
+      ...params,
     });
     return response.data;
   }
@@ -407,6 +443,34 @@ export class OrderApi {
     }
     
     const response = await this.client.get<AssetDetails>('/api/v1/assetDetails', params);
+    return response.data;
+  }
+
+  public async export(
+    exportType: 'trades' | 'orders' | 'positions',
+    accountIndex: number,
+    params?: { market_id?: number },
+    auth?: string
+  ): Promise<{ export_url: string; status: string }> {
+    const response = await this.client.post<{ export_url: string; status: string }>('/api/v1/export', {
+      type: exportType,
+      account_index: accountIndex,
+      ...params,
+    }, auth ? { headers: { 'X-Auth-Token': auth } } : undefined);
+    return response.data;
+  }
+
+  public async getExchangeMetrics(params?: Record<string, any>): Promise<ExchangeMetrics> {
+    const response = await this.client.get<ExchangeMetrics>('/api/v1/exchangeMetrics', {
+      ...(params || {}),
+    });
+    return response.data;
+  }
+
+  public async getExecuteStats(params?: Record<string, any>): Promise<ExecuteStats> {
+    const response = await this.client.get<ExecuteStats>('/api/v1/executeStats', {
+      ...(params || {}),
+    });
     return response.data;
   }
 }

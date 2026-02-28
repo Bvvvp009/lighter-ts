@@ -6,7 +6,30 @@
  * Automatically detects the environment and uses the appropriate initialization method.
  */
 
-import * as fs from 'fs';
+// Conditional Node.js imports - only loaded in Node.js environment
+let fs: any;
+let os: any;
+let path: any;
+
+async function ensureNodeModulesLoaded(): Promise<void> {
+  if (fs && os && path) {
+    return;
+  }
+
+  const fsMod = await import('node:fs');
+  const osMod = await import('node:os');
+  const pathMod = await import('node:path');
+
+  fs = fsMod.default || fsMod;
+  os = osMod.default || osMod;
+  path = pathMod.default || pathMod;
+}
+
+async function getNodeRequire(): Promise<any> {
+  const moduleMod = await import('node:module');
+  const createRequireFn = (moduleMod as any).createRequire;
+  return createRequireFn(process.cwd() + '/');
+}
 
 export interface WasmSignerConfig {
   wasmPath?: string; // Path to the WASM binary (optional; defaults to bundled)
@@ -194,9 +217,6 @@ export interface WasmTxResponse {
   error?: string;
 }
 
-// ============================================================================
-// WASM Manager (Singleton Pattern)
-// ============================================================================
 export interface WasmConfig {
   wasmPath: string;
   wasmExecPath?: string;
@@ -357,7 +377,16 @@ export class WasmSignerClient {
    */
   private async initializeBrowser(): Promise<void> {
     // Load the Go WASM runtime
-    const wasmExecPath = this.config.wasmExecPath || this.config.wasmPath?.replace('.wasm', '_exec.js') || 'wasm/wasm_exec.js';
+    // Derive wasm_exec.js path from wasmPath directory (always wasm_exec.js, not wasm_filename_exec.js)
+    let wasmExecPath: string;
+    if (this.config.wasmExecPath) {
+      wasmExecPath = this.config.wasmExecPath;
+    } else if (this.config.wasmPath) {
+      const dir = this.config.wasmPath.substring(0, this.config.wasmPath.lastIndexOf('/'));
+      wasmExecPath = dir ? `${dir}/wasm_exec.js` : 'wasm_exec.js';
+    } else {
+      wasmExecPath = 'wasm/wasm_exec.js';
+    }
     await this.loadScript(wasmExecPath);
 
     // Load the WASM binary
@@ -414,6 +443,8 @@ export class WasmSignerClient {
    * Node.js-specific initialization
    */
   private async initializeNode(): Promise<void> {
+    await ensureNodeModulesLoaded();
+
     // Resolve WASM paths relative to package root if they're relative paths
     const resolvedWasmPath = this.resolveWasmPath(this.config.wasmPath || 'wasm/lighter-signer.wasm');
     let wasmExecPath = this.config.wasmExecPath;
@@ -464,7 +495,7 @@ export class WasmSignerClient {
     // Set up the WASM runtime environment before running
     // Only pass essential environment variables to avoid exceeding WASM limits
     const essentialEnvVars: Record<string, string> = {
-      TMPDIR: require('os').tmpdir(),
+      TMPDIR: os.tmpdir(),
       HOME: process.env['HOME'] || '',
       PATH: process.env['PATH'] || '',
       // Add any specific vars your signer needs here
@@ -1155,32 +1186,69 @@ export class WasmSignerClient {
    */
   private async loadScript(src: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      console.log(`[WASM] Loading script: ${src}`);
+      const fullUrl = this.resolveScriptUrl(src);
+      console.log(`[WASM] Resolved URL: ${fullUrl}`);
+      
       const script = document.createElement('script');
-      script.src = src;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+      script.src = fullUrl;
+      script.onload = () => {
+        console.log(`[WASM] Script loaded successfully: ${fullUrl}`);
+        resolve();
+      };
+      script.onerror = (error) => {
+        console.error(`[WASM] Script loading failed: ${fullUrl}`, error);
+        reject(new Error(`Failed to load script: ${fullUrl}`));
+      };
       document.head.appendChild(script);
     });
   }
 
   /**
+   * Resolve script URL for browser context
+   */
+  private resolveScriptUrl(src: string): string {
+    // If it's already a full URL, use as-is
+    if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/')) {
+      return src;
+    }
+    
+    // Try multiple resolution strategies
+    // 1. Check if file exists relative to current document
+    // 2. Check if file exists in dist/umd (for bundled assets)
+    
+    // For relative paths like 'wasm/wasm_exec.js', try common locations:
+    const candidates = [
+      src,  // Exact path
+      `/dist/umd/${src}`,  // May be in dist/umd subdirectory
+      `./dist/umd/${src}`,  // Relative to project root
+    ];
+    
+    // Use first candidate for now (will be resolved based on browser location)
+    return candidates[0];
+  }
+
+  /**
    * Load wasm_exec.js for Node.js
    */
-  private async loadWasmExec(path: string): Promise<void> {
+  private async loadWasmExec(wasmExecPath: string): Promise<void> {
     try {
-      let absolutePath: string = path;
+      await ensureNodeModulesLoaded();
+      const nodeRequire = await getNodeRequire();
+
+      let absolutePath: string = wasmExecPath;
       
       if (!absolutePath.startsWith('/') && !absolutePath.includes(':')) {
-        try {
-          absolutePath = require.resolve(path, { paths: [process.cwd()] });
-        } catch {
-          absolutePath = require('path').resolve(process.cwd(), path);
-        }
+        absolutePath = path.resolve(process.cwd(), wasmExecPath);
       }
 
-      // Directly require the wasm_exec.js file
-      delete require.cache[absolutePath];
-      const wasmExec = require(absolutePath);
+      // Check if file exists
+      if (!fs.existsSync(absolutePath)) {
+        throw new Error(`WASM exec file not found: ${absolutePath}`);
+      }
+      
+      // Load the module using createRequire() for ESM/CJS compatibility
+      const wasmExec = nodeRequire(absolutePath);
       
       // Set Go class on global object
       if (wasmExec && wasmExec.Go) {
@@ -1198,10 +1266,14 @@ export class WasmSignerClient {
   /**
    * Resolve WASM path relative to package root
    */
-  private resolveWasmPath(path: string): string {
+  private resolveWasmPath(wasmPath: string): string {
+    if (!path || !fs) {
+      throw new Error('Node path/fs modules are not initialized');
+    }
+
     // If path is already absolute, return as-is
-    if (require('path').isAbsolute(path)) {
-      return path;
+    if (path.isAbsolute(wasmPath)) {
+      return wasmPath;
     }
 
     // Try to resolve relative to package root first
@@ -1209,7 +1281,7 @@ export class WasmSignerClient {
       // Look for the package root by finding node_modules/lighter-ts-sdk
       const packageRoot = this.findPackageRoot();
       if (packageRoot) {
-        const resolvedPath = require('path').join(packageRoot, path);
+        const resolvedPath = path.join(packageRoot, wasmPath);
         if (fs.existsSync(resolvedPath)) {
           return resolvedPath;
         }
@@ -1217,17 +1289,24 @@ export class WasmSignerClient {
     } catch {}
 
     // Fallback to current working directory
-    return require('path').resolve(process.cwd(), path);
+    return path.resolve(process.cwd(), wasmPath);
   }
 
   /**
    * Find the package root directory
    */
   private findPackageRoot(): string | null {
+    if (!path || !fs) {
+      return null;
+    }
+
     try {
       // Try to resolve the package.json of lighter-ts-sdk
-      const packageJsonPath = require.resolve('lighter-ts-sdk/package.json');
-      return require('path').dirname(packageJsonPath);
+      // For ESM, we need to handle this differently
+      const packageJsonPath = `${process.cwd()}/package.json`;
+      if (fs.existsSync(packageJsonPath)) {
+        return path.dirname(packageJsonPath);
+      }
     } catch {
       // Fallback: look for node_modules/lighter-ts-sdk in current or parent directories
       let currentDir = process.cwd();
@@ -1235,11 +1314,11 @@ export class WasmSignerClient {
       let depth = 0;
       
       while (currentDir && depth < maxDepth) {
-        const packagePath = require('path').join(currentDir, 'node_modules', 'lighter-ts-sdk');
+        const packagePath = path.join(currentDir, 'node_modules', 'lighter-ts-sdk');
         if (fs.existsSync(packagePath)) {
           return packagePath;
         }
-        currentDir = require('path').dirname(currentDir);
+        currentDir = path.dirname(currentDir);
         depth++;
       }
     }
@@ -1249,19 +1328,53 @@ export class WasmSignerClient {
   /**
    * Load WASM binary for Node.js
    */
-  private async loadWasmBinary(path: string): Promise<ArrayBuffer> {
+  private async loadWasmBinary(wasmPath: string): Promise<ArrayBuffer> {
     if (this.isBrowser) {
-      // Browser path
-      const response = await fetch(path);
-      if (!response.ok) {
-        throw new Error(`Failed to load WASM binary: ${response.statusText}`);
+      // Browser path - resolve relative to document root
+      const fullUrl = this.resolveWasmUrl(wasmPath);
+      console.log(`[WASM] Fetching WASM binary from: ${fullUrl}`);
+      
+      try {
+        const response = await fetch(fullUrl);
+        if (!response.ok) {
+          console.error(`[WASM] Fetch failed with status ${response.status}: ${response.statusText}`);
+          throw new Error(`Failed to load WASM binary: HTTP ${response.status} ${response.statusText} from ${fullUrl}`);
+        }
+        const data = await response.arrayBuffer();
+        console.log(`[WASM] WASM binary loaded successfully (${data.byteLength} bytes)`);
+        return data;
+      } catch (error) {
+        console.error(`[WASM] Failed to fetch WASM binary:`, error);
+        throw error;
       }
-      return response.arrayBuffer();
     } else {
       // Node.js path
-      const buffer = fs.readFileSync(path);
-      return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+      await ensureNodeModulesLoaded();
+      const buffer = fs.readFileSync(wasmPath);
+      return (buffer.buffer as ArrayBuffer).slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
     }
+  }
+
+  /**
+   * Resolve WASM binary URL for browser context
+   */
+  private resolveWasmUrl(wasmPath: string): string {
+    // If it's already a full URL, use as-is
+    if (wasmPath.startsWith('http://') || wasmPath.startsWith('https://') || wasmPath.startsWith('/')) {
+      return wasmPath;
+    }
+    
+    // For relative paths, try to resolve based on bundle location
+    // Candidates (in order of preference):
+    const candidates = [
+      wasmPath,  // Assume it's relative to current document location
+      `/dist/umd/${wasmPath}`,  // May be in /dist/umd subdirectory
+      `./dist/umd/${wasmPath}`,  // Relative path
+    ];
+    
+    const resolved = candidates[0]; // Use first candidate
+    console.log(`[WASM] Resolving WASM path "${wasmPath}" to: "${resolved}"`);
+    return resolved;
   }
 }
 

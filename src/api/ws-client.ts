@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+// @ts-ignore - ws module declaration
 import { WebSocketConfig, WebSocketSubscription } from '../types';
 
 export class WsClient {
@@ -6,6 +7,7 @@ export class WsClient {
   private config: WebSocketConfig;
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private shouldReconnect = true;
   private subscriptions: Map<string, WebSocketSubscription> = new Map();
   private isConnecting = false;
   private isConnected = false;
@@ -25,6 +27,7 @@ export class WsClient {
         return;
       }
 
+      this.shouldReconnect = true;
       this.isConnecting = true;
 
       try {
@@ -59,7 +62,9 @@ export class WsClient {
         this.ws!.on('close', () => {
           this.isConnected = false;
           this.config.onClose?.();
-          this.attemptReconnect();
+          if (this.shouldReconnect) {
+            this.attemptReconnect();
+          }
         });
       } catch (error) {
         this.isConnecting = false;
@@ -69,6 +74,8 @@ export class WsClient {
   }
 
   public disconnect(): void {
+    this.shouldReconnect = false;
+
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

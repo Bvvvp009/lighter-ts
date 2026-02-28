@@ -218,12 +218,10 @@ export class TransactionApi {
       params.append('auth', auth);
     }
 
-    // Debug logging
     if (process.env.DEBUG || process.env.NODE_ENV === 'development') {
       try {
-        const txInfoParsed = JSON.parse(txInfo);
+        JSON.parse(txInfo);
       } catch (e) {
-        // Ignore parse errors
       }
     }
 
@@ -234,7 +232,6 @@ export class TransactionApi {
     return response.data;
   }
 
-  // JSON variant
   public async sendTxJson(
     txType: number,
     txInfo: string,
@@ -299,6 +296,14 @@ export class TransactionApi {
       account_index: accountIndex,
       ...params,
     });
+    return response.data;
+  }
+
+  public async getTransferHistory(accountIndex: number, params?: PaginationParams, auth?: string): Promise<{ transfers: any[]; total: number }> {
+    const response = await this.client.get<{ transfers: any[]; total: number }>('/api/v1/transfer/history', {
+      account_index: accountIndex,
+      ...params,
+    }, auth ? { headers: { 'X-Auth-Token': auth } } : undefined);
     return response.data;
   }
 }

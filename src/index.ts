@@ -12,12 +12,19 @@ export { AnnouncementApi } from './api/announcement-api';
 export { BlockApi } from './api/block-api';
 export { BridgeApi } from './api/bridge-api';
 export { FundingApi } from './api/funding-api';
+export { InfoApi } from './api/info-api';
 export { NotificationApi } from './api/notification-api';
 export { OrderApi } from './api/order-api';
 export { ReferralApi } from './api/referral-api';
 export { TransactionApi } from './api/transaction-api';
 export { RootApi } from './api/root-api';
 export { CandlestickApi } from './api/candlestick-api';
+
+// Explorer API Classes
+export { ExplorerApiClient } from './api/explorer-api-client';
+export type { ExplorerConfiguration } from './api/explorer-api-client';
+export { SearchApi } from './api/search-api';
+export { LogsApi } from './api/logs-api';
 
 // Bridge Classes
 export { L1BridgeClient } from './bridge/l1-bridge-client';
@@ -29,7 +36,12 @@ export type {
   CreateOrderParams as SignerCreateOrderParams,
   CreateMarketOrderParams,
   CancelOrderParams as SignerCancelOrderParams,
-  ChangeApiKeyParams
+  ChangeApiKeyParams,
+  OcoOrderLegParams,
+  OcoOrderParams,
+  OtocoMainOrderParams,
+  OtocoProtectionOrderParams,
+  OtocoOrderParams
 } from './signer/wasm-signer-client';
 
 // Note: Signer Server Client removed - using local WASM signer instead
@@ -61,6 +73,7 @@ export type {
 // Export Order Types and Enums from the unified order file
 export { 
   OrderType,
+  GroupingType,
   TimeInForce,
   TransactionStatus,
   TransactionType
@@ -112,6 +125,18 @@ export type {
   FeeBucket,
   PnLEntry,
   PnLResponse,
+  AccountLimits,
+  AccountMetadata,
+  L1Metadata,
+  PublicPoolsMetadataResponse,
+  ApiTokensResponse,
+  CreateApiTokenParams,
+  CreateApiTokenResponse,
+  RevokeApiTokenResponse,
+  Liquidation,
+  LiquidationResponse,
+  PositionFunding,
+  PositionFundingResponse,
   Trade
 } from './api/account-api';
 
@@ -148,10 +173,15 @@ export type {
 // Types from BridgeApi
 export type {
   FastBridgeInfo,
-  BridgeSupportedNetwork
+  BridgeSupportedNetwork,
+  BridgesByL1AddressResponse,
+  IsNextBridgeFastResponse,
+  FastWithdrawResponse,
+  FastWithdrawInfoResponse
 } from './api/bridge-api';
 export type {
   TransferParams,
+  TransferSameMasterAccountParams,
   WithdrawParams,
   L1DepositParams,
   L1DepositResult,
@@ -166,14 +196,21 @@ export type {
 
 // Types from NotificationApi
 export type {
-  ResultCode
+  ResultCode,
+  PushNotifSettingsResponse
 } from './api/notification-api';
 
 // Types from ReferralApi
 export type {
   ReferralPointEntry,
-  ReferralPoints
+  ReferralPoints,
+  UserReferrals
 } from './api/referral-api';
+
+// Types from RootApi
+export type {
+  SystemStatus
+} from './api/root-api';
 
 // Types from AnnouncementApi
 export type {
@@ -194,6 +231,30 @@ export type {
   FundingQuery
 } from './api/candlestick-api';
 
+// Types from SearchApi (Explorer)
+export type {
+  SearchResultType,
+  TransactionLogResult,
+  TransactionLog,
+  PublicData,
+  TradePubdata,
+  OrderPubdata,
+  BatchResult,
+  BatchInfo,
+  BlockResult,
+  BlockInfo,
+  AccountResult,
+  AccountInfo,
+  SearchResult,
+  SearchParams
+} from './api/search-api';
+
+// Types from LogsApi (Explorer)
+export type {
+  LogQueryParams,
+  AccountLogsResponse
+} from './api/logs-api';
+
 export type {
   OrderBookParams,
   TradeParams,
@@ -209,6 +270,24 @@ export type {
 // Utility Classes
 export { Config } from './utils/configuration';
 // API Key utilities removed - use WASM signer for key generation
+
+// Environment Detection Utilities (for browser/Node.js/Next.js compatibility)
+export {
+  isBrowser,
+  isNodeJS,
+  isDeno,
+  isWorker,
+  isNextJS,
+  isNextJSClient,
+  isNextJSServer,
+  isReactNative,
+  detectEnvironment,
+  getWebSocketConstructor,
+  hasCryptoSupport,
+  hasLocalStorageSupport,
+  hasIndexedDBSupport,
+  RuntimeEnvironment
+} from './utils/environment';
 
 // New Utility Exports
 export * from './utils/price-utils';
@@ -234,6 +313,8 @@ export const LIGHTER_CONSTANTS = {
   // Margin Modes
   CROSS_MARGIN_MODE: 0,
   ISOLATED_MARGIN_MODE: 1,
+  ISOLATED_MARGIN_REMOVE_COLLATERAL: 0,
+  ISOLATED_MARGIN_ADD_COLLATERAL: 1,
   
   // Transaction Types
   TX_TYPE_CREATE_ORDER: 1,
@@ -268,4 +349,4 @@ export const DEFAULT_CONFIG = {
 } as const;
 
 // Version
-export const VERSION = '1.0.0';
+export const VERSION = '1.1.0';

@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+// @ts-ignore - ws module declaration
 import { EventEmitter } from 'events';
 
 // Lighter WebSocket API interfaces based on official documentation
@@ -65,6 +66,7 @@ export class WebSocketOrderClient extends EventEmitter {
   private ws: WebSocket | null = null;
   private config: WsConnectionConfig;
   private isConnected = false;
+  private shouldReconnect = true;
   private reconnectAttempts = 0;
   private pendingRequests = new Map<string, {
     resolve: (value: any) => void;
@@ -89,6 +91,7 @@ export class WebSocketOrderClient extends EventEmitter {
   }
 
   async connect(): Promise<void> {
+    this.shouldReconnect = true;
     return new Promise((resolve, reject) => {
       try {
         // Build WebSocket URL candidates:
@@ -107,8 +110,14 @@ export class WebSocketOrderClient extends EventEmitter {
 
         let attemptIndex = 0;
         const attemptConnect = () => {
+          if (!this.shouldReconnect) {
+            reject(new Error('WebSocket connection aborted'));
+            return;
+          }
+
           const path = candidates[attemptIndex];
           const wsUrl = `${base}${path}`;
+          let connectTimeout: NodeJS.Timeout | null = null;
           
           this.ws = new WebSocket(wsUrl);
 
@@ -162,10 +171,16 @@ export class WebSocketOrderClient extends EventEmitter {
             this.stopHeartbeat();
             this.emit('disconnected', { code, reason });
             cleanupListeners();
-            this.scheduleReconnect();
+            if (this.shouldReconnect) {
+              this.scheduleReconnect();
+            }
           };
 
           const cleanupListeners = () => {
+            if (connectTimeout) {
+              clearTimeout(connectTimeout);
+              connectTimeout = null;
+            }
             if (!this.ws) return;
             this.ws.removeListener('open', handleOpen);
             this.ws.removeListener('message', handleMessage);
@@ -179,7 +194,7 @@ export class WebSocketOrderClient extends EventEmitter {
           this.ws.on('close', handleClose);
 
           // Connection timeout per attempt
-          setTimeout(() => {
+          connectTimeout = setTimeout(() => {
             if (!this.isConnected && this.ws?.readyState !== WebSocket.OPEN) {
               try { this.ws?.terminate(); } catch {}
               if (!explicitPath && attemptIndex < candidates.length - 1) {
@@ -205,7 +220,6 @@ export class WebSocketOrderClient extends EventEmitter {
     try {
       const message = JSON.parse(data.toString());
       
-      // Debug: log received messages
       if (process.env.DEBUG_WS) {
         console.log('[WS DEBUG] Pending requests:', Array.from(this.pendingRequests.keys()));
         console.log('[WS DEBUG] Message type:', message.type || 'unknown');
@@ -478,22 +492,6 @@ export class WebSocketOrderClient extends EventEmitter {
           data: dataPayload
         };
         const messageStr = JSON.stringify(messageToSend);
-        // Debug: log the message being sent (truncate tx_info for readability)
-        if (process.env.DEBUG_WS) {
-          const debugMsg = JSON.parse(messageStr);
-          if (debugMsg.data?.tx_info) {
-            const txInfoStr = typeof debugMsg.data.tx_info === 'string' 
-              ? debugMsg.data.tx_info 
-              : JSON.stringify(debugMsg.data.tx_info);
-            debugMsg.data.tx_info = txInfoStr.substring(0, 100) + '...';
-          }
-          if (debugMsg.data?.tx_infos) {
-            debugMsg.data.tx_infos = debugMsg.data.tx_infos.map((ti: any) => {
-              const tiStr = typeof ti === 'string' ? ti : JSON.stringify(ti);
-              return tiStr.substring(0, 100) + '...';
-            });
-          }
-        }
         this.ws!.send(messageStr);
       } catch (error) {
         clearTimeout(timeout);
@@ -505,6 +503,8 @@ export class WebSocketOrderClient extends EventEmitter {
 
   async disconnect(): Promise<void> {
     return new Promise((resolve) => {
+      this.shouldReconnect = false;
+
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
@@ -520,7 +520,7 @@ export class WebSocketOrderClient extends EventEmitter {
       this.pendingRequests.clear();
 
       if (this.ws) {
-        this.ws.on('close', () => {
+        this.ws.once('close', () => {
           this.ws = null;
           this.isConnected = false;
           resolve();

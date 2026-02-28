@@ -25,12 +25,16 @@ export class CandlestickApi {
   }
 
   async getCandlesticks(query: CandlestickQuery): Promise<{ candlesticks: Candlestick[] }> {
-    const response = await this.client.get(`/candlesticks`, { params: query });
+    const response = await this.client.get('/api/v1/candlesticks', { params: query });
     return response.data;
   }
 
+  async getCandles(query: CandlestickQuery): Promise<{ candlesticks: Candlestick[] }> {
+    return this.getCandlesticks(query);
+  }
+
   async getFundings(query: FundingQuery): Promise<{ fundings: Funding[] }> {
-    const response = await this.client.get(`/fundings`, { params: query });
+    const response = await this.client.get('/api/v1/fundings', { params: query });
     return response.data;
   }
 } 

@@ -11,9 +11,11 @@ import { NonceManager } from '../utils/nonce-manager';
 // Performance monitoring removed - not needed
 import { RequestBatcher } from '../utils/request-batcher';
 import { WebSocketOrderClient } from '../api/ws-order-client';
-import { TransferParams, WithdrawParams, BridgeSupportedNetwork, DepositHistory, WithdrawHistory, L1DepositParams, L1DepositResult, L1BridgeConfig } from '../types/api';
+import { TransferParams, TransferSameMasterAccountParams, WithdrawParams, BridgeSupportedNetwork, DepositHistory, WithdrawHistory, L1DepositParams, L1DepositResult, L1BridgeConfig } from '../types/api';
 import { FastBridgeInfo } from '../api/bridge-api';
 import { OrderApi } from '../api/order-api';
+import { ExplorerApiClient } from '../api/explorer-api-client';
+import { LogsApi } from '../api/logs-api';
 
 /**
  * Configuration interface for SignerClient
@@ -85,6 +87,53 @@ export interface ChangeApiKeyParams {
   nonce?: number; // Optional nonce for the new API key index (defaults to 0 for new keys)
 }
 
+export interface OcoOrderLegParams {
+  marketIndex: number;
+  clientOrderIndex?: number;
+  baseAmount: number;
+  price: number;
+  isAsk: boolean;
+  orderType?: OrderType;
+  timeInForce?: TimeInForce;
+  reduceOnly?: boolean;
+  triggerPrice?: number;
+  orderExpiry?: number;
+}
+
+export interface OcoOrderParams {
+  orders: [OcoOrderLegParams, OcoOrderLegParams];
+  nonce?: number;
+}
+
+export interface OtocoMainOrderParams {
+  marketIndex: number;
+  baseAmount: number;
+  isAsk: boolean;
+  orderType: OrderType.LIMIT | OrderType.MARKET;
+  clientOrderIndex?: number;
+  price?: number;
+  avgExecutionPrice?: number;
+  maxSlippage?: number;
+  idealPrice?: number;
+  timeInForce?: TimeInForce;
+  reduceOnly?: boolean;
+  orderExpiry?: number;
+}
+
+export interface OtocoProtectionOrderParams {
+  triggerPrice: number;
+  price?: number;
+  isLimit?: boolean;
+  orderExpiry?: number;
+}
+
+export interface OtocoOrderParams {
+  mainOrder: OtocoMainOrderParams;
+  stopLoss: OtocoProtectionOrderParams;
+  takeProfit: OtocoProtectionOrderParams;
+  nonce?: number;
+}
+
 /**
  * Order Type Constants and Enums
  * Provides easy-to-understand order type references without context
@@ -103,6 +152,12 @@ export enum TimeInForce {
   IMMEDIATE_OR_CANCEL = 0,
   GOOD_TILL_TIME = 1,
   POST_ONLY = 2
+}
+
+export enum GroupingType {
+  OTO = 1,
+  OCO = 2,
+  OTOCO = 3
 }
 
 export enum TransactionStatus {
@@ -134,9 +189,6 @@ export enum TransactionType {
  * @class SignerClient
  */
 export class SignerClient {
-  // ============================================================================
-  // PRIVATE PROPERTIES
-  // ============================================================================
   private config: SignerConfig;
   private apiClient: ApiClient;
   private transactionApi: TransactionApi;
@@ -153,9 +205,6 @@ export class SignerClient {
   private wsOrderClient: WebSocketOrderClient | null = null;
   private orderBatcher: RequestBatcher | null = null;
 
-  // ============================================================================
-  // CONSTANTS
-  // ============================================================================
   static readonly ORDER_TYPE_LIMIT = 0;
   static readonly ORDER_TYPE_MARKET = 1;
   static readonly ORDER_TIME_IN_FORCE_GOOD_TILL_TIME = 1;
@@ -216,10 +265,9 @@ export class SignerClient {
 
   static readonly CROSS_MARGIN_MODE = 0
   static readonly ISOLATED_MARGIN_MODE = 1
+  static readonly ISOLATED_MARGIN_REMOVE_COLLATERAL = 0
+  static readonly ISOLATED_MARGIN_ADD_COLLATERAL = 1
 
-  // ============================================================================
-  // CONSTRUCTOR & INITIALIZATION
-  // ============================================================================
   /**
    * Creates a new SignerClient instance
    * @param config - Configuration object containing API credentials and settings
@@ -516,9 +564,6 @@ export class SignerClient {
     return this.clientCreationPromise;
   }
 
-  // ============================================================================
-  // ORDER CREATION METHODS
-  // ============================================================================
   private validateConfig(config: SignerConfig): void {
     if (!config.url || typeof config.url !== 'string') {
       throw new Error('URL is required and must be a string');
@@ -664,7 +709,7 @@ export class SignerClient {
             }
             const txInfo = JSON.parse(wasmResponse.txInfo);
 
-            // Send via WebSocket using official Lighter API
+            // Send via WebSocket API
             const wsTransaction = await this.wsOrderClient.sendTransaction(
               wasmResponse.txType || SignerClient.TX_TYPE_CREATE_ORDER,
               wasmResponse.txInfo
@@ -754,7 +799,6 @@ export class SignerClient {
       accountIndex: this.config.accountIndex
     };
 
-    // Debug: Log order parameters in development
     if (process.env.NODE_ENV === 'development' || process.env.DEBUG) {
       logger.debug('Order signing parameters', {
         inputOrderType: params.orderType,
@@ -901,6 +945,126 @@ export class SignerClient {
     }
   }
 
+  private parseOrderBookInt(value: string | number | undefined): number {
+    if (value === undefined || value === null) {
+      return 0;
+    }
+    if (typeof value === 'number') {
+      return Math.floor(value);
+    }
+    const normalized = value.replace('.', '');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? Math.floor(parsed) : 0;
+  }
+
+  async getBestPrice(marketIndex: number, isAsk: boolean, obOrders?: any): Promise<number> {
+    const orderBook = obOrders || await this.orderApi.getOrderBookOrders({ market_id: marketIndex, depth: 1 } as any);
+    const side = isAsk ? (orderBook?.bids || []) : (orderBook?.asks || []);
+    if (!side.length) {
+      throw new Error('Order book has no liquidity on required side');
+    }
+    return this.parseOrderBookInt(side[0]?.price);
+  }
+
+  async getPotentialExecutionPrice(
+    marketIndex: number,
+    amount: number,
+    isAsk: boolean,
+    isAmountBase: boolean = true,
+    obOrders?: any
+  ): Promise<[number, number]> {
+    const orderBook = obOrders || await this.orderApi.getOrderBookOrders({ market_id: marketIndex, depth: 100 } as any);
+    const side = isAsk ? (orderBook?.bids || []) : (orderBook?.asks || []);
+
+    let matchedUsdAmount = 0;
+    let matchedSize = 0;
+
+    for (const level of side) {
+      if ((isAmountBase && matchedSize >= amount) || (!isAmountBase && matchedUsdAmount >= amount)) {
+        break;
+      }
+
+      const currentPrice = this.parseOrderBookInt(level?.price);
+      const currentSize = this.parseOrderBookInt(level?.remaining_base_amount ?? level?.size);
+      if (currentPrice <= 0 || currentSize <= 0) {
+        continue;
+      }
+
+      const maxPossibleSize = isAmountBase
+        ? amount - matchedSize
+        : Math.floor((amount - matchedUsdAmount) / currentPrice);
+
+      const usedSize = Math.min(maxPossibleSize, currentSize);
+      if (usedSize <= 0) {
+        continue;
+      }
+
+      matchedUsdAmount += currentPrice * usedSize;
+      matchedSize += usedSize;
+    }
+
+    if (matchedSize <= 0) {
+      throw new Error('No liquidity available to estimate execution price');
+    }
+
+    const potentialExecutionPrice = matchedUsdAmount / matchedSize;
+    return [potentialExecutionPrice, isAmountBase ? matchedSize : matchedUsdAmount];
+  }
+
+  async createMarketOrder_quoteAmount(params: {
+    marketIndex: number;
+    clientOrderIndex: number;
+    quoteAmount: number;
+    maxSlippage: number;
+    isAsk: boolean;
+    reduceOnly?: boolean;
+    nonce?: number;
+    apiKeyIndex?: number;
+    idealPrice?: number;
+  }): Promise<[any, string, string | null]> {
+    try {
+      const quoteAmount = Math.floor(params.quoteAmount * 1e6);
+      const obOrders = await this.orderApi.getOrderBookOrders({ market_id: params.marketIndex, depth: 100 } as any);
+
+      const idealPrice = params.idealPrice ?? await this.getBestPrice(params.marketIndex, params.isAsk, obOrders);
+      const acceptableExecutionPrice = Math.round(idealPrice * (1 + params.maxSlippage * (params.isAsk ? -1 : 1)));
+
+      const [potentialExecutionPrice, matchedUsdAmount] = await this.getPotentialExecutionPrice(
+        params.marketIndex,
+        quoteAmount,
+        params.isAsk,
+        false,
+        obOrders
+      );
+
+      if ((params.isAsk && potentialExecutionPrice < acceptableExecutionPrice) || (!params.isAsk && potentialExecutionPrice > acceptableExecutionPrice)) {
+        return [null, '', 'Excessive slippage'];
+      }
+
+      if (matchedUsdAmount < quoteAmount) {
+        return [null, '', 'Cannot be sure slippage will be acceptable due to the high size'];
+      }
+
+      const baseAmount = Math.floor(quoteAmount / potentialExecutionPrice);
+
+      return await this.createOrder({
+        marketIndex: params.marketIndex,
+        clientOrderIndex: params.clientOrderIndex,
+        baseAmount,
+        price: Math.round(acceptableExecutionPrice),
+        isAsk: params.isAsk,
+        orderType: SignerClient.ORDER_TYPE_MARKET,
+        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+        orderExpiry: SignerClient.DEFAULT_IOC_EXPIRY,
+        reduceOnly: params.reduceOnly || false,
+        ...(params.nonce !== undefined ? { nonce: params.nonce } : {}),
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return [null, '', errorMessage];
+    }
+  }
+
   /**
    * Create market order with maximum slippage limit
    * Will only execute the amount such that slippage is limited to the value provided
@@ -986,9 +1150,6 @@ export class SignerClient {
     }
   }
 
-  // ============================================================================
-  // ORDER MANAGEMENT METHODS
-  // ============================================================================
   async cancelOrder(params: CancelOrderParams): Promise<[any, string, string | null]> {
     return await this.processTransactionWithRetry(async () => {
       try {
@@ -1562,602 +1723,6 @@ export class SignerClient {
   }
 
   /**
-   * Create a unified order with optional stop-loss and take-profit orders
-   * Signs all orders individually then sends as batch transaction
-   * Includes comprehensive error handling (acknowledgeFailure on code !== 200)
-   * 
-   * @param params - Unified order parameters
-   * @returns Promise resolving to unified order result
-   * 
-   * @example
-   * const result = await client.createUnifiedOrder({
-   *   marketIndex: 0,
-   *   clientOrderIndex: Date.now(),
-   *   baseAmount: 1000000,
-   *   isAsk: false,
-   *   orderType: OrderType.MARKET,
-   *   avgExecutionPrice: 300000,
-   *   stopLoss: { triggerPrice: 285000, isLimit: false },
-   *   takeProfit: { triggerPrice: 315000, isLimit: false }
-   * });
-   */
-  async createUnifiedOrder(params: {
-    marketIndex: number;
-    clientOrderIndex: number;
-    baseAmount: number;
-    isAsk: boolean;
-    orderType: OrderType;
-    price?: number;
-    avgExecutionPrice?: number;
-    maxSlippage?: number; // Max slippage as decimal (e.g., 0.001 = 0.1%, default 0.001)
-    idealPrice?: number; // Ideal price to calculate slippage from
-    stopLoss?: {
-      triggerPrice: number;
-      price?: number;
-      isLimit?: boolean;
-    };
-    takeProfit?: {
-      triggerPrice: number;
-      price?: number;
-      isLimit?: boolean;
-    };
-    reduceOnly?: boolean;
-    timeInForce?: TimeInForce;
-    orderExpiry?: number;
-    nonce?: number; // Optional nonce (will be fetched automatically if not provided, used as starting nonce for batch operations)
-  }): Promise<{
-    mainOrder: { tx: any, hash: string, error: string | null };
-    stopLoss?: { tx: any, hash: string, error: string | null };
-    takeProfit?: { tx: any, hash: string, error: string | null };
-    batchResult: { hashes: string[], errors: string[] };
-    success: boolean;
-    message: string;
-  }> {
-    try {
-      // Validate required parameters
-      if (!params.marketIndex && params.marketIndex !== 0) {
-        return {
-          mainOrder: { tx: null, hash: '', error: 'Market index is required' },
-          batchResult: { hashes: [], errors: ['Market index is required'] },
-          success: false,
-          message: 'Market index is required'
-        };
-      }
-
-      if (!params.baseAmount || params.baseAmount <= 0) {
-        return {
-          mainOrder: { tx: null, hash: '', error: 'Base amount must be greater than 0' },
-          batchResult: { hashes: [], errors: ['Base amount must be greater than 0'] },
-          success: false,
-          message: 'Base amount must be greater than 0'
-        };
-      }
-
-      // Check if SL/TP should be created (only if triggerPrice > 0)
-      // Note: TWAP orders execute over time, creating positions gradually
-      // SL/TP in the same batch would execute before positions exist
-      // For now, only create SL/TP for LIMIT and MARKET orders
-      const isTWAPOrder = params.orderType === OrderType.TWAP;
-      const shouldCreateSL = !isTWAPOrder && params.stopLoss && params.stopLoss.triggerPrice > 0;
-      const shouldCreateTP = !isTWAPOrder && params.takeProfit && params.takeProfit.triggerPrice > 0;
-      
-      // Get nonces for all orders in the batch
-      const orderCount = 1 + (shouldCreateSL ? 1 : 0) + (shouldCreateTP ? 1 : 0);
-      let nonces: number[];
-      if (params.nonce !== undefined && params.nonce !== -1) {
-        // Use provided nonce as starting nonce and calculate sequential nonces
-        nonces = [];
-        for (let i = 0; i < orderCount; i++) {
-          nonces.push(params.nonce + i);
-        }
-      } else {
-        // Fetch nonces from API
-        nonces = await this.getNextNonces(orderCount);
-      }
-
-      // Prepare transactions array
-      const txTypes: number[] = [];
-      const txInfos: string[] = [];
-
-      // 1. Sign main order using WASM signer directly
-      let mainTxInfo: string;
-      let mainOrderResult: any;
-      let mainWasmResponse: any = null;
-
-      if (params.orderType === OrderType.MARKET) {
-        // For MARKET orders with SL/TP, use CREATE_GROUPED_ORDERS (OTOCO) instead of batch
-        // This matches the dashboard behavior and fixes "invalid reduce only direction" errors
-        if (shouldCreateSL && shouldCreateTP) {
-          // Calculate avgExecutionPrice with slippage protection if needed
-          let avgExecutionPrice = params.avgExecutionPrice;
-          
-          // Apply slippage protection if maxSlippage is provided
-          if (params.maxSlippage !== undefined && params.maxSlippage > 0) {
-            const idealPrice = params.idealPrice || avgExecutionPrice || 4000; // Fallback to 4000 if no price provided
-            const slippageMultiplier = 1 + (params.maxSlippage * (params.isAsk ? -1 : 1));
-            avgExecutionPrice = Math.round(idealPrice * slippageMultiplier);
-          } else if (!avgExecutionPrice) {
-            // Default slippage of 0.1% if not provided
-            const defaultIdealPrice = params.idealPrice || 4000;
-            const defaultSlippage = 0.001; // 0.1%
-            const slippageMultiplier = 1 + (defaultSlippage * (params.isAsk ? -1 : 1));
-            avgExecutionPrice = Math.round(defaultIdealPrice * slippageMultiplier);
-          }
-          
-          const sl = params.stopLoss!;
-          const tp = params.takeProfit!;
-          const slIsAsk = !params.isAsk; // Opposite direction for SL
-          const tpIsAsk = !params.isAsk; // Opposite direction for TP
-          
-          // Build orders array: [main MARKET, TP, SL]
-          // CRITICAL: For grouped orders, ClientOrderIndex MUST be 0 (nil)
-          const groupedOrders = [
-            {
-              marketIndex: params.marketIndex,
-              clientOrderIndex: 0, // MUST be 0 for grouped orders (nil)
-              baseAmount: params.baseAmount,
-              price: avgExecutionPrice!,
-              isAsk: params.isAsk,
-              orderType: SignerClient.ORDER_TYPE_MARKET,
-              timeInForce: SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
-              reduceOnly: false,
-              triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
-              orderExpiry: 0 // Market orders use 0 for orderExpiry
-            },
-            {
-              marketIndex: params.marketIndex,
-              clientOrderIndex: 0, // MUST be 0 for grouped orders (nil)
-              baseAmount: 0, // CRITICAL: SL/TP orders must have BaseAmount=0 for OTOCO
-              price: tp.price ?? tp.triggerPrice,
-              isAsk: tpIsAsk,
-              orderType: tp.isLimit ? SignerClient.ORDER_TYPE_TAKE_PROFIT_LIMIT : SignerClient.ORDER_TYPE_TAKE_PROFIT,
-              timeInForce: tp.isLimit ? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
-              reduceOnly: true,
-              triggerPrice: tp.triggerPrice,
-              orderExpiry: Date.now() + (28 * 24 * 60 * 60 * 1000) // 28 days for SL/TP
-            },
-            {
-              marketIndex: params.marketIndex,
-              clientOrderIndex: 0, // MUST be 0 for grouped orders (nil)
-              baseAmount: 0, // CRITICAL: SL/TP orders must have BaseAmount=0 for OTOCO
-              price: sl.price ?? sl.triggerPrice,
-              isAsk: slIsAsk,
-              orderType: sl.isLimit ? SignerClient.ORDER_TYPE_STOP_LOSS_LIMIT : SignerClient.ORDER_TYPE_STOP_LOSS,
-              timeInForce: sl.isLimit ? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
-              reduceOnly: true,
-              triggerPrice: sl.triggerPrice,
-              orderExpiry: Date.now() + (28 * 24 * 60 * 60 * 1000) // 28 days for SL/TP
-            }
-          ];
-          
-          // Use createGroupedOrders with GroupingType=3 (OTOCO)
-          const [groupedInfo, groupedTxHash, groupedError] = await this.createGroupedOrders(
-            3, // GroupingType: 3 = OTOCO (One Triggers One Cancels Other)
-            groupedOrders,
-            nonces[0]! // Pass nonce directly (getNextNonces returns number[])
-          );
-          
-          if (groupedError) {
-            return {
-              mainOrder: { tx: null, hash: '', error: groupedError },
-              batchResult: { hashes: [], errors: [groupedError] },
-              success: false,
-              message: `Failed to create grouped orders: ${groupedError}`
-            };
-          }
-          
-          // Parse result - grouped orders return a single transaction hash
-          return {
-            mainOrder: { tx: groupedInfo, hash: groupedTxHash || '', error: null },
-            stopLoss: { tx: groupedInfo, hash: groupedTxHash || '', error: null },
-            takeProfit: { tx: groupedInfo, hash: groupedTxHash || '', error: null },
-            batchResult: { hashes: groupedTxHash ? [groupedTxHash] : [], errors: [] },
-            success: true,
-            message: 'Successfully created market order with SL/TP using grouped orders (OTOCO)'
-          };
-        }
-        
-        // For MARKET orders without SL/TP, use regular order creation
-        // Calculate avgExecutionPrice with slippage protection if needed
-        let avgExecutionPrice = params.avgExecutionPrice;
-        
-        // Apply slippage protection if maxSlippage is provided
-        if (params.maxSlippage !== undefined && params.maxSlippage > 0) {
-          const idealPrice = params.idealPrice || avgExecutionPrice || 4000; // Fallback to 4000 if no price provided
-          const slippageMultiplier = 1 + (params.maxSlippage * (params.isAsk ? -1 : 1));
-          avgExecutionPrice = Math.round(idealPrice * slippageMultiplier);
-        } else if (!avgExecutionPrice) {
-          // Default slippage of 0.1% if not provided
-          const defaultIdealPrice = params.idealPrice || 4000;
-          const defaultSlippage = 0.001; // 0.1%
-          const slippageMultiplier = 1 + (defaultSlippage * (params.isAsk ? -1 : 1));
-          avgExecutionPrice = Math.round(defaultIdealPrice * slippageMultiplier);
-        }
-        
-        // Use WASM signer directly for market order
-        const marketOrderParams = {
-          marketIndex: params.marketIndex,
-          clientOrderIndex: params.clientOrderIndex,
-          baseAmount: params.baseAmount,
-          price: avgExecutionPrice!,
-          isAsk: params.isAsk ? 1 : 0,
-          orderType: SignerClient.ORDER_TYPE_MARKET,
-          timeInForce: SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
-          reduceOnly: (params.reduceOnly ?? false) ? 1 : 0,
-          triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
-          orderExpiry: 0, // Market orders use 0 for orderExpiry
-          nonce: nonces[0]!,
-          apiKeyIndex: this.config.apiKeyIndex,
-          accountIndex: this.config.accountIndex
-        };
-        
-        const mainWasmResponse = await (this.wallet as WasmSignerClient).signCreateOrder(marketOrderParams);
-        if (mainWasmResponse.error) {
-          return {
-            mainOrder: { tx: null, hash: '', error: mainWasmResponse.error },
-            batchResult: { hashes: [], errors: [mainWasmResponse.error] },
-            success: false,
-            message: mainWasmResponse.error
-          };
-        }
-        mainTxInfo = mainWasmResponse.txInfo;
-        mainOrderResult = JSON.parse(mainTxInfo);
-      } else if (params.orderType === OrderType.LIMIT) {
-        // For LIMIT orders with SL/TP, use CREATE_GROUPED_ORDERS (OTOCO) instead of batch
-        // This matches the dashboard behavior and fixes "invalid reduce only direction" errors
-        if (shouldCreateSL && shouldCreateTP) {
-          // Use grouped orders (OTOCO) for limit orders with SL/TP
-          let orderExpiry = params.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY;
-          if (orderExpiry === undefined || orderExpiry === -1 || orderExpiry === SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY) {
-            orderExpiry = Date.now() + (28 * 24 * 60 * 60 * 1000);
-          }
-          
-          const sl = params.stopLoss!;
-          const tp = params.takeProfit!;
-          const slIsAsk = !params.isAsk; // Opposite direction for SL
-          const tpIsAsk = !params.isAsk; // Opposite direction for TP
-          
-          // Build orders array: [main LIMIT, TP, SL]
-          // CRITICAL: For grouped orders, ClientOrderIndex MUST be 0 (nil)
-          // This is validated by the server: if order.ClientOrderIndex != NilClientOrderIndex (0), it returns ErrClientOrderIndexNotNil
-          const groupedOrders = [
-            {
-              marketIndex: params.marketIndex,
-              clientOrderIndex: 0, // MUST be 0 for grouped orders (nil)
-              baseAmount: params.baseAmount,
-              price: params.price!,
-              isAsk: params.isAsk,
-              orderType: SignerClient.ORDER_TYPE_LIMIT,
-              timeInForce: params.timeInForce ?? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-              reduceOnly: false,
-              triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
-              orderExpiry: orderExpiry
-            },
-            {
-              marketIndex: params.marketIndex,
-              clientOrderIndex: 0, // MUST be 0 for grouped orders (nil)
-              baseAmount: 0, // CRITICAL: SL/TP orders must have BaseAmount=0 for OTOCO
-              price: tp.price ?? tp.triggerPrice,
-              isAsk: tpIsAsk,
-              orderType: tp.isLimit ? SignerClient.ORDER_TYPE_TAKE_PROFIT_LIMIT : SignerClient.ORDER_TYPE_TAKE_PROFIT,
-              timeInForce: tp.isLimit ? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
-              reduceOnly: true,
-              triggerPrice: tp.triggerPrice,
-              orderExpiry: orderExpiry // Same expiry as main order
-            },
-            {
-              marketIndex: params.marketIndex,
-              clientOrderIndex: 0, // MUST be 0 for grouped orders (nil)
-              baseAmount: 0, // CRITICAL: SL/TP orders must have BaseAmount=0 for OTOCO
-              price: sl.price ?? sl.triggerPrice,
-              isAsk: slIsAsk,
-              orderType: sl.isLimit ? SignerClient.ORDER_TYPE_STOP_LOSS_LIMIT : SignerClient.ORDER_TYPE_STOP_LOSS,
-              timeInForce: sl.isLimit ? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
-              reduceOnly: true,
-              triggerPrice: sl.triggerPrice,
-              orderExpiry: orderExpiry // Same expiry as main order
-            }
-          ];
-          
-          // Use createGroupedOrders with GroupingType=3 (OTOCO)
-          const [groupedInfo, groupedTxHash, groupedError] = await this.createGroupedOrders(
-            3, // GroupingType: 3 = OTOCO (One Triggers One Cancels Other)
-            groupedOrders,
-            nonces[0]! // Pass nonce directly (getNextNonces returns number[])
-          );
-          
-          if (groupedError) {
-            return {
-              mainOrder: { tx: null, hash: '', error: groupedError },
-              batchResult: { hashes: [], errors: [groupedError] },
-              success: false,
-              message: `Failed to create grouped orders: ${groupedError}`
-            };
-          }
-          
-          // Parse result - grouped orders return a single transaction hash
-          return {
-            mainOrder: { tx: groupedInfo, hash: groupedTxHash || '', error: null },
-            stopLoss: { tx: groupedInfo, hash: groupedTxHash || '', error: null },
-            takeProfit: { tx: groupedInfo, hash: groupedTxHash || '', error: null },
-            batchResult: { hashes: groupedTxHash ? [groupedTxHash] : [], errors: [] },
-            success: true,
-            message: 'Successfully created limit order with SL/TP using grouped orders (OTOCO)'
-          };
-        }
-        
-        // For LIMIT orders without SL/TP, use regular order creation
-        // Handle order expiry - same logic as createOrderOptimized
-        let orderExpiry = params.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY;
-        
-        // CRITICAL: -1 represents DEFAULT_28_DAY_ORDER_EXPIRY
-        // The server-side converts -1 to proper 28-day timestamp
-        // WASM/Go validation requires -1 to be converted to actual timestamp CLIENT-SIDE
-        if (orderExpiry === undefined || orderExpiry === -1 || orderExpiry === SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY) {
-          orderExpiry = Date.now() + (28 * 24 * 60 * 60 * 1000); // Convert to milliseconds
-        }
-        // NOTE: Do NOT convert milliseconds to seconds - WASM signer expects milliseconds
-        
-        // Use WASM signer directly for limit order
-        const limitOrderParams = {
-          marketIndex: params.marketIndex,
-          clientOrderIndex: params.clientOrderIndex,
-          baseAmount: params.baseAmount,
-          price: params.price!,
-          isAsk: params.isAsk ? 1 : 0,
-          orderType: SignerClient.ORDER_TYPE_LIMIT,
-          timeInForce: params.timeInForce ?? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-          reduceOnly: (params.reduceOnly ?? false) ? 1 : 0,
-          triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
-          orderExpiry: orderExpiry,
-          nonce: nonces[0]!,
-          apiKeyIndex: this.config.apiKeyIndex,
-          accountIndex: this.config.accountIndex
-        };
-        
-        const mainWasmResponse = await (this.wallet as WasmSignerClient).signCreateOrder(limitOrderParams);
-        if (mainWasmResponse.error) {
-          return {
-            mainOrder: { tx: null, hash: '', error: mainWasmResponse.error },
-            batchResult: { hashes: [], errors: [mainWasmResponse.error] },
-            success: false,
-            message: mainWasmResponse.error
-          };
-        }
-        mainTxInfo = mainWasmResponse.txInfo;
-        mainOrderResult = JSON.parse(mainTxInfo);
-      } else if (params.orderType === OrderType.TWAP) {
-        // Use WASM signer directly for TWAP order
-        const twapOrderParams = {
-          marketIndex: params.marketIndex,
-          clientOrderIndex: params.clientOrderIndex,
-          baseAmount: params.baseAmount,
-          price: params.price!,
-          isAsk: params.isAsk ? 1 : 0,
-          orderType: SignerClient.ORDER_TYPE_TWAP,
-          timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-          reduceOnly: (params.reduceOnly ?? false) ? 1 : 0,
-          triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
-          orderExpiry: params.orderExpiry ?? (Date.now() + (60 * 60 * 1000)), // Default 1 hour for TWAP
-          nonce: nonces[0]!,
-          apiKeyIndex: this.config.apiKeyIndex,
-          accountIndex: this.config.accountIndex
-        };
-        
-        const mainWasmResponse = await (this.wallet as WasmSignerClient).signCreateOrder(twapOrderParams);
-        if (mainWasmResponse.error) {
-          return {
-            mainOrder: { tx: null, hash: '', error: mainWasmResponse.error },
-            batchResult: { hashes: [], errors: [mainWasmResponse.error] },
-            success: false,
-            message: mainWasmResponse.error
-          };
-        }
-        mainTxInfo = mainWasmResponse.txInfo;
-        mainOrderResult = JSON.parse(mainTxInfo);
-      } else {
-        return {
-          mainOrder: { tx: null, hash: '', error: `Unsupported order type: ${params.orderType}` },
-          batchResult: { hashes: [], errors: [`Unsupported order type: ${params.orderType}`] },
-          success: false,
-          message: `Unsupported order type: ${params.orderType}`
-        };
-      }
-
-      txTypes.push(mainWasmResponse?.txType || SignerClient.TX_TYPE_CREATE_ORDER);
-      txInfos.push(mainTxInfo);
-
-      // 2. Sign SL order (if provided and triggerPrice > 0)
-      let slTxInfo: string | null = null;
-      let slOrderResult: any = null;
-      if (shouldCreateSL) {
-        const sl = params.stopLoss!;
-        // SL direction: If main order is ASK (sell), SL should be BID (buy) to close short
-        // If main order is BID (buy), SL should be ASK (sell) to close long
-        const slIsAsk = !params.isAsk; // Opposite direction for SL
-        
-        // Use WASM signer directly for SL order
-        // SL/TP orders MUST be reduce-only to close positions created by the main order
-        // When the parent order creates a position, SL/TP will trigger to close it
-        const slOrderParams = {
-          marketIndex: params.marketIndex,
-          clientOrderIndex: params.clientOrderIndex + 1, // SL uses mainOrderIndex + 1
-          baseAmount: params.baseAmount,
-          price: sl.price ?? sl.triggerPrice,
-          isAsk: slIsAsk ? 1 : 0,
-          orderType: sl.isLimit ? SignerClient.ORDER_TYPE_STOP_LOSS_LIMIT : SignerClient.ORDER_TYPE_STOP_LOSS,
-          timeInForce: sl.isLimit ? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
-          reduceOnly: 1, // SL/TP are ALWAYS reduce-only to close the position
-          triggerPrice: sl.triggerPrice,
-          orderExpiry: Date.now() + (28 * 24 * 60 * 60 * 1000), // 28 days from now in milliseconds
-          nonce: nonces[1]!,
-          apiKeyIndex: this.config.apiKeyIndex,
-          accountIndex: this.config.accountIndex
-        };
-        
-        const slWasmResponse = await (this.wallet as WasmSignerClient).signCreateOrder(slOrderParams);
-        if (slWasmResponse.error) {
-          return {
-            mainOrder: { tx: mainOrderResult, hash: '', error: null },
-            batchResult: { hashes: [], errors: [`Stop-loss order failed: ${slWasmResponse.error}`] },
-            success: false,
-            message: `Stop-loss order failed: ${slWasmResponse.error}`
-          };
-        }
-        slTxInfo = slWasmResponse.txInfo;
-        slOrderResult = JSON.parse(slTxInfo);
-        
-        txTypes.push(slWasmResponse.txType || SignerClient.TX_TYPE_CREATE_ORDER);
-        txInfos.push(slTxInfo);
-      }
-
-      // 3. Sign TP order (if provided and triggerPrice > 0)
-      let tpTxInfo: string | null = null;
-      let tpOrderResult: any = null;
-      if (shouldCreateTP) {
-        const tp = params.takeProfit!;
-        // TP direction: If main order is ASK (sell), TP should be BID (buy) to close short
-        // If main order is BID (buy), TP should be ASK (sell) to close long
-        const tpIsAsk = !params.isAsk; // Opposite direction for TP
-        
-        // Use WASM signer directly for TP order
-        // SL/TP orders MUST be reduce-only to close positions created by the main order
-        // When the parent order creates a position, SL/TP will trigger to close it
-        const tpOrderParams = {
-          marketIndex: params.marketIndex,
-          clientOrderIndex: params.clientOrderIndex + (shouldCreateSL ? 2 : 1), // TP uses mainOrderIndex + 2 (or +1 if no SL)
-          baseAmount: params.baseAmount,
-          price: tp.price ?? tp.triggerPrice,
-          isAsk: tpIsAsk ? 1 : 0,
-          orderType: tp.isLimit ? SignerClient.ORDER_TYPE_TAKE_PROFIT_LIMIT : SignerClient.ORDER_TYPE_TAKE_PROFIT,
-          timeInForce: tp.isLimit ? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
-          reduceOnly: 1, // SL/TP are ALWAYS reduce-only to close the position
-          triggerPrice: tp.triggerPrice,
-          orderExpiry: Date.now() + (28 * 24 * 60 * 60 * 1000), // 28 days from now in milliseconds
-          nonce: nonces[shouldCreateSL ? 2 : 1]!,
-          apiKeyIndex: this.config.apiKeyIndex,
-          accountIndex: this.config.accountIndex
-        };
-        
-        const tpWasmResponse = await (this.wallet as WasmSignerClient).signCreateOrder(tpOrderParams);
-        if (tpWasmResponse.error) {
-          return {
-            mainOrder: { tx: mainOrderResult, hash: '', error: null },
-            batchResult: { hashes: [], errors: [`Take-profit order failed: ${tpWasmResponse.error}`] },
-            success: false,
-            message: `Take-profit order failed: ${tpWasmResponse.error}`
-          };
-        }
-        tpTxInfo = tpWasmResponse.txInfo;
-        tpOrderResult = JSON.parse(tpTxInfo);
-        
-        txTypes.push(tpWasmResponse.txType || SignerClient.TX_TYPE_CREATE_ORDER);
-        txInfos.push(tpTxInfo);
-      }
-
-      // Send batch transaction
-      const batchResult = await this.transactionApi.sendTransactionBatch({
-        tx_types: JSON.stringify(txTypes),
-        tx_infos: JSON.stringify(txInfos)
-      });
-
-      // Debug: Log batch response in development
-      if (process.env.NODE_ENV === 'development' || process.env.DEBUG) {
-        logger.debug('Batch transaction response', {
-          code: batchResult.code,
-          message: batchResult.message,
-          tx_hash: batchResult.tx_hash,
-          hashes: (batchResult as any).hashes,
-          orderCount,
-          shouldCreateSL,
-          shouldCreateTP
-        });
-      }
-
-      // Check for immediate errors in the batch response
-      if (batchResult.code && batchResult.code !== 200) {
-        this.acknowledgeFailure();
-        return {
-          mainOrder: { tx: mainOrderResult, hash: '', error: batchResult.message || 'Batch transaction failed' },
-          batchResult: { hashes: [], errors: [batchResult.message || 'Batch transaction failed'] },
-          success: false,
-          message: batchResult.message || 'Batch transaction failed'
-        };
-      }
-
-      // Parse results
-      const result: {
-        mainOrder: { tx: any, hash: string, error: string | null };
-        stopLoss?: { tx: any, hash: string, error: string | null };
-        takeProfit?: { tx: any, hash: string, error: string | null };
-        batchResult: { hashes: string[], errors: string[] };
-        success: boolean;
-        message: string;
-      } = {
-        mainOrder: { tx: mainOrderResult, hash: '', error: null },
-        batchResult: { hashes: [], errors: [] },
-        success: false,
-        message: ''
-      };
-
-      // Extract hashes from batch result - support both tx_hash and hashes fields
-      const batchHashes = (batchResult.tx_hash && Array.isArray(batchResult.tx_hash)) 
-        ? batchResult.tx_hash 
-        : ((batchResult as any).hashes && Array.isArray((batchResult as any).hashes))
-          ? (batchResult as any).hashes
-          : [];
-      
-      if (batchHashes.length > 0) {
-        result.batchResult.hashes = batchHashes;
-        result.mainOrder.hash = batchHashes[0] || '';
-        
-        if (shouldCreateSL && batchHashes[1]) {
-          result.stopLoss = { tx: slOrderResult, hash: batchHashes[1], error: null };
-        }
-        
-        if (shouldCreateTP) {
-          const tpIndex = shouldCreateSL ? 2 : 1;
-          if (batchHashes[tpIndex]) {
-            result.takeProfit = { tx: tpOrderResult, hash: batchHashes[tpIndex], error: null };
-          }
-        }
-      } else {
-        // No hashes returned - this might indicate a problem
-        logger.warning('Batch transaction returned no hashes', {
-          batchResult,
-          orderCount,
-          txTypesCount: txTypes.length,
-          txInfosCount: txInfos.length
-        });
-      }
-
-      // Determine success status
-      result.success = result.batchResult.hashes.length === orderCount;
-      result.message = result.success 
-        ? `Successfully created ${orderCount} order(s) with batch transaction`
-        : `Partial failure: Created ${result.batchResult.hashes.length}/${orderCount} orders`;
-
-      return result;
-
-    } catch (error) {
-      // Acknowledge failure to prevent nonce leak
-      this.acknowledgeFailure();
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-      return {
-        mainOrder: { tx: null, hash: '', error: errorMessage },
-        batchResult: { hashes: [], errors: [errorMessage] },
-        success: false,
-        message: `Failed to create unified order: ${errorMessage}`
-      };
-    }
-  }
-
-  // ============================================================================
-  // ORDER MANAGEMENT METHODS
-  // ============================================================================
-  /**
    * Modify an existing order
    * @param marketIndex - Market index
    * @param orderIndex - Order index to modify
@@ -2274,6 +1839,72 @@ export class SignerClient {
           }
         }
         // If messageToSign is present but no ethPrivateKey provided, proceed with only L2 signature (L1Sig will be empty string in txInfo)
+
+        const txHash = await this.transactionApi.sendTxWithIndices(
+          wasmResponse.txType || SignerClient.TX_TYPE_TRANSFER,
+          txInfo,
+          this.config.accountIndex,
+          this.config.apiKeyIndex
+        );
+        
+        // Check for immediate errors in the response
+        if (txHash.code && txHash.code !== 200) {
+          this.acknowledgeFailure();
+          return [null, '', txHash.message || 'Transaction failed'];
+        }
+        
+        return [JSON.parse(wasmResponse.txInfo), txHash.tx_hash || txHash.hash || wasmResponse.txHash || '', null];
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return [null, '', errorMessage];
+      }
+    });
+  }
+
+  /**
+   * Transfer USDC between subaccounts under the same master account (L2-to-L2 transfer).
+   * This method does NOT require an L1 signature since both accounts share the same master.
+   * @param params - Transfer parameters (does not require ethPrivateKey)
+   * @returns Promise resolving to [transferInfo, transactionHash, error]
+   */
+  async transferSameMasterAccount(params: TransferSameMasterAccountParams): Promise<[any, string, string | null]> {
+    return await this.processTransactionWithRetry(async () => {
+      try {
+        // Get next nonce if not provided
+        const nextNonce = (params.nonce === undefined || params.nonce === -1) ? 
+          await this.getNextNonce() :
+          { nonce: params.nonce };
+
+        const scaledAmount = Math.floor(params.usdcAmount * SignerClient.USDC_TICKER_SCALE);
+
+        // Use WASM signer - NO ethPrivateKey for same master account transfers
+        const wasmParams: any = {
+          toAccountIndex: params.toAccountIndex,
+          usdcAmount: scaledAmount,
+          fee: params.fee,
+          memo: params.memo,
+          nonce: nextNonce.nonce,
+          apiKeyIndex: this.config.apiKeyIndex,
+          accountIndex: this.config.accountIndex
+        };
+        
+        // Include asset_id and is_spot_account if provided
+        if (params.asset_id !== undefined) {
+          wasmParams.asset_id = params.asset_id;
+        }
+        if (params.is_spot_account !== undefined) {
+          wasmParams.is_spot_account = params.is_spot_account;
+        }
+        
+        const wasmResponse = await (this.wallet as WasmSignerClient).signTransfer(wasmParams);
+
+        if (wasmResponse.error) {
+          return [null, '', wasmResponse.error];
+        }
+
+        // For same master account transfers, we don't handle L1 signatures
+        // The WASM module will handle the L2 signature (API key) automatically
+        const txInfo = wasmResponse.txInfo;
 
         const txHash = await this.transactionApi.sendTxWithIndices(
           wasmResponse.txType || SignerClient.TX_TYPE_TRANSFER,
@@ -2688,6 +2319,139 @@ export class SignerClient {
   }
 
   /**
+   * Create OCO grouped orders (One Cancels Other)
+   * @param params - OCO order parameters (exactly two orders)
+   * @returns Promise resolving to grouped transaction result
+   */
+  async createOcoOrder(
+    params: OcoOrderParams
+  ): Promise<{ tx: any; hash: string; error: string | null }> {
+    if (!params.orders || params.orders.length !== 2) {
+      return { tx: null, hash: '', error: 'OCO requires exactly two orders' };
+    }
+
+    const orders = params.orders.map((order) => ({
+      marketIndex: order.marketIndex,
+      clientOrderIndex: order.clientOrderIndex ?? 0,
+      baseAmount: order.baseAmount,
+      price: order.price,
+      isAsk: order.isAsk,
+      orderType: order.orderType ?? OrderType.LIMIT,
+      timeInForce: order.timeInForce ?? TimeInForce.GOOD_TILL_TIME,
+      reduceOnly: order.reduceOnly ?? false,
+      triggerPrice: order.triggerPrice ?? SignerClient.NIL_TRIGGER_PRICE,
+      orderExpiry: order.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY
+    }));
+
+    const [tx, hash, error] = await this.createGroupedOrders(
+      GroupingType.OCO,
+      orders,
+      params.nonce ?? -1
+    );
+
+    return { tx, hash, error };
+  }
+
+  /**
+   * Create OTOCO grouped orders (entry + take-profit + stop-loss)
+   * @param params - OTOCO order parameters
+   * @returns Promise resolving to grouped transaction result
+   */
+  async createOtocoOrder(
+    params: OtocoOrderParams
+  ): Promise<{ tx: any; hash: string; error: string | null }> {
+    const { mainOrder, stopLoss, takeProfit } = params;
+
+    if (mainOrder.baseAmount <= 0) {
+      return { tx: null, hash: '', error: 'Main order baseAmount must be greater than 0' };
+    }
+
+    if (stopLoss.triggerPrice <= 0 || takeProfit.triggerPrice <= 0) {
+      return { tx: null, hash: '', error: 'Stop-loss and take-profit triggerPrice must be greater than 0' };
+    }
+
+    const isMarketMainOrder = mainOrder.orderType === OrderType.MARKET;
+    let mainPrice = mainOrder.price;
+
+    if (isMarketMainOrder) {
+      mainPrice = mainOrder.avgExecutionPrice;
+      if (mainOrder.maxSlippage !== undefined && mainOrder.maxSlippage > 0) {
+        const idealPrice = mainOrder.idealPrice || mainPrice || 4000;
+        const slippageMultiplier = 1 + (mainOrder.maxSlippage * (mainOrder.isAsk ? -1 : 1));
+        mainPrice = Math.round(idealPrice * slippageMultiplier);
+      } else if (!mainPrice) {
+        const defaultIdealPrice = mainOrder.idealPrice || 4000;
+        const defaultSlippage = 0.001;
+        const slippageMultiplier = 1 + (defaultSlippage * (mainOrder.isAsk ? -1 : 1));
+        mainPrice = Math.round(defaultIdealPrice * slippageMultiplier);
+      }
+    } else if (!mainPrice || mainPrice <= 0) {
+      return { tx: null, hash: '', error: 'Main LIMIT order requires a valid price' };
+    }
+
+    const mainExpiry = isMarketMainOrder
+      ? 0
+      : ((mainOrder.orderExpiry === undefined || mainOrder.orderExpiry === -1)
+        ? Date.now() + (28 * 24 * 60 * 60 * 1000)
+        : mainOrder.orderExpiry);
+
+    const protectionExpiryDefault = Date.now() + (28 * 24 * 60 * 60 * 1000);
+
+    const groupedOrders = [
+      {
+        marketIndex: mainOrder.marketIndex,
+        clientOrderIndex: 0,
+        baseAmount: mainOrder.baseAmount,
+        price: mainPrice!,
+        isAsk: mainOrder.isAsk,
+        orderType: isMarketMainOrder ? SignerClient.ORDER_TYPE_MARKET : SignerClient.ORDER_TYPE_LIMIT,
+        timeInForce: isMarketMainOrder
+          ? SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL
+          : (mainOrder.timeInForce ?? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME),
+        reduceOnly: mainOrder.reduceOnly ?? false,
+        triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
+        orderExpiry: mainExpiry
+      },
+      {
+        marketIndex: mainOrder.marketIndex,
+        clientOrderIndex: 0,
+        baseAmount: 0,
+        price: takeProfit.price ?? takeProfit.triggerPrice,
+        isAsk: !mainOrder.isAsk,
+        orderType: takeProfit.isLimit ? SignerClient.ORDER_TYPE_TAKE_PROFIT_LIMIT : SignerClient.ORDER_TYPE_TAKE_PROFIT,
+        timeInForce: takeProfit.isLimit
+          ? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME
+          : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+        reduceOnly: true,
+        triggerPrice: takeProfit.triggerPrice,
+        orderExpiry: takeProfit.orderExpiry ?? protectionExpiryDefault
+      },
+      {
+        marketIndex: mainOrder.marketIndex,
+        clientOrderIndex: 0,
+        baseAmount: 0,
+        price: stopLoss.price ?? stopLoss.triggerPrice,
+        isAsk: !mainOrder.isAsk,
+        orderType: stopLoss.isLimit ? SignerClient.ORDER_TYPE_STOP_LOSS_LIMIT : SignerClient.ORDER_TYPE_STOP_LOSS,
+        timeInForce: stopLoss.isLimit
+          ? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME
+          : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+        reduceOnly: true,
+        triggerPrice: stopLoss.triggerPrice,
+        orderExpiry: stopLoss.orderExpiry ?? protectionExpiryDefault
+      }
+    ];
+
+    const [tx, hash, error] = await this.createGroupedOrders(
+      GroupingType.OTOCO,
+      groupedOrders,
+      params.nonce ?? -1
+    );
+
+    return { tx, hash, error };
+  }
+
+  /**
    * Create grouped orders (OTO/OCO/OTOCO)
    * @param groupingType - Grouping type: 1=OTO, 2=OCO, 3=OTOCO
    * @param orders - Array of order parameters
@@ -2880,6 +2644,8 @@ export class SignerClient {
     const startTime = Date.now();
     let dots = '';
     let animationInterval: NodeJS.Timeout | null = null;
+    const explorerHost = ExplorerApiClient.resolveExplorerHost(this.config.url);
+    const logsApi = new LogsApi(new ExplorerApiClient({ explorerHost }));
     
     // Start rotating dots animation
     const startAnimation = () => {
@@ -2898,120 +2664,10 @@ export class SignerClient {
       process.stdout.write('\r' + ' '.repeat(80) + '\r'); // Clear the line
     };
 
-    // Helper to get status name from code
-    const getStatusName = (status: number | string): string => {
-      if (typeof status === 'string') return status;
-      switch (status) {
-        case SignerClient.TX_STATUS_PENDING: return 'Pending';
-        case SignerClient.TX_STATUS_QUEUED: return 'Queued';
-        case SignerClient.TX_STATUS_COMMITTED: return 'Committed';
-        case SignerClient.TX_STATUS_EXECUTED: return 'Executed';
-        case SignerClient.TX_STATUS_FAILED: return 'Failed';
-        case SignerClient.TX_STATUS_REJECTED: return 'Rejected';
-        default: return `Unknown (${status})`;
-      }
-    };
-
-    // Enhanced error detection
-    const getErrorInfo = (transaction: Transaction): string => {
-      try {
-        // 1. Check API response code first (most reliable)
-        if (transaction.code && transaction.code !== 200) {
-          if (transaction.message) {
-            return transaction.message;
-          }
-          return 'Transaction failed';
-        }
-        
-        // 2. Check direct message field
-        if (transaction.message) {
-          return transaction.message;
-        }
-        
-        // 3. Check event_info for execution errors
-        if (transaction.event_info) {
-          try {
-            const eventInfo = JSON.parse(transaction.event_info);
-            
-            // Check for actual error field (ae) from the API
-            if (eventInfo.ae) {
-              try {
-                // Parse ae which contains the actual error from server
-                const parsedAe = JSON.parse(eventInfo.ae);
-                // Return the server's actual error message
-                return parsedAe.message || JSON.stringify(parsedAe);
-              } catch {
-                // If not JSON, return as-is
-                return eventInfo.ae;
-              }
-            }
-          
-            // Only use these as fallbacks if ae is not present
-            if (eventInfo.error) {
-              return eventInfo.error;
-            }
-            
-            if (eventInfo.message) {
-              return eventInfo.message;
-            }
-          } catch (parseError) {
-            // If we can't parse event_info, return it as-is
-            return transaction.event_info;
-          }
-        }
-        
-        // 4. Check info field for additional error details
-        if (transaction.info) {
-          const info = JSON.parse(transaction.info);
-          
-          // Check for Error field (capitalized)
-          if (info.Error) {
-            return info.Error;
-          }
-          
-          // Check for error field
-          if (info.error) {
-            return info.error;
-          }
-          
-          // Check for message field
-          if (info.message) {
-            return info.message;
-          }
-          
-          // Check for specific error structures
-          if (info.error_code && info.error_message) {
-            return `${info.error_message} (code: ${info.error_code})`;
-          }
-          
-          // Check for validation errors
-          if (info.validation_errors && Array.isArray(info.validation_errors)) {
-            return `Validation errors: ${info.validation_errors.join(', ')}`;
-          }
-        }
-        
-        // 5. Check data field for error information
-        if (transaction.data) {
-          const data = typeof transaction.data === 'string' ? JSON.parse(transaction.data) : transaction.data;
-          
-          if (data.error) {
-            return data.error;
-          }
-          
-          if (data.message) {
-            return data.message;
-          }
-          
-          if (data.Error) {
-            return data.Error;
-          }
-        }
-        
-      } catch (e) {
-        // Failed to parse, continue to generic message
-      }
-      
-      return 'Transaction failed - no detailed error information available';
+    const getLogError = (status: string): string => {
+      if (status === 'failed') return 'Transaction failed';
+      if (status === 'rejected') return 'Transaction rejected';
+      return `Transaction ${status}`;
     };
     
     try {
@@ -3019,60 +2675,47 @@ export class SignerClient {
       
       while (Date.now() - startTime < maxWaitTime) {
         try {
-          const transaction = await this.transactionApi.getTransaction({
-            by: 'hash' as const,
-            value: txHash
-          });
-          
-          const status = typeof transaction.status === 'number' ? transaction.status : parseInt(String(transaction.status), 10);
-          
-          if (status === SignerClient.TX_STATUS_EXECUTED) {
+          const log = await logsApi.getByHash(txHash);
+          const status = (log as any).status as string | null | undefined;
+
+          if (status === 'committed' || status === 'executed') {
             stopAnimation();
-            return transaction;
-          } 
-          // Status 4 = FAILED, Status 5 = REJECTED
-          else if (status === SignerClient.TX_STATUS_FAILED || status === SignerClient.TX_STATUS_REJECTED) {
+            return log as unknown as Transaction;
+          }
+
+          if (status === 'failed' || status === 'rejected') {
             stopAnimation();
-            const errorInfo = getErrorInfo(transaction);
-            throw new TransactionException(
-              errorInfo,
-              'waitForTransaction',
-              transaction
-            );
-          } 
-          // Status 0,1 = Still processing (PENDING, QUEUED)
-          else if (status === SignerClient.TX_STATUS_PENDING || status === SignerClient.TX_STATUS_QUEUED) {
-            await new Promise(resolve => setTimeout(resolve, pollInterval));
+            throw new TransactionException(getLogError(status), 'waitForTransaction', log as unknown as Transaction);
           }
-          // Status 2 = COMMITTED - Check for errors or success
-          else if (status === SignerClient.TX_STATUS_COMMITTED) {
-            const errorInfo = getErrorInfo(transaction);
-            
-            // If there's an actual error message, throw it
-            if (errorInfo && errorInfo !== 'Transaction failed - no detailed error information available') {
-              stopAnimation();
-              throw new TransactionException(errorInfo, 'waitForTransaction', transaction);
+
+          // Some explorer records may be present with null/unknown status on testnet.
+          // In that case, fallback to core transaction API status codes.
+          if (!status || status === 'pending') {
+            try {
+              const transaction = await this.transactionApi.getTransaction({
+                by: 'hash' as const,
+                value: txHash
+              });
+
+              const txStatus = typeof transaction.status === 'number'
+                ? transaction.status
+                : parseInt(String(transaction.status), 10);
+
+              if (txStatus === SignerClient.TX_STATUS_COMMITTED || txStatus === SignerClient.TX_STATUS_EXECUTED) {
+                stopAnimation();
+                return transaction;
+              }
+
+              if (txStatus === SignerClient.TX_STATUS_FAILED || txStatus === SignerClient.TX_STATUS_REJECTED) {
+                stopAnimation();
+                throw new TransactionException(`Transaction ${txStatus === SignerClient.TX_STATUS_FAILED ? 'failed' : 'rejected'}`, 'waitForTransaction', transaction);
+              }
+            } catch {
+              // If tx api lookup is unavailable yet, continue polling.
             }
-            
-            const txCode = transaction.code;
-            if (txCode !== undefined && txCode !== null && (txCode === 200 || String(txCode) === '200')) {
-              stopAnimation();
-              return transaction;
-            }
-            
-            // No code 200 yet, wait a bit more
-            const timeWaiting = Date.now() - startTime;
-            if (timeWaiting > maxWaitTime * 0.8) {
-              stopAnimation();
-              throw new TransactionException('Transaction committed but execution timed out', 'waitForTransaction', transaction);
-            }
-            
-            await new Promise(resolve => setTimeout(resolve, pollInterval));
           }
-          // Unknown status
-          else {
-            await new Promise(resolve => setTimeout(resolve, pollInterval));
-          }
+
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
           
         } catch (error) {
           // Check if it's a NotFoundException (404) - transaction not found yet
@@ -3226,7 +2869,23 @@ export class SignerClient {
    * Close the API client connection
    */
   async close(): Promise<void> {
-    await this.apiClient.close();
+    try {
+      if (this.wsOrderClient) {
+        await this.wsOrderClient.disconnect();
+        this.wsOrderClient = null;
+      }
+
+      if (this.orderBatcher) {
+        await this.orderBatcher.destroy();
+        this.orderBatcher = null;
+      }
+
+      if (this.nonceCache) {
+        this.nonceCache.clearAllCache();
+      }
+    } finally {
+      await this.apiClient.close();
+    }
   }
 }
 
