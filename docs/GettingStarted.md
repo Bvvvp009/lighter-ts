@@ -4,10 +4,10 @@ Complete guide for beginners to start trading on Lighter Protocol using TypeScri
 
 ## What is the Lighter TypeScript SDK?
 
-The SDK gives you everything you need to trade perpetual futures on Lighter Protocol from your TypeScript/JavaScript applications. It uses the **official lighter-go WASM signer** from [elliottech/lighter-go](https://github.com/elliottech/lighter-go) for all cryptographic operations.
+The SDK gives you everything you need to trade perpetual futures on Lighter Protocol from your TypeScript/JavaScript applications. It uses a WASM signer for cryptographic operations.
 
 **Key Features:**
-- ✅ Uses official lighter-go signer (reference implementation)
+- ✅ Uses a WASM signer for transaction signing
 - ✅ Order creation (Market, Limit, TWAP)
 - ✅ Stop-loss and take-profit orders
 - ✅ Position management
@@ -77,20 +77,20 @@ async function myFirstTrade() {
   await signerClient.ensureWasmClient();
 
   try {
-    // Place a market order
-    const result = await signerClient.createUnifiedOrder({
-      marketIndex: 0,              // ETH market
-      clientOrderIndex: Date.now(),
-      baseAmount: 10000,          // 0.01 ETH (10000 / 1,000,000)
-      isAsk: false,               // BUY
-      orderType: OrderType.MARKET,
-      
+    // Place a market order with SL/TP using OTOCO
+    const result = await signerClient.createOtocoOrder({
+      mainOrder: {
+        marketIndex: 0,              // ETH market
+        clientOrderIndex: Date.now(),
+        baseAmount: 10000,          // 0.01 ETH (10000 / 1,000,000)
+        isAsk: false,               // BUY
+        orderType: OrderType.MARKET
+      },
       // Automatic stop-loss at 5% loss
       stopLoss: {
         triggerPrice: 380000,     // $3800 (5% below $4000)
         isLimit: false
       },
-      
       // Automatic take-profit at 5% gain
       takeProfit: {
         triggerPrice: 420000,     // $4200 (5% above $4000)
@@ -99,17 +99,16 @@ async function myFirstTrade() {
     });
 
     // Check if order succeeded
-    if (!result.success) {
-      console.error('❌ Order failed:', result.mainOrder.error);
+    if (result.error || !result.hash) {
+      console.error('❌ Order failed:', result.error);
       return;
     }
 
-    console.log('✅ Main order created!');
-    console.log('✅ Stop-loss created!');
-    console.log('✅ Take-profit created!');
+    console.log('✅ OTOCO order created!');
+    console.log('✅ Entry, stop-loss, and take-profit orders grouped!');
     
     // Wait for confirmation
-    await signerClient.waitForTransaction(result.mainOrder.hash, 30000);
+    await signerClient.waitForTransaction(result.hash, 30000);
     console.log('✅ Order confirmed on-chain!');
 
   } catch (error) {
@@ -130,9 +129,8 @@ npx ts-node my-first-trade.ts
 
 You'll see output like:
 ```
-✅ Main order created!
-✅ Stop-loss created!
-✅ Take-profit created!
+✅ OTOCO order created!
+✅ Entry, stop-loss, and take-profit orders grouped!
 ⏳ Waiting for confirmation...
 ✅ Order confirmed on-chain!
 ```
@@ -142,10 +140,9 @@ You'll see output like:
 ### What Happens When You Run This?
 
 1. **Initialization**: Creates a connection to Lighter Protocol
-2. **Order Creation**: Creates your market order
-3. **SL/TP Setup**: Automatically creates stop-loss and take-profit orders
-4. **Batch Submission**: Sends all three orders together as one transaction
-5. **Confirmation**: Waits for the transaction to be confirmed on-chain
+2. **Order Creation**: Creates your OTOCO grouped order (entry + SL + TP)
+3. **Grouped Submission**: Sends all three orders together as one transaction
+4. **Confirmation**: Waits for the transaction to be confirmed on-chain
 
 ### Breaking Down the Parameters
 
@@ -184,7 +181,7 @@ Here's what happens:
 
 **Both SL and TP are automatically set to "reduce-only"** - they only close positions, never open new ones.
 
-**Note**: For TWAP orders, which execute gradually over time, SL/TP cannot be created in the same batch. Create SL/TP separately after the TWAP begins executing.
+**Note**: TWAP orders execute gradually over time. For TWAP orders, create SL/TP separately after the TWAP begins executing.
 
 ## Common Operations
 
@@ -193,7 +190,7 @@ Here's what happens:
 Instead of executing immediately, wait for the right price:
 
 ```typescript
-const result = await signerClient.createUnifiedOrder({
+const [tx, hash, error] = await signerClient.createOrder({
   marketIndex: 0,
   clientOrderIndex: Date.now(),
   baseAmount: 10000,
@@ -202,6 +199,13 @@ const result = await signerClient.createUnifiedOrder({
   orderType: OrderType.LIMIT,
   orderExpiry: Date.now() + (60 * 60 * 1000) // Expires in 1 hour
 });
+
+if (error || !hash) {
+  console.error('Failed:', error);
+  return;
+}
+
+await signerClient.waitForTransaction(hash);
 ```
 
 **Difference from market order**:
@@ -265,21 +269,21 @@ orders.forEach(order => {
 ### Always Check for Errors
 
 ```typescript
-// Method 1: Check result object
-const result = await signerClient.createUnifiedOrder(params);
-if (!result.success) {
-  console.error('Failed:', result.mainOrder.error);
-  return;
-}
-
-// Method 2: Check error field
+// Check error field (tuple return)
 const [tx, hash, error] = await signerClient.createOrder(params);
-if (error) {
+if (error || !hash) {
   console.error('Failed:', error);
   return;
 }
 
-// Method 3: Try-catch for unexpected errors
+// Check result object (OTOCO)
+const result = await signerClient.createOtocoOrder(params);
+if (result.error || !result.hash) {
+  console.error('Failed:', result.error);
+  return;
+}
+
+// Try-catch for unexpected errors
 try {
   await signerClient.waitForTransaction(hash);
 } catch (error) {
@@ -356,6 +360,29 @@ Before going live:
 - Review the API documentation in `docs/`
 - Test with the system setup example first
 
-## Happy Trading! 🚀
+## 📚 Further Reading
 
-You now have everything you need to start trading on Lighter Protocol. Start with the examples, experiment with the parameters, and build your own trading strategies!
+After mastering the basics, explore these comprehensive guides:
+
+### [Transaction Monitoring Guide](./TransactionMonitoring.md)
+Learn how to monitor transaction status across network states with:
+- Understanding transaction status states (PENDING, QUEUED, COMMITTED, EXECUTED, FAILED, REJECTED)
+- Using `waitForTransaction()` for blocking confirmation
+- Advanced monitoring patterns (polling, fire-and-forget, batch tracking)
+- Error handling and recovery strategies
+- Production patterns for transaction queues
+
+### [Margin Management Guide](./MarginManagement.md)
+Master collateral management with:
+- Cross-margin vs Isolated-margin modes
+- Direction constants (ADD_COLLATERAL, REMOVE_COLLATERAL)
+- Per-market collateral management
+- Switching between margin modes
+- Best practices and troubleshooting
+
+### [API Reference](./API.md)
+Complete API documentation with all methods and parameters.
+
+### [SignerClient Documentation](./SignerClient.md)
+Detailed reference for every SignerClient method and constant.
+

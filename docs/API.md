@@ -19,8 +19,8 @@ The main class for trading operations, order management, and account operations.
 - `updateLeverage()` - Update leverage settings
 - `generateAPIKey()` - Generate new API keys
 
-### [ApiClient](ApiClient.md)
-Base HTTP client for API communication.
+### ApiClient
+Base HTTP client for API communication (exported from `src/api/api-client.ts`).
 
 ### [WsClient](WsClient.md)
 WebSocket client for real-time data streaming.
@@ -56,7 +56,7 @@ Transaction management and history.
 - `getAccountTransactions()` - Get account transactions
 - `getNextNonce()` - Get next nonce
 - `sendTx()` - Send transaction
-- `sendTxBatch()` - Send batch transactions
+- `sendTransactionBatch()` - Send batch transactions
 
 ### BlockApi
 Block information and data. Note: BlockApi methods are available through TransactionApi.
@@ -93,36 +93,20 @@ Parameters for creating limit orders.
 #### [MarketOrderParams](types/MarketOrderParams.md)
 Parameters for creating market orders.
 
-#### [CancelOrderParams](types/CancelOrderParams.md)
-Parameters for canceling orders.
-
-#### [CancelAllOrdersParams](types/CancelAllOrdersParams.md)
-Parameters for canceling all orders.
+#### CancelOrderParams / CancelAllOrdersParams
+Signer-side order cancellation parameter types are available from the SDK exports.
 
 ### Transaction Types
 
-#### [TransferParams](types/TransferParams.md)
-Parameters for USDC transfers.
-
-#### [UpdateLeverageParams](types/UpdateLeverageParams.md)
-Parameters for updating leverage.
+#### TransferParams / UpdateLeverageParams
+Transaction and leverage parameter types are available from the SDK exports.
 
 ### Data Types
 
 #### [Account](types/Account.md)
 Account information structure.
 
-#### [Order](types/Order.md)
-Order information structure.
-
-#### [Transaction](types/Transaction.md)
-Transaction information structure.
-
-#### [OrderBook](types/OrderBook.md)
-Order book data structure.
-
-#### [Trade](types/Trade.md)
-Trade information structure.
+See API class docs for additional data structures (`Order`, `Transaction`, `OrderBook`, `Trade`) and the source exports in `src/index.ts`.
 
 ## Constants
 
@@ -193,11 +177,11 @@ wsClient.on('error', (error) => {
 
 See the [examples directory](../examples/) for comprehensive usage examples:
 
-- [Basic Trading](examples/create_market_order.ts)
-- [Order Management](examples/create_cancel_order.ts)
-- [Account Setup](examples/system_setup.ts)
-- [Real-time Data](examples/ws.ts)
-- [Advanced Operations](examples/transfer_update_leverage.ts)
+- [Basic Trading](../examples/create_market_order.ts)
+- [Order Management](../examples/cancel_order.ts)
+- [Account Setup](../examples/system_setup.ts)
+- [Real-time Data](../examples/market_data.ts)
+- [Advanced Operations](../examples/transfer_spot_perp.ts)
 
 ## Getting Help
 

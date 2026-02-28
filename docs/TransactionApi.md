@@ -305,7 +305,7 @@ const txHash = await transactionApi.sendTxJson(
 );
 ```
 
-### sendTxBatch(params: SendTransactionBatchParams)
+### sendTransactionBatch(params: SendTransactionBatchParams)
 
 Sends multiple transactions in a batch.
 
@@ -319,13 +319,13 @@ Sends multiple transactions in a batch.
 **Example:**
 ```typescript
 // Using tx_types and tx_infos (comma-separated strings)
-const batchHashes = await transactionApi.sendTxBatch({
+const batchHashes = await transactionApi.sendTransactionBatch({
   tx_types: '14,15',
   tx_infos: 'txInfo1,txInfo2'
 });
 
 // Using transactions array
-const batchHashes = await transactionApi.sendTxBatch({
+const batchHashes = await transactionApi.sendTransactionBatch({
   account_index: 123,
   api_key_index: 0,
   transactions: [
