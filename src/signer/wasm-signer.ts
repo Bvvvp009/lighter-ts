@@ -1304,28 +1304,28 @@ export class WasmSignerClient {
       return null;
     }
 
-    try {
-      // Try to resolve the package.json of lighter-ts-sdk
-      // For ESM, we need to handle this differently
-      const packageJsonPath = `${process.cwd()}/package.json`;
-      if (fs.existsSync(packageJsonPath)) {
-        return path.dirname(packageJsonPath);
+    // Look for installed package in node_modules from current or parent directories
+    let currentDir = process.cwd();
+    const maxDepth = 10; // Prevent infinite loops
+    let depth = 0;
+
+    while (currentDir && depth < maxDepth) {
+      const packagePath = path.join(currentDir, 'node_modules', 'lighter-ts-sdk');
+      if (fs.existsSync(packagePath)) {
+        return packagePath;
       }
-    } catch {
-      // Fallback: look for node_modules/lighter-ts-sdk in current or parent directories
-      let currentDir = process.cwd();
-      const maxDepth = 10; // Prevent infinite loops
-      let depth = 0;
-      
-      while (currentDir && depth < maxDepth) {
-        const packagePath = path.join(currentDir, 'node_modules', 'lighter-ts-sdk');
-        if (fs.existsSync(packagePath)) {
-          return packagePath;
-        }
-        currentDir = path.dirname(currentDir);
-        depth++;
-      }
+      currentDir = path.dirname(currentDir);
+      depth++;
     }
+
+    // Local development fallback: treat cwd as package root only when it contains bundled WASM assets
+    const cwd = process.cwd();
+    const localWasmExec = path.join(cwd, 'wasm', 'wasm_exec.js');
+    const localWasmBinary = path.join(cwd, 'wasm', 'lighter-signer.wasm');
+    if (fs.existsSync(localWasmExec) || fs.existsSync(localWasmBinary)) {
+      return cwd;
+    }
+
     return null;
   }
 
