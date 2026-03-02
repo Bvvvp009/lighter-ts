@@ -1,6 +1,6 @@
 {
   "name": "lighter-ts-sdk",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "TypeScript SDK for Lighter Protocol - Trade perpetuals with unmatched efficiency and fairness on Lighter",
   "type": "module",
   "main": "./dist/cjs/index.js",
