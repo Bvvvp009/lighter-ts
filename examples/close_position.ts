@@ -8,9 +8,13 @@ import { OrderType, SignerClient, ApiClient, AccountApi } from '../src';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-async function closePosition() {
+const closePosition = async ({ apiPrivateKey, accountIndex, marketId } : {
+  apiPrivateKey: string,
+  accountIndex: number,
+  marketId: number,
+}) => {
   console.log('🚀 Closing Position...\n');
-
+  
   // Use testnet credentials (matching other examples)
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
   const ACCOUNT_INDEX = parseInt(process.env['TESTNET_ACCOUNT_INDEX'] || process.env['ACCOUNT_INDEX'] || "271");
@@ -36,8 +40,9 @@ async function closePosition() {
     console.log('📊 Fetching account positions...');
     const account = await accountApi.getAccount({
       by: 'index',
-      value: ACCOUNT_INDEX.toString()
+      value: accountIndex.toString()
     });
+    console.log('🚀 Account:', account);
 
     // Check if response is wrapped in 'accounts' array
     let actualAccount = account;
@@ -46,14 +51,14 @@ async function closePosition() {
     }
 
     // Get positions from the actual account object
-    let positions = actualAccount.positions || [];
+    const positions = actualAccount.positions || [];
     
     // Find position for the specified market
     // Note: API returns 'position' field (not 'size') and 'sign' field (not 'side')
-    const position = positions.find((p: any) => p.market_id === MARKET_INDEX);
+    const position = positions.find((p: any) => p.market_id === marketId);
 
     if (!position) {
-      console.log(`ℹ️ No open position found for market ${MARKET_INDEX}.`);
+      console.log(`ℹ️ No open position found for market ${marketId}.`);
       if (positions.length > 0) {
         console.log(`   Available positions: ${positions.map((p: any) => {
           const posSize = (p as any).position || p.size || '0';
@@ -72,15 +77,22 @@ async function closePosition() {
     const positionSize = parseFloat(positionSizeStr);
     const sign = (position as any).sign || 0;
     const positionSide = sign > 0 ? 'long' : 'short';
+
+    const apiClient = new ApiClient({ host: BASE_URL });
+    const orderApi = new OrderApi(apiClient);
+    const market = new MarketHelper(marketId, orderApi);
+    await market.initialize();
+
+    const baseAmountUnits = market.amountToUnits(positionSize);
+    const lastPrice = market.lastPrice;
+    const idealPriceUnits = market.priceToUnits(lastPrice);
+    console.log(lastPrice, idealPriceUnits);
     
     // Check if position is actually active
     if (positionSize <= 0 || sign === 0) {
-      console.log(`ℹ️ Position for market ${MARKET_INDEX} is not active (size: ${positionSizeStr}, sign: ${sign}).`);
+      console.log(`ℹ️ Position for market ${marketId} is not active (size: ${positionSizeStr}, sign: ${sign}).`);
       return;
     }
-    
-    // Convert position size to baseAmount units (1 ETH = 1,000,000 units)
-    const baseAmount = Math.floor(positionSize * 1_000_000);
     
     // Determine direction: opposite of position side
     // LONG position (sign > 0) -> need to SELL (isAsk: true) to close
@@ -88,32 +100,28 @@ async function closePosition() {
     const isAsk = sign > 0; // true for long (sell to close), false for short (buy to close)
     
     // Get current market price for better execution
-    const markPrice = parseFloat((position as any).mark_price || position.mark_price || '0');
-    const entryPrice = parseFloat((position as any).avg_entry_price || position.entry_price || '0');
-    const avgExecutionPrice = markPrice > 0 ? Math.floor(markPrice * 100) : 
-                              (entryPrice > 0 ? Math.floor(entryPrice * 100) : 450000); // Convert to price units
+    
 
     console.log('📋 Position Information:');
-    console.log(`   Market: ${MARKET_INDEX}`);
+    console.log(`   Market: ${marketId}`);
     console.log(`   Side: ${positionSide.toUpperCase()}`);
     console.log(`   Size: ${positionSizeStr}`);
     console.log(`   Entry Price: ${(position as any).avg_entry_price || position.entry_price || 'N/A'}`);
-    console.log(`   Mark Price: ${(position as any).mark_price || position.mark_price || 'N/A'}`);
     console.log(`   Position Value: ${(position as any).position_value || 'N/A'}`);
     console.log(`   Unrealized PnL: ${(position as any).unrealized_pnl || position.unrealized_pnl || 'N/A'}\n`);
 
     console.log('📋 Close Order Parameters:');
     console.log(`   Direction: ${isAsk ? 'SELL' : 'BUY'} (opposite of ${positionSide})`);
-    console.log(`   Base Amount: ${baseAmount} units (${positionSizeStr} ETH)`);
-    console.log(`   Execution Price: ${avgExecutionPrice} ($${avgExecutionPrice / 100})`);
+    console.log(`   Position size: ${positionSizeStr}`);
+    console.log(`   Execution Price: ${lastPrice}`);
     console.log(`   Reduce Only: true\n`);
 
     // Create a market order to close the position
     const [tx, txHash, error] = await signerClient.createMarketOrder({
-      marketIndex: MARKET_INDEX,
+      marketIndex: marketId,
       clientOrderIndex: Date.now(),
-      baseAmount: baseAmount,
-      avgExecutionPrice: avgExecutionPrice,
+      baseAmount: baseAmountUnits,
+      avgExecutionPrice: idealPriceUnits,
       isAsk: isAsk, // CRITICAL: Opposite direction of position
       reduceOnly: true
     });
@@ -146,10 +154,10 @@ async function closePosition() {
       }
     }
 
-    console.log('\n🎉 Position closed successfully!');
-
+    return txHash;
   } catch (error) {
     console.error('❌ Error closing position:', error instanceof Error ? error.message : String(error));
+    throw new Error('Failed to close position');
   } finally {
     await signerClient.close();
     await apiClient.close();
