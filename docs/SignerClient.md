@@ -60,7 +60,11 @@ Creates a limit order.
 - `timeInForce: number` - Time in force (use `SignerClient.ORDER_TIME_IN_FORCE_*`)
 - `reduceOnly: boolean` - Whether this is a reduce-only order
 - `triggerPrice: number` - Trigger price for conditional orders
+- `integratorAccountIndex?: number` - Partner/integrator account index
+- `integratorTakerFee?: number` - Partner fee for taker fills (in 1e6 scale)
+- `integratorMakerFee?: number` - Partner fee for maker fills (in 1e6 scale)
 - `orderExpiry: number` - Order expiry timestamp
+- `skipNonce?: boolean` - Skip nonce checks/signing attribute when supported by signer
 
 **Returns:** `Promise<[any, string, string | null]>` - `[transaction, txHash, error]`
 
@@ -76,7 +80,11 @@ const [tx, txHash, err] = await client.createOrder({
   timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
   reduceOnly: false,
   triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
-  orderExpiry: SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY
+  orderExpiry: SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY,
+  integratorAccountIndex: 1234,
+  integratorTakerFee: 100,
+  integratorMakerFee: 100,
+  skipNonce: false
 });
 ```
 
@@ -112,6 +120,7 @@ Cancels an existing order.
 - `marketIndex: number` - Market index
 - `orderIndex: number` - Order index to cancel
 - `nonce?: number` - Optional nonce (auto-generated if not provided)
+- `skipNonce?: boolean` - Skip nonce checks/signing attribute when supported by signer
 
 **Returns:** `Promise<[any, string, string | null]>` - `[transaction, txHash, error]`
 
@@ -158,7 +167,7 @@ Transfers USDC between accounts.
 const [tx, txHash, err] = await client.transfer(456, 1000000); // Transfer 100 USDC (in cents)
 ```
 
-### modifyOrder(marketIndex, orderIndex, baseAmount, price, triggerPrice, nonce?)
+### modifyOrder(marketIndex, orderIndex, baseAmount, price, triggerPrice, nonce?, options?)
 
 Modifies an existing order's parameters without canceling it.
 
@@ -169,6 +178,10 @@ Modifies an existing order's parameters without canceling it.
 - `price: number` - New price
 - `triggerPrice: number` - New trigger price (0 for non-conditional orders)
 - `nonce?: number` - Optional nonce (auto-fetched if not provided)
+- `options?.integratorAccountIndex?: number` - Partner/integrator account index
+- `options?.integratorTakerFee?: number` - Partner taker fee (1e6 scale)
+- `options?.integratorMakerFee?: number` - Partner maker fee (1e6 scale)
+- `options?.skipNonce?: boolean` - Skip nonce checks/signing attribute when supported by signer
 
 **Returns:** `Promise<[any, string, string | null]>` - `[orderInfo, txHash, error]`
 

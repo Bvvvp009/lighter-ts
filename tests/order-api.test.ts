@@ -94,7 +94,24 @@ describe('OrderApi dormant methods', () => {
   });
 
   describe('getOrderBookOrders', () => {
-    it('should request order book orders with market and depth', async () => {
+    it('should request order book orders with market and limit', async () => {
+      const expected: OrderBookOrders = {
+        market_id: 2,
+        orders: [],
+      };
+
+      mockClient.get.mockImplementation(async () => ({ data: expected }));
+
+      const result = await orderApi.getOrderBookOrders({ market_id: 2, limit: 5 });
+
+      expect(mockClient.get).toHaveBeenCalledWith('/api/v1/orderBookOrders', {
+        market_id: 2,
+        limit: 5,
+      });
+      expect(result).toEqual(expected);
+    });
+
+    it('should support depth as a backward-compatible alias for limit', async () => {
       const expected: OrderBookOrders = {
         market_id: 2,
         orders: [],
@@ -106,7 +123,7 @@ describe('OrderApi dormant methods', () => {
 
       expect(mockClient.get).toHaveBeenCalledWith('/api/v1/orderBookOrders', {
         market_id: 2,
-        depth: 5,
+        limit: 5,
       });
       expect(result).toEqual(expected);
     });

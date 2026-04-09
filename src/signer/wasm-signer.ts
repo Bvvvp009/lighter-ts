@@ -64,6 +64,10 @@ export interface CreateOrderParams {
   reduceOnly: number;
   triggerPrice: number;
   orderExpiry: number;
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex?: number;
   accountIndex?: number;
@@ -72,6 +76,7 @@ export interface CreateOrderParams {
 export interface CancelOrderParams {
   marketIndex: number;
   orderIndex: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -80,6 +85,7 @@ export interface CancelOrderParams {
 export interface CancelAllOrdersParams {
   timeInForce: number;
   time: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -122,6 +128,10 @@ export interface ModifyOrderParams {
   baseAmount: number;
   price: number;
   triggerPrice: number;
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -177,6 +187,35 @@ export interface BurnSharesParams {
   accountIndex: number;
 }
 
+export interface StakeAssetsParams {
+  stakingPoolIndex: number;
+  shareAmount: number;
+  nonce: number;
+  apiKeyIndex: number;
+  accountIndex: number;
+}
+
+export interface UnstakeAssetsParams {
+  stakingPoolIndex: number;
+  shareAmount: number;
+  nonce: number;
+  apiKeyIndex: number;
+  accountIndex: number;
+}
+
+export interface ApproveIntegratorParams {
+  integratorIndex: number;
+  maxPerpsTakerFee: number;
+  maxPerpsMakerFee: number;
+  maxSpotTakerFee: number;
+  maxSpotMakerFee: number;
+  approvalExpiry: number;
+  skipNonce?: number;
+  nonce: number;
+  apiKeyIndex: number;
+  accountIndex: number;
+}
+
 export interface CreateGroupedOrderParams {
   marketIndex: number;
   clientOrderIndex: number;  // Must be 0 for grouped orders
@@ -188,11 +227,18 @@ export interface CreateGroupedOrderParams {
   reduceOnly: number;
   triggerPrice: number;
   orderExpiry: number;
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
 }
 
 export interface CreateGroupedOrdersParams {
   groupingType: number;  // 1=OTO, 2=OCO, 3=OTOCO
   orders: CreateGroupedOrderParams[];
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -555,6 +601,9 @@ export class WasmSignerClient {
       signUpdatePublicPool: (global as any).SignUpdatePublicPool || (global as any).signUpdatePublicPool || (global as any).lighterWasmFunctions?.signUpdatePublicPool,
       signMintShares: (global as any).SignMintShares || (global as any).signMintShares || (global as any).lighterWasmFunctions?.signMintShares,
       signBurnShares: (global as any).SignBurnShares || (global as any).signBurnShares || (global as any).lighterWasmFunctions?.signBurnShares,
+      signStakeAssets: (global as any).SignStakeAssets || (global as any).signStakeAssets || (global as any).lighterWasmFunctions?.signStakeAssets,
+      signUnstakeAssets: (global as any).SignUnstakeAssets || (global as any).signUnstakeAssets || (global as any).lighterWasmFunctions?.signUnstakeAssets,
+      signApproveIntegrator: (global as any).SignApproveIntegrator || (global as any).signApproveIntegrator || (global as any).lighterWasmFunctions?.signApproveIntegrator,
       signCreateGroupedOrders: (global as any).SignCreateGroupedOrders || (global as any).signCreateGroupedOrders || (global as any).lighterWasmFunctions?.signCreateGroupedOrders,
       // Note: SwitchAPIKey is not exported from lighter-go WASM - use CreateClient with different apiKeyIndex instead
       switchAPIKey: (global as any).SwitchAPIKey || (global as any).switchAPIKey || (global as any).lighterWasmFunctions?.switchAPIKey || undefined,
@@ -670,7 +719,7 @@ export class WasmSignerClient {
     const apiKeyIndex = params.apiKeyIndex ?? 0;
     const accountIndex = params.accountIndex ?? 0;
     
-    const result = this.wasmModule.signCreateOrder(
+    let result = this.wasmModule.signCreateOrder(
       params.marketIndex,
       params.clientOrderIndex,
       params.baseAmount,
@@ -681,10 +730,56 @@ export class WasmSignerClient {
       params.reduceOnly,
       params.triggerPrice,
       params.orderExpiry,
+      params.integratorAccountIndex ?? 0,
+      params.integratorTakerFee ?? 0,
+      params.integratorMakerFee ?? 0,
+      params.skipNonce ?? 0,
       params.nonce,
       apiKeyIndex,
       accountIndex
     );
+
+    // Backward compatibility:
+    // - partner/no-skip build expects 16 args (no skipNonce)
+    // - legacy build expects 13 args (no integrator fields)
+    if (result?.error && String(result.error).includes('expects 16 args')) {
+      result = this.wasmModule.signCreateOrder(
+        params.marketIndex,
+        params.clientOrderIndex,
+        params.baseAmount,
+        params.price,
+        params.isAsk,
+        params.orderType,
+        params.timeInForce,
+        params.reduceOnly,
+        params.triggerPrice,
+        params.orderExpiry,
+        params.integratorAccountIndex ?? 0,
+        params.integratorTakerFee ?? 0,
+        params.integratorMakerFee ?? 0,
+        params.nonce,
+        apiKeyIndex,
+        accountIndex
+      );
+    }
+
+    if (result?.error && String(result.error).includes('expects 13 args')) {
+      result = this.wasmModule.signCreateOrder(
+        params.marketIndex,
+        params.clientOrderIndex,
+        params.baseAmount,
+        params.price,
+        params.isAsk,
+        params.orderType,
+        params.timeInForce,
+        params.reduceOnly,
+        params.triggerPrice,
+        params.orderExpiry,
+        params.nonce,
+        apiKeyIndex,
+        accountIndex
+      );
+    }
     
     if (result.error) {
       return { txType: 0, txInfo: '', txHash: '', error: result.error };
@@ -704,14 +799,26 @@ export class WasmSignerClient {
    */
   async signCancelOrder(params: CancelOrderParams): Promise<WasmTxResponse> {
     await this.ensureInitialized();
-    
-    const result = this.wasmModule.signCancelOrder(
+
+    let result = this.wasmModule.signCancelOrder(
       params.marketIndex,
       params.orderIndex,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
     );
+
+    // Legacy build expects 5 args (no skipNonce)
+    if (result?.error && String(result.error).includes('expects 5 args')) {
+      result = this.wasmModule.signCancelOrder(
+        params.marketIndex,
+        params.orderIndex,
+        params.nonce,
+        params.apiKeyIndex,
+        params.accountIndex
+      );
+    }
     
     if (result.error) {
       return { txType: 0, txInfo: '', txHash: '', error: result.error };
@@ -746,14 +853,26 @@ export class WasmSignerClient {
    */
   async signCancelAllOrders(params: CancelAllOrdersParams): Promise<WasmTxResponse> {
     await this.ensureInitialized();
-    
-    const result = this.wasmModule.signCancelAllOrders(
+
+    let result = this.wasmModule.signCancelAllOrders(
       params.timeInForce,
       params.time,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
     );
+
+    // Legacy build expects 5 args (no skipNonce)
+    if (result?.error && String(result.error).includes('expects 5 args')) {
+      result = this.wasmModule.signCancelAllOrders(
+        params.timeInForce,
+        params.time,
+        params.nonce,
+        params.apiKeyIndex,
+        params.accountIndex
+      );
+    }
     
     if (result.error) {
       return { txType: 0, txInfo: '', txHash: '', error: result.error };
@@ -904,17 +1023,53 @@ export class WasmSignerClient {
    */
   async signModifyOrder(params: ModifyOrderParams): Promise<WasmTxResponse> {
     await this.ensureInitialized();
-    
-    const result = this.wasmModule.signModifyOrder(
+
+    let result = this.wasmModule.signModifyOrder(
       params.marketIndex,
       params.index,
       params.baseAmount,
       params.price,
       params.triggerPrice,
+      params.integratorAccountIndex ?? 0,
+      params.integratorTakerFee ?? 0,
+      params.integratorMakerFee ?? 0,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
     );
+
+    // Backward compatibility:
+    // - partner/no-skip build expects 11 args (no skipNonce)
+    // - legacy build expects 8 args (no integrator fields)
+    if (result?.error && String(result.error).includes('expects 11 args')) {
+      result = this.wasmModule.signModifyOrder(
+        params.marketIndex,
+        params.index,
+        params.baseAmount,
+        params.price,
+        params.triggerPrice,
+        params.integratorAccountIndex ?? 0,
+        params.integratorTakerFee ?? 0,
+        params.integratorMakerFee ?? 0,
+        params.nonce,
+        params.apiKeyIndex,
+        params.accountIndex
+      );
+    }
+
+    if (result?.error && String(result.error).includes('expects 8 args')) {
+      result = this.wasmModule.signModifyOrder(
+        params.marketIndex,
+        params.index,
+        params.baseAmount,
+        params.price,
+        params.triggerPrice,
+        params.nonce,
+        params.apiKeyIndex,
+        params.accountIndex
+      );
+    }
     
     if (result.error) {
       return { txType: 0, txInfo: '', txHash: '', error: result.error };
@@ -1093,6 +1248,107 @@ export class WasmSignerClient {
   }
 
   /**
+   * Sign a stake assets transaction
+   * Returns composite response with txType, txInfo, txHash
+   */
+  async signStakeAssets(params: StakeAssetsParams): Promise<WasmTxResponse> {
+    await this.ensureInitialized();
+
+    const result = this.wasmModule.signStakeAssets(
+      params.stakingPoolIndex,
+      params.shareAmount,
+      params.nonce,
+      params.apiKeyIndex,
+      params.accountIndex
+    );
+
+    if (result.error) {
+      return { txType: 0, txInfo: '', txHash: '', error: result.error };
+    }
+
+    return {
+      txType: result.txType ?? 35, // Default to STAKE_ASSETS
+      txInfo: result.txInfo ?? '',
+      txHash: result.txHash ?? '',
+      messageToSign: result.messageToSign
+    };
+  }
+
+  /**
+   * Sign an unstake assets transaction
+   * Returns composite response with txType, txInfo, txHash
+   */
+  async signUnstakeAssets(params: UnstakeAssetsParams): Promise<WasmTxResponse> {
+    await this.ensureInitialized();
+
+    const result = this.wasmModule.signUnstakeAssets(
+      params.stakingPoolIndex,
+      params.shareAmount,
+      params.nonce,
+      params.apiKeyIndex,
+      params.accountIndex
+    );
+
+    if (result.error) {
+      return { txType: 0, txInfo: '', txHash: '', error: result.error };
+    }
+
+    return {
+      txType: result.txType ?? 36, // Default to UNSTAKE_ASSETS
+      txInfo: result.txInfo ?? '',
+      txHash: result.txHash ?? '',
+      messageToSign: result.messageToSign
+    };
+  }
+
+  /**
+   * Sign an approve integrator transaction
+   * Returns composite response with txType, txInfo, txHash, messageToSign
+   */
+  async signApproveIntegrator(params: ApproveIntegratorParams): Promise<WasmTxResponse> {
+    await this.ensureInitialized();
+
+    let result = this.wasmModule.signApproveIntegrator(
+      params.integratorIndex,
+      params.maxPerpsTakerFee,
+      params.maxPerpsMakerFee,
+      params.maxSpotTakerFee,
+      params.maxSpotMakerFee,
+      params.approvalExpiry,
+      params.skipNonce ?? 0,
+      params.nonce,
+      params.apiKeyIndex,
+      params.accountIndex
+    );
+
+    // Legacy build expects 9 args (no skipNonce)
+    if (result?.error && String(result.error).includes('expects 9 args')) {
+      result = this.wasmModule.signApproveIntegrator(
+        params.integratorIndex,
+        params.maxPerpsTakerFee,
+        params.maxPerpsMakerFee,
+        params.maxSpotTakerFee,
+        params.maxSpotMakerFee,
+        params.approvalExpiry,
+        params.nonce,
+        params.apiKeyIndex,
+        params.accountIndex
+      );
+    }
+
+    if (result.error) {
+      return { txType: 0, txInfo: '', txHash: '', error: result.error };
+    }
+
+    return {
+      txType: result.txType ?? 45, // Default to APPROVE_INTEGRATOR
+      txInfo: result.txInfo ?? '',
+      txHash: result.txHash ?? '',
+      messageToSign: result.messageToSign
+    };
+  }
+
+  /**
    * Switch active API key
    * Note: This function is not exported from lighter-go WASM.
    * In lighter-go, multiple API keys are managed via CreateClient with different apiKeyIndex values.
@@ -1141,15 +1397,33 @@ export class WasmSignerClient {
       ReduceOnly: order.reduceOnly,
       TriggerPrice: order.triggerPrice,
       OrderExpiry: order.orderExpiry,
+      IntegratorAccountIndex: order.integratorAccountIndex ?? 0,
+      IntegratorTakerFee: order.integratorTakerFee ?? 0,
+      IntegratorMakerFee: order.integratorMakerFee ?? 0,
     }));
-    
-    const result = this.wasmModule.signCreateGroupedOrders(
+
+    let result = this.wasmModule.signCreateGroupedOrders(
       params.groupingType,
       ordersArray,
+      params.integratorAccountIndex ?? 0,
+      params.integratorTakerFee ?? 0,
+      params.integratorMakerFee ?? 0,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
     );
+
+    // Legacy grouped-orders builds expect 5 args
+    if (result?.error && String(result.error).includes('expects 5 args')) {
+      result = this.wasmModule.signCreateGroupedOrders(
+        params.groupingType,
+        ordersArray,
+        params.nonce,
+        params.apiKeyIndex,
+        params.accountIndex
+      );
+    }
     
     if (result.error) {
       return { txType: 0, txInfo: '', txHash: '', error: result.error };
@@ -1304,8 +1578,26 @@ export class WasmSignerClient {
       return null;
     }
 
+    // Local development priority: if cwd looks like the SDK repo and has bundled WASM,
+    // use it before resolving an installed node_modules package.
+    const cwd = process.cwd();
+    const localPackageJson = path.join(cwd, 'package.json');
+    const localWasmExec = path.join(cwd, 'wasm', 'wasm_exec.js');
+    const localWasmBinary = path.join(cwd, 'wasm', 'lighter-signer.wasm');
+    if (fs.existsSync(localPackageJson)) {
+      try {
+        const pkgRaw = fs.readFileSync(localPackageJson, 'utf-8');
+        const pkg = JSON.parse(pkgRaw) as { name?: string };
+        if (pkg.name === 'lighter-ts-sdk' && (fs.existsSync(localWasmExec) || fs.existsSync(localWasmBinary))) {
+          return cwd;
+        }
+      } catch {
+        // Ignore parse errors and continue with standard resolution.
+      }
+    }
+
     // Look for installed package in node_modules from current or parent directories
-    let currentDir = process.cwd();
+    let currentDir = cwd;
     const maxDepth = 10; // Prevent infinite loops
     let depth = 0;
 
@@ -1319,9 +1611,6 @@ export class WasmSignerClient {
     }
 
     // Local development fallback: treat cwd as package root only when it contains bundled WASM assets
-    const cwd = process.cwd();
-    const localWasmExec = path.join(cwd, 'wasm', 'wasm_exec.js');
-    const localWasmBinary = path.join(cwd, 'wasm', 'lighter-signer.wasm');
     if (fs.existsSync(localWasmExec) || fs.existsSync(localWasmBinary)) {
       return cwd;
     }

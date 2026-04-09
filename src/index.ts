@@ -64,6 +64,9 @@ export type {
   UpdatePublicPoolParams,
   MintSharesParams,
   BurnSharesParams,
+  StakeAssetsParams,
+  UnstakeAssetsParams,
+  ApproveIntegratorParams,
   CreateGroupedOrderParams,
   CreateGroupedOrdersParams,
   WasmSignerResponse,
@@ -88,6 +91,11 @@ export type { OrderStatusResult } from './utils/order-status-checker';
 
 // WebSocket Client
 export { WsClient } from './api/ws-client';
+export type {
+  AccountAllSubscriptionParams,
+  WsAccountAllPosition,
+  WsAccountAllMessage
+} from './api/ws-client';
 export { WebSocketOrderClient } from './api/ws-order-client';
 export type {
   LighterWsSendTx,

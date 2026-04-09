@@ -39,6 +39,7 @@ export interface AccountPosition {
   mark_price: string;
   unrealized_pnl: string;
   realized_pnl: string;
+  total_funding_paid_out?: string;
   margin_used: string;
 }
 

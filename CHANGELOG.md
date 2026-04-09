@@ -5,6 +5,32 @@ All notable changes to the Lighter TypeScript SDK will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+### Fixed
+
+### Tested
+
+## [1.0.11] - 2026-04-06
+
+### Added
+- Added `timeInForce?: TimeInForce` to `OtocoProtectionOrderParams`.
+- Added integrator and skip nonce support in signer order flows:
+  - `integratorAccountIndex`, `integratorTakerFee`, `integratorMakerFee`
+  - `skipNonce`
+- Added `total_funding_paid_out?: string` to account position types.
+- Added WebSocket `account_all` subscription helpers and exported types.
+
+### Fixed
+- Fixed `OrderApi.getOrderBookOrders()` to send `limit` (with `depth` kept as a backward-compatible alias).
+- Improved local WASM resolution in development so local rebuilt assets are preferred over installed package assets.
+
+### Tested
+- CJS and ESM builds validated independently.
+- Live create/cancel order flow validated through both built artifacts (`dist/cjs` and `dist/esm`).
+
 ## [1.1.0] - 2026-02-12
 
 ### Added

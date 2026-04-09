@@ -37,6 +37,11 @@ export interface OrderBookDetail {
   last_update_id: string;
 }
 
+export interface OrderBookOrdersParams extends OrderBookParams {
+  limit?: number;
+  depth?: number;
+}
+
 export interface OrderBookDetailsResponse {
   code: number;
   order_book_details: OrderBookDetailItem[];
@@ -329,10 +334,10 @@ export class OrderApi {
     return response.data;
   }
 
-  public async getOrderBookOrders(params: OrderBookParams & { depth?: number }): Promise<OrderBookOrders> {
+  public async getOrderBookOrders(params: OrderBookOrdersParams): Promise<OrderBookOrders> {
     const response = await this.client.get<OrderBookOrders>('/api/v1/orderBookOrders', {
       market_id: params.market_id,
-      ...(params.depth !== undefined ? { depth: params.depth } : {}),
+      ...((params.limit ?? params.depth) !== undefined ? { limit: params.limit ?? params.depth } : {}),
     });
     return response.data;
   }

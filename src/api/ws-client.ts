@@ -2,6 +2,31 @@ import WebSocket from 'ws';
 // @ts-ignore - ws module declaration
 import { WebSocketConfig, WebSocketSubscription } from '../types';
 
+export interface AccountAllSubscriptionParams {
+  accountIndex: number;
+  apiKeyIndex?: number;
+  auth?: string;
+}
+
+export interface WsAccountAllPosition {
+  market_id?: number;
+  side?: 'long' | 'short' | string;
+  size?: string;
+  entry_price?: string;
+  mark_price?: string;
+  unrealized_pnl?: string;
+  realized_pnl?: string;
+  total_funding_paid_out?: string;
+  [key: string]: any;
+}
+
+export interface WsAccountAllMessage {
+  channel?: 'account_all' | string;
+  account_index?: number;
+  positions?: WsAccountAllPosition[];
+  [key: string]: any;
+}
+
 export class WsClient {
   private ws: WebSocket | null = null;
   private config: WebSocketConfig;
@@ -127,6 +152,32 @@ export class WsClient {
     }
 
     this.ws.send(JSON.stringify(message));
+  }
+
+  /**
+   * Subscribe to account_all updates.
+   * This channel can include total_funding_paid_out per position.
+   */
+  public subscribeAccountAll(params: AccountAllSubscriptionParams): void {
+    const subParams: Record<string, any> = {
+      account_index: params.accountIndex,
+    };
+
+    if (params.apiKeyIndex !== undefined) {
+      subParams.api_key_index = params.apiKeyIndex;
+    }
+    if (params.auth) {
+      subParams.auth = params.auth;
+    }
+
+    this.subscribe({
+      channel: 'account_all',
+      params: subParams,
+    });
+  }
+
+  public unsubscribeAccountAll(): void {
+    this.unsubscribe('account_all');
   }
 
   private attemptReconnect(): void {

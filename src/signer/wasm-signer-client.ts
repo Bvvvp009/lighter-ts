@@ -59,8 +59,12 @@ export interface CreateOrderParams {
   timeInForce?: number;
   reduceOnly?: boolean;
   triggerPrice?: number;
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
   orderExpiry?: number; // Add optional orderExpiry parameter
   nonce?: number; // Add optional nonce parameter
+  skipNonce?: boolean;
 }
 
 export interface CreateMarketOrderParams {
@@ -70,13 +74,18 @@ export interface CreateMarketOrderParams {
   avgExecutionPrice: number;
   isAsk: boolean;
   reduceOnly?: boolean;
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
   nonce?: number; // Optional nonce (will be fetched automatically if not provided)
+  skipNonce?: boolean;
 }
 
 export interface CancelOrderParams {
   marketIndex: number;
   orderIndex: number;
   nonce?: number; // Optional nonce (will be fetched automatically if not provided)
+  skipNonce?: boolean;
 }
 
 export interface ChangeApiKeyParams {
@@ -98,11 +107,18 @@ export interface OcoOrderLegParams {
   reduceOnly?: boolean;
   triggerPrice?: number;
   orderExpiry?: number;
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
 }
 
 export interface OcoOrderParams {
   orders: [OcoOrderLegParams, OcoOrderLegParams];
   nonce?: number;
+  skipNonce?: boolean;
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
 }
 
 export interface OtocoMainOrderParams {
@@ -117,6 +133,9 @@ export interface OtocoMainOrderParams {
   idealPrice?: number;
   timeInForce?: TimeInForce;
   reduceOnly?: boolean;
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
   orderExpiry?: number;
 }
 
@@ -124,6 +143,10 @@ export interface OtocoProtectionOrderParams {
   triggerPrice: number;
   price?: number;
   isLimit?: boolean;
+  timeInForce?: TimeInForce;
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
   orderExpiry?: number;
 }
 
@@ -132,6 +155,10 @@ export interface OtocoOrderParams {
   stopLoss: OtocoProtectionOrderParams;
   takeProfit: OtocoProtectionOrderParams;
   nonce?: number;
+  skipNonce?: boolean;
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
 }
 
 /**
@@ -180,7 +207,10 @@ export enum TransactionType {
   BURN_SHARES = 19,
   UPDATE_LEVERAGE = 20,
   CREATE_GROUPED_ORDERS = 28,
-  UPDATE_MARGIN = 29
+  UPDATE_MARGIN = 29,
+  STAKE_ASSETS = 35,
+  UNSTAKE_ASSETS = 36,
+  APPROVE_INTEGRATOR = 45
 }
 
 /**
@@ -228,6 +258,9 @@ export class SignerClient {
   static readonly TX_TYPE_UPDATE_LEVERAGE = 20
   static readonly TX_TYPE_CREATE_GROUPED_ORDERS = 28
   static readonly TX_TYPE_UPDATE_MARGIN = 29
+  static readonly TX_TYPE_STAKE_ASSETS = 35
+  static readonly TX_TYPE_UNSTAKE_ASSETS = 36
+  static readonly TX_TYPE_APPROVE_INTEGRATOR = 45
 
   static readonly ORDER_TYPE_STOP_LOSS = 2
   static readonly ORDER_TYPE_STOP_LOSS_LIMIT = 3
@@ -646,7 +679,9 @@ export class SignerClient {
         if (this.config.enableWebSocket && this.wsOrderClient?.isReady()) {
           try {
             // Get next nonce if not provided
-            const nextNonce = (params.nonce === undefined || params.nonce === -1) ? 
+            const nextNonce = (params.skipNonce || params.nonce === 0)
+              ? { nonce: params.nonce ?? 0 }
+              : (params.nonce === undefined || params.nonce === -1) ? 
               await this.getNextNonce() :
               { nonce: params.nonce };
             const nonce = nextNonce.nonce;
@@ -654,13 +689,10 @@ export class SignerClient {
             // Handle order expiry conversion (same as createOrderOptimized)
             let orderExpiry = params.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY;
             
-            // CRITICAL: -1 represents DEFAULT_28_DAY_ORDER_EXPIRY
-            // The server-side converts -1 to proper 28-day timestamp
-            // WASM/Go validation requires -1 to be converted to actual timestamp CLIENT-SIDE
+            // Convert sentinel/default expiry into a concrete millisecond timestamp for WASM validation.
             if (orderExpiry === undefined || orderExpiry === -1 || orderExpiry === SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY) {
               orderExpiry = Date.now() + (28 * 24 * 60 * 60 * 1000); // Convert to milliseconds
             }
-            // NOTE: Do NOT convert milliseconds to seconds - WASM signer expects milliseconds
 
             // Default timeInForce based on order type
             // For limit orders, default to GOOD_TILL_TIME if not specified
@@ -698,6 +730,10 @@ export class SignerClient {
               reduceOnly: params.reduceOnly ? 1 : 0,
               triggerPrice: params.triggerPrice !== undefined ? params.triggerPrice : SignerClient.NIL_TRIGGER_PRICE,
               orderExpiry: wasmOrderExpiry,
+              integratorAccountIndex: params.integratorAccountIndex ?? 0,
+              integratorTakerFee: params.integratorTakerFee ?? 0,
+              integratorMakerFee: params.integratorMakerFee ?? 0,
+              skipNonce: params.skipNonce ? 1 : 0,
               nonce,
               apiKeyIndex: this.config.apiKeyIndex,
               accountIndex: this.config.accountIndex
@@ -739,23 +775,19 @@ export class SignerClient {
 
   private async createOrderOptimized(params: CreateOrderParams): Promise<[any, string, string | null]> {
     // Get next nonce if not provided (with caching)
-    const nextNonce = (params.nonce === undefined || params.nonce === -1) ? 
+    const nextNonce = (params.skipNonce || params.nonce === 0)
+      ? { nonce: params.nonce ?? 0 }
+      : (params.nonce === undefined || params.nonce === -1) ? 
       await this.getNextNonce() :
       { nonce: params.nonce };
 
     // Handle order expiry
     let orderExpiry = params.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY;
     
-    // CRITICAL: -1 represents DEFAULT_28_DAY_ORDER_EXPIRY
-    // The server-side converts -1 to proper 28-day timestamp
-    // WASM/Go validation requires -1 to be converted to actual timestamp CLIENT-SIDE
+    // Convert sentinel/default expiry into a concrete millisecond timestamp for WASM validation.
     if (orderExpiry === undefined || orderExpiry === -1 || orderExpiry === SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY) {
       orderExpiry = Date.now() + (28 * 24 * 60 * 60 * 1000); // Convert to milliseconds
     }
-    // NOTE: Do NOT convert milliseconds to seconds - WASM signer expects milliseconds
-    // else if (orderExpiry > 1e12) {
-    //   orderExpiry = Math.floor(orderExpiry / 1000);
-    // }
 
     // Default timeInForce based on order type FIRST (before computing wasmOrderExpiry)
     // For limit orders, default to GOOD_TILL_TIME if not specified
@@ -794,6 +826,10 @@ export class SignerClient {
       reduceOnly: (params.reduceOnly || false) ? 1 : 0,
       triggerPrice: params.triggerPrice !== undefined ? params.triggerPrice : SignerClient.NIL_TRIGGER_PRICE,
       orderExpiry: wasmOrderExpiry,
+      integratorAccountIndex: params.integratorAccountIndex ?? 0,
+      integratorTakerFee: params.integratorTakerFee ?? 0,
+      integratorMakerFee: params.integratorMakerFee ?? 0,
+      skipNonce: params.skipNonce ? 1 : 0,
       nonce: nextNonce.nonce,
       apiKeyIndex: this.config.apiKeyIndex,
       accountIndex: this.config.accountIndex
@@ -893,7 +929,9 @@ export class SignerClient {
 
     try {
       // Get next nonce if not provided (with caching)
-      const nextNonce = (params.nonce === undefined || params.nonce === -1) ? 
+      const nextNonce = (params.skipNonce || params.nonce === 0)
+        ? { nonce: params.nonce ?? 0 }
+        : (params.nonce === undefined || params.nonce === -1) ? 
         await this.getNextNonce() :
         { nonce: params.nonce };
 
@@ -909,6 +947,10 @@ export class SignerClient {
         reduceOnly: params.reduceOnly ? 1 : 0,
         triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
         orderExpiry: 0, // NilOrderExpiry for market orders
+        integratorAccountIndex: params.integratorAccountIndex ?? 0,
+        integratorTakerFee: params.integratorTakerFee ?? 0,
+        integratorMakerFee: params.integratorMakerFee ?? 0,
+        skipNonce: params.skipNonce ? 1 : 0,
         nonce: nextNonce.nonce,
         apiKeyIndex: this.config.apiKeyIndex,
         accountIndex: this.config.accountIndex
@@ -958,7 +1000,7 @@ export class SignerClient {
   }
 
   async getBestPrice(marketIndex: number, isAsk: boolean, obOrders?: any): Promise<number> {
-    const orderBook = obOrders || await this.orderApi.getOrderBookOrders({ market_id: marketIndex, depth: 1 } as any);
+    const orderBook = obOrders || await this.orderApi.getOrderBookOrders({ market_id: marketIndex, limit: 1 } as any);
     const side = isAsk ? (orderBook?.bids || []) : (orderBook?.asks || []);
     if (!side.length) {
       throw new Error('Order book has no liquidity on required side');
@@ -973,7 +1015,7 @@ export class SignerClient {
     isAmountBase: boolean = true,
     obOrders?: any
   ): Promise<[number, number]> {
-    const orderBook = obOrders || await this.orderApi.getOrderBookOrders({ market_id: marketIndex, depth: 100 } as any);
+    const orderBook = obOrders || await this.orderApi.getOrderBookOrders({ market_id: marketIndex, limit: 100 } as any);
     const side = isAsk ? (orderBook?.bids || []) : (orderBook?.asks || []);
 
     let matchedUsdAmount = 0;
@@ -1024,7 +1066,7 @@ export class SignerClient {
   }): Promise<[any, string, string | null]> {
     try {
       const quoteAmount = Math.floor(params.quoteAmount * 1e6);
-      const obOrders = await this.orderApi.getOrderBookOrders({ market_id: params.marketIndex, depth: 100 } as any);
+      const obOrders = await this.orderApi.getOrderBookOrders({ market_id: params.marketIndex, limit: 100 } as any);
 
       const idealPrice = params.idealPrice ?? await this.getBestPrice(params.marketIndex, params.isAsk, obOrders);
       const acceptableExecutionPrice = Math.round(idealPrice * (1 + params.maxSlippage * (params.isAsk ? -1 : 1)));
@@ -1154,7 +1196,9 @@ export class SignerClient {
     return await this.processTransactionWithRetry(async () => {
       try {
         // Get next nonce if not provided (with caching)
-        const nextNonce = (params.nonce === undefined || params.nonce === -1) ? 
+        const nextNonce = (params.skipNonce || params.nonce === 0)
+          ? { nonce: params.nonce ?? 0 }
+          : (params.nonce === undefined || params.nonce === -1) ? 
           await this.getNextNonce() :
           { nonce: params.nonce };
 
@@ -1162,6 +1206,7 @@ export class SignerClient {
         const wasmParams = {
           marketIndex: params.marketIndex,
           orderIndex: params.orderIndex,
+          skipNonce: params.skipNonce ? 1 : 0,
           nonce: nextNonce.nonce,
           apiKeyIndex: this.config.apiKeyIndex,
           accountIndex: this.config.accountIndex
@@ -1738,12 +1783,20 @@ export class SignerClient {
     baseAmount: number,
     price: number,
     triggerPrice: number,
-    nonce: number = -1
+    nonce: number = -1,
+    options?: {
+      integratorAccountIndex?: number;
+      integratorTakerFee?: number;
+      integratorMakerFee?: number;
+      skipNonce?: boolean;
+    }
   ): Promise<[any, string, string | null]> {
     return await this.processTransactionWithRetry(async () => {
       try {
         // Get next nonce if not provided
-        const nextNonce = (nonce === -1) ? 
+        const nextNonce = (options?.skipNonce || nonce === 0)
+          ? { nonce: nonce === -1 ? 0 : nonce }
+          : (nonce === -1) ? 
           await this.getNextNonce() :
           { nonce };
 
@@ -1754,6 +1807,10 @@ export class SignerClient {
           baseAmount,
           price,
           triggerPrice,
+          integratorAccountIndex: options?.integratorAccountIndex ?? 0,
+          integratorTakerFee: options?.integratorTakerFee ?? 0,
+          integratorMakerFee: options?.integratorMakerFee ?? 0,
+          skipNonce: options?.skipNonce ? 1 : 0,
           nonce: nextNonce.nonce,
           apiKeyIndex: this.config.apiKeyIndex,
           accountIndex: this.config.accountIndex
@@ -2319,6 +2376,162 @@ export class SignerClient {
   }
 
   /**
+   * Stake assets in a staking pool
+   * @param stakingPoolIndex - Staking pool index
+   * @param shareAmount - Amount of shares to stake
+   * @param nonce - Optional nonce (will be fetched automatically if not provided)
+   * @returns Promise resolving to [stakeInfo, transactionHash, error]
+   */
+  async stakeAssets(
+    stakingPoolIndex: number,
+    shareAmount: number,
+    nonce: number = -1
+  ): Promise<[any, string, string | null]> {
+    return await this.processTransactionWithRetry(async () => {
+      try {
+        const nextNonce = (nonce === -1) ? await this.getNextNonce() : { nonce };
+
+        const wasmResponse = await (this.wallet as WasmSignerClient).signStakeAssets({
+          stakingPoolIndex,
+          shareAmount,
+          nonce: nextNonce.nonce,
+          apiKeyIndex: this.config.apiKeyIndex,
+          accountIndex: this.config.accountIndex
+        });
+
+        if (wasmResponse.error) {
+          return [null, '', wasmResponse.error];
+        }
+
+        const txHash = await this.transactionApi.sendTxWithIndices(
+          wasmResponse.txType || SignerClient.TX_TYPE_STAKE_ASSETS,
+          wasmResponse.txInfo,
+          this.config.accountIndex,
+          this.config.apiKeyIndex
+        );
+
+        if (txHash.code && txHash.code !== 200) {
+          this.acknowledgeFailure();
+          return [null, '', txHash.message || 'Transaction failed'];
+        }
+
+        return [JSON.parse(wasmResponse.txInfo), txHash.tx_hash || txHash.hash || wasmResponse.txHash || '', null];
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return [null, '', errorMessage];
+      }
+    });
+  }
+
+  /**
+   * Unstake assets from a staking pool
+   * @param stakingPoolIndex - Staking pool index
+   * @param shareAmount - Amount of shares to unstake
+   * @param nonce - Optional nonce (will be fetched automatically if not provided)
+   * @returns Promise resolving to [unstakeInfo, transactionHash, error]
+   */
+  async unstakeAssets(
+    stakingPoolIndex: number,
+    shareAmount: number,
+    nonce: number = -1
+  ): Promise<[any, string, string | null]> {
+    return await this.processTransactionWithRetry(async () => {
+      try {
+        const nextNonce = (nonce === -1) ? await this.getNextNonce() : { nonce };
+
+        const wasmResponse = await (this.wallet as WasmSignerClient).signUnstakeAssets({
+          stakingPoolIndex,
+          shareAmount,
+          nonce: nextNonce.nonce,
+          apiKeyIndex: this.config.apiKeyIndex,
+          accountIndex: this.config.accountIndex
+        });
+
+        if (wasmResponse.error) {
+          return [null, '', wasmResponse.error];
+        }
+
+        const txHash = await this.transactionApi.sendTxWithIndices(
+          wasmResponse.txType || SignerClient.TX_TYPE_UNSTAKE_ASSETS,
+          wasmResponse.txInfo,
+          this.config.accountIndex,
+          this.config.apiKeyIndex
+        );
+
+        if (txHash.code && txHash.code !== 200) {
+          this.acknowledgeFailure();
+          return [null, '', txHash.message || 'Transaction failed'];
+        }
+
+        return [JSON.parse(wasmResponse.txInfo), txHash.tx_hash || txHash.hash || wasmResponse.txHash || '', null];
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return [null, '', errorMessage];
+      }
+    });
+  }
+
+  /**
+   * Approve an integrator with fee caps and expiry
+   * @param integratorIndex - Integrator account index
+   * @param maxPerpsTakerFee - Max perps taker fee
+   * @param maxPerpsMakerFee - Max perps maker fee
+   * @param maxSpotTakerFee - Max spot taker fee
+   * @param maxSpotMakerFee - Max spot maker fee
+   * @param approvalExpiry - Approval expiry timestamp
+   * @param nonce - Optional nonce (will be fetched automatically if not provided)
+   * @returns Promise resolving to [approveInfo, transactionHash, error]
+   */
+  async approveIntegrator(
+    integratorIndex: number,
+    maxPerpsTakerFee: number,
+    maxPerpsMakerFee: number,
+    maxSpotTakerFee: number,
+    maxSpotMakerFee: number,
+    approvalExpiry: number,
+    nonce: number = -1
+  ): Promise<[any, string, string | null]> {
+    return await this.processTransactionWithRetry(async () => {
+      try {
+        const nextNonce = (nonce === -1) ? await this.getNextNonce() : { nonce };
+
+        const wasmResponse = await (this.wallet as WasmSignerClient).signApproveIntegrator({
+          integratorIndex,
+          maxPerpsTakerFee,
+          maxPerpsMakerFee,
+          maxSpotTakerFee,
+          maxSpotMakerFee,
+          approvalExpiry,
+          nonce: nextNonce.nonce,
+          apiKeyIndex: this.config.apiKeyIndex,
+          accountIndex: this.config.accountIndex
+        });
+
+        if (wasmResponse.error) {
+          return [null, '', wasmResponse.error];
+        }
+
+        const txHash = await this.transactionApi.sendTxWithIndices(
+          wasmResponse.txType || SignerClient.TX_TYPE_APPROVE_INTEGRATOR,
+          wasmResponse.txInfo,
+          this.config.accountIndex,
+          this.config.apiKeyIndex
+        );
+
+        if (txHash.code && txHash.code !== 200) {
+          this.acknowledgeFailure();
+          return [null, '', txHash.message || 'Transaction failed'];
+        }
+
+        return [JSON.parse(wasmResponse.txInfo), txHash.tx_hash || txHash.hash || wasmResponse.txHash || '', null];
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return [null, '', errorMessage];
+      }
+    });
+  }
+
+  /**
    * Create OCO grouped orders (One Cancels Other)
    * @param params - OCO order parameters (exactly two orders)
    * @returns Promise resolving to grouped transaction result
@@ -2340,13 +2553,22 @@ export class SignerClient {
       timeInForce: order.timeInForce ?? TimeInForce.GOOD_TILL_TIME,
       reduceOnly: order.reduceOnly ?? false,
       triggerPrice: order.triggerPrice ?? SignerClient.NIL_TRIGGER_PRICE,
-      orderExpiry: order.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY
+      orderExpiry: order.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY,
+      integratorAccountIndex: order.integratorAccountIndex ?? params.integratorAccountIndex ?? 0,
+      integratorTakerFee: order.integratorTakerFee ?? params.integratorTakerFee ?? 0,
+      integratorMakerFee: order.integratorMakerFee ?? params.integratorMakerFee ?? 0
     }));
 
     const [tx, hash, error] = await this.createGroupedOrders(
       GroupingType.OCO,
       orders,
-      params.nonce ?? -1
+      params.nonce ?? -1,
+      {
+        ...(params.skipNonce !== undefined && { skipNonce: params.skipNonce }),
+        ...(params.integratorAccountIndex !== undefined && { integratorAccountIndex: params.integratorAccountIndex }),
+        ...(params.integratorTakerFee !== undefined && { integratorTakerFee: params.integratorTakerFee }),
+        ...(params.integratorMakerFee !== undefined && { integratorMakerFee: params.integratorMakerFee })
+      }
     );
 
     return { tx, hash, error };
@@ -2410,7 +2632,10 @@ export class SignerClient {
           : (mainOrder.timeInForce ?? SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME),
         reduceOnly: mainOrder.reduceOnly ?? false,
         triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
-        orderExpiry: mainExpiry
+        orderExpiry: mainExpiry,
+        integratorAccountIndex: mainOrder.integratorAccountIndex ?? params.integratorAccountIndex ?? 0,
+        integratorTakerFee: mainOrder.integratorTakerFee ?? params.integratorTakerFee ?? 0,
+        integratorMakerFee: mainOrder.integratorMakerFee ?? params.integratorMakerFee ?? 0
       },
       {
         marketIndex: mainOrder.marketIndex,
@@ -2424,7 +2649,10 @@ export class SignerClient {
           : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
         reduceOnly: true,
         triggerPrice: takeProfit.triggerPrice,
-        orderExpiry: takeProfit.orderExpiry ?? protectionExpiryDefault
+        orderExpiry: takeProfit.orderExpiry ?? protectionExpiryDefault,
+        integratorAccountIndex: takeProfit.integratorAccountIndex ?? params.integratorAccountIndex ?? 0,
+        integratorTakerFee: takeProfit.integratorTakerFee ?? params.integratorTakerFee ?? 0,
+        integratorMakerFee: takeProfit.integratorMakerFee ?? params.integratorMakerFee ?? 0
       },
       {
         marketIndex: mainOrder.marketIndex,
@@ -2438,14 +2666,23 @@ export class SignerClient {
           : SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
         reduceOnly: true,
         triggerPrice: stopLoss.triggerPrice,
-        orderExpiry: stopLoss.orderExpiry ?? protectionExpiryDefault
+        orderExpiry: stopLoss.orderExpiry ?? protectionExpiryDefault,
+        integratorAccountIndex: stopLoss.integratorAccountIndex ?? params.integratorAccountIndex ?? 0,
+        integratorTakerFee: stopLoss.integratorTakerFee ?? params.integratorTakerFee ?? 0,
+        integratorMakerFee: stopLoss.integratorMakerFee ?? params.integratorMakerFee ?? 0
       }
     ];
 
     const [tx, hash, error] = await this.createGroupedOrders(
       GroupingType.OTOCO,
       groupedOrders,
-      params.nonce ?? -1
+      params.nonce ?? -1,
+      {
+        ...(params.skipNonce !== undefined && { skipNonce: params.skipNonce }),
+        ...(params.integratorAccountIndex !== undefined && { integratorAccountIndex: params.integratorAccountIndex }),
+        ...(params.integratorTakerFee !== undefined && { integratorTakerFee: params.integratorTakerFee }),
+        ...(params.integratorMakerFee !== undefined && { integratorMakerFee: params.integratorMakerFee })
+      }
     );
 
     return { tx, hash, error };
@@ -2471,13 +2708,24 @@ export class SignerClient {
       reduceOnly?: boolean;
       triggerPrice?: number;
       orderExpiry?: number;
+      integratorAccountIndex?: number;
+      integratorTakerFee?: number;
+      integratorMakerFee?: number;
     }>,
-    nonce: number = -1
+    nonce: number = -1,
+    options?: {
+      skipNonce?: boolean;
+      integratorAccountIndex?: number;
+      integratorTakerFee?: number;
+      integratorMakerFee?: number;
+    }
   ): Promise<[any, string, string | null]> {
     return await this.processTransactionWithRetry(async () => {
       try {
         // Get next nonce if not provided
-        const nextNonce = (nonce === -1) ? 
+        const nextNonce = (options?.skipNonce || nonce === 0)
+          ? { nonce: nonce === -1 ? 0 : nonce }
+          : (nonce === -1) ? 
           await this.getNextNonce() :
           { nonce };
 
@@ -2492,13 +2740,20 @@ export class SignerClient {
           timeInForce: order.timeInForce,
           reduceOnly: (order.reduceOnly ?? false) ? 1 : 0,
           triggerPrice: order.triggerPrice || SignerClient.NIL_TRIGGER_PRICE,
-          orderExpiry: order.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY
+          orderExpiry: order.orderExpiry ?? SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY,
+          integratorAccountIndex: order.integratorAccountIndex ?? options?.integratorAccountIndex ?? 0,
+          integratorTakerFee: order.integratorTakerFee ?? options?.integratorTakerFee ?? 0,
+          integratorMakerFee: order.integratorMakerFee ?? options?.integratorMakerFee ?? 0
         }));
 
         // Use WASM signer
         const wasmResponse = await (this.wallet as WasmSignerClient).signCreateGroupedOrders({
           groupingType,
           orders: wasmOrders,
+          integratorAccountIndex: options?.integratorAccountIndex ?? 0,
+          integratorTakerFee: options?.integratorTakerFee ?? 0,
+          integratorMakerFee: options?.integratorMakerFee ?? 0,
+          skipNonce: options?.skipNonce ? 1 : 0,
           nonce: nextNonce.nonce,
           apiKeyIndex: this.config.apiKeyIndex,
           accountIndex: this.config.accountIndex

@@ -55,13 +55,16 @@ console.log(`Found ${orderBooks.length} order books`);
 Gets orders from the order book for a specific market.
 
 **Parameters:**
-- `marketIndex: number` - Market index
+- `market_id: number` - Market index
+- `limit?: number` - Maximum number of price levels to return
+
+`depth` is still accepted as a backward-compatible alias for `limit`.
 
 **Returns:** `Promise<OrderBookOrders>` - Order book orders
 
 **Example:**
 ```typescript
-const orders = await orderApi.getOrderBookOrders({ marketIndex: 0 });
+const orders = await orderApi.getOrderBookOrders({ market_id: 0, limit: 20 });
 console.log('Order book orders:', orders);
 ```
 

@@ -85,6 +85,31 @@ wsClient.unsubscribe('order_book/0');
 **Parameters:**
 - `channel: string` - Channel name to unsubscribe from
 
+### subscribeAccountAll(params: AccountAllSubscriptionParams)
+
+Subscribes to the `account_all` channel for account-level position updates.
+
+```typescript
+wsClient.subscribeAccountAll({
+  accountIndex: 12345,
+  apiKeyIndex: 4,
+  auth: '<auth-token>'
+});
+```
+
+**Parameters:**
+- `params.accountIndex: number` - Account index
+- `params.apiKeyIndex?: number` - API key index (optional)
+- `params.auth?: string` - Auth token for private subscriptions
+
+### unsubscribeAccountAll()
+
+Unsubscribes from the `account_all` channel.
+
+```typescript
+wsClient.unsubscribeAccountAll();
+```
+
 ### isConnectedToWebSocket()
 
 Checks if the WebSocket is currently connected.
@@ -121,6 +146,10 @@ const subscriptions = wsClient.getSubscriptions();
 - **Channel:** `market_stats/{marketIndex}`
 - **Example:** `market_stats/0` (ETH/USDC market)
 - **Updates:** Market statistics (funding rate, open interest, etc.)
+
+### Account All (Private)
+- **Channel:** `account_all`
+- **Updates:** Account positions and related fields (including `total_funding_paid_out` when present)
 
 ## Complete Example
 

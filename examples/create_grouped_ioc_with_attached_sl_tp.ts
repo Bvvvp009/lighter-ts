@@ -22,6 +22,9 @@ async function createGroupedIOCWithAttachedSLTPExample() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || '';
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '1000', 10);
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '4', 10);
+  const INTEGRATOR_ACCOUNT_INDEX = parseInt(process.env['INTEGRATOR_ACCOUNT_INDEX'] || '0', 10);
+  const INTEGRATOR_TAKER_FEE = parseInt(process.env['INTEGRATOR_TAKER_FEE'] || '0', 10);
+  const INTEGRATOR_MAKER_FEE = parseInt(process.env['INTEGRATOR_MAKER_FEE'] || '0', 10);
 
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY must be set in .env file');
@@ -126,6 +129,12 @@ async function createGroupedIOCWithAttachedSLTPExample() {
     console.log('   Grouping: OTOCO (One-Triggers-One-Cancels-Other)');
     console.log('     - Parent triggers Child 1 (Take Profit)');
     console.log('     - Child 1 cancels Child 2 (Stop Loss)');
+    if (INTEGRATOR_ACCOUNT_INDEX > 0) {
+      console.log('   Partner: Integrator fees enabled');
+      console.log(`     IntegratorAccountIndex: ${INTEGRATOR_ACCOUNT_INDEX}`);
+      console.log(`     IntegratorTakerFee: ${INTEGRATOR_TAKER_FEE}`);
+      console.log(`     IntegratorMakerFee: ${INTEGRATOR_MAKER_FEE}`);
+    }
     console.log('');
 
     // OTOCO grouping type = 3
@@ -134,7 +143,15 @@ async function createGroupedIOCWithAttachedSLTPExample() {
 
     const [orderInfo, txHash, error] = await signerClient.createGroupedOrders(
       groupingType, // OTOCO
-      [iocOrder, takeProfitOrder, stopLossOrder]
+      [iocOrder, takeProfitOrder, stopLossOrder],
+      -1,
+      {
+        ...(INTEGRATOR_ACCOUNT_INDEX > 0 && {
+          integratorAccountIndex: INTEGRATOR_ACCOUNT_INDEX,
+          integratorTakerFee: INTEGRATOR_TAKER_FEE,
+          integratorMakerFee: INTEGRATOR_MAKER_FEE,
+        }),
+      }
     );
 
     if (error) {

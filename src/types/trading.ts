@@ -31,7 +31,12 @@ export interface CreateOrderParams {
   timeInForce?: TimeInForce;
   reduceOnly?: boolean;
   triggerPrice?: number;
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
   orderExpiry?: number;
+  nonce?: number;
+  skipNonce?: boolean;
 }
 
 export interface CreateMarketOrderParams {
@@ -41,10 +46,17 @@ export interface CreateMarketOrderParams {
   avgExecutionPrice: number;
   isAsk: boolean;
   reduceOnly?: boolean;
+  integratorAccountIndex?: number;
+  integratorTakerFee?: number;
+  integratorMakerFee?: number;
+  nonce?: number;
+  skipNonce?: boolean;
 }
 
 export interface CancelOrderParams {
   marketIndex: number;
   orderIndex: number;
+  nonce?: number;
+  skipNonce?: boolean;
 }
 
