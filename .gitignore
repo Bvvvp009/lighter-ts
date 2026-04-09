@@ -97,6 +97,14 @@ temp/
 # Logs
 logs
 *.log
+
+# SDK directories (separate repos)
+lighter-go/
+lighter-python/
+
+# Test/analysis reports
+reports/
+
 # Runtime data
 pids
 *.pid
