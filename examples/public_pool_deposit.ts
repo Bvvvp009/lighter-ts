@@ -5,7 +5,7 @@
  * to earn a percentage of the pool's trading profits.
  */
 
-import { SignerClient } from '../dist/esm/index.js';
+import { SignerClient } from '../src';
 import dotenv from 'dotenv';
 
 dotenv.config();

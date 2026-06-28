@@ -152,7 +152,8 @@ export interface TransferParams {
   toAccountIndex: number;
   usdcAmount: number;
   asset_id?: number; // Asset ID (required for spot transfers)
-  is_spot_account?: boolean; // true for spot account, false/undefined for perp account (only used for USDC transfers)
+  is_spot_account?: boolean; // destination route: true for spot account, false/undefined for perp account
+  from_is_spot_account?: boolean; // source route: defaults to is_spot_account (same-route transfer) if omitted; set explicitly (opposite of is_spot_account) for same-account spot<->perp swaps
   fee: number;
   memo: string;
   ethPrivateKey?: string; // Optional: ETH private key for L1 signature. If not provided, only L2 signature (API key) will be used
@@ -167,7 +168,8 @@ export interface TransferSameMasterAccountParams {
   toAccountIndex: number; // Destination subaccount index (must be under the same master account)
   usdcAmount: number; // Amount of USDC to transfer (will be scaled by 1e6)
   asset_id?: number; // Asset ID (default: 3 for USDC)
-  is_spot_account?: boolean; // true for spot account, false/undefined for perp account
+  is_spot_account?: boolean; // destination route: true for spot account, false/undefined for perp account
+  from_is_spot_account?: boolean; // source route: defaults to is_spot_account (same-route transfer) if omitted; set explicitly (opposite of is_spot_account) for same-account spot<->perp swaps
   fee: number; // Transfer fee in USDC (will be scaled by 1e6)
   memo: string; // 32-byte memo (can be 64 hex chars or 66 with 0x prefix)
   nonce?: number; // Optional nonce (will auto-fetch if not provided)

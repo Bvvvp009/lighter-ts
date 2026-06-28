@@ -21,8 +21,8 @@ async function multiClientAdvancedExample() {
   }
   const API_KEY_INDEX_1 = parseInt(process.env['API_KEY_INDEX'] || '4', 10);
   const API_KEY_INDEX_2 = parseInt(process.env['API_KEY_INDEX_2'] || '5', 10);
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '271', 10);
-  const BASE_URL = process.env['BASE_URL'] || 'https://testnet.zklighter.elliot.ai';
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   // Client 1: Master account with API key index 1
   const client1 = new SignerClient({
     url: BASE_URL,

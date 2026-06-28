@@ -5,7 +5,7 @@
  * isolated margin position to free up capital.
  */
 
-import { SignerClient } from '../dist/esm/index.js';
+import { SignerClient } from '../src';
 import dotenv from 'dotenv';
 
 dotenv.config();

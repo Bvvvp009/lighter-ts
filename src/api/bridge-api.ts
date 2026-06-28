@@ -236,4 +236,35 @@ export class BridgeApi {
     
     return await this.l1BridgeClient.getTransactionStatus(txHash);
   }
+
+  public async createIntentAddress(params: {
+    chain_id: number;
+    from_addr: string;
+    amount: string;
+    account_index?: number;
+    is_external_deposit?: boolean;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const body: Record<string, any> = {
+      chain_id: params.chain_id,
+      from_addr: params.from_addr,
+      amount: params.amount,
+      ...(params.account_index !== undefined ? { account_index: params.account_index } : {}),
+      ...(params.is_external_deposit !== undefined ? { is_external_deposit: params.is_external_deposit } : {}),
+    };
+    const response = await this.client.post<{ [key: string]: any }>('/api/v1/createIntentAddress', body, params.authorization ? { headers: { authorization: params.authorization } } : undefined);
+    return response.data;
+  }
+
+  public async depositNetworks(): Promise<{ [key: string]: any }> {
+    const response = await this.client.get<{ [key: string]: any }>('/api/v1/deposit/networks');
+    return response.data;
+  }
+
+  public async depositLatest(l1Address: string): Promise<{ [key: string]: any }> {
+    const response = await this.client.get<{ [key: string]: any }>('/api/v1/deposit/latest', {
+      l1_address: l1Address,
+    });
+    return response.data;
+  }
 }

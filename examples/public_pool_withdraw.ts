@@ -4,7 +4,7 @@
  * This example demonstrates how to burn shares (withdraw USDC) from a public pool.
  */
 
-import { SignerClient } from '../dist/esm/index.js';
+import { SignerClient } from '../src';
 import dotenv from 'dotenv';
 
 dotenv.config();

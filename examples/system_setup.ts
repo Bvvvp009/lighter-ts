@@ -17,15 +17,14 @@
  * - EXISTING_API_KEY_INDEX: Index of existing API key (optional, defaults to 0 if API_PRIVATE_KEY provided)
  */
 
-import { SignerClient, ApiClient, AccountApi } from '../src';
-import { createWasmSignerClient } from '../src/signer/wasm-signer';
+import { SignerClient, ApiClient, AccountApi, createWasmSignerClient } from '../src';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 
 dotenv.config();
 
-const BASE_URL = process.env['BASE_URL'] || 'https://testnet.zklighter.elliot.ai';
+const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 const ETH_PRIVATE_KEY = process.env['ETH_PRIVATE_KEY'] || process.env['ACCOUNT_PRIVATE_KEY'] || '';
 const ACCOUNT_INDEX_ENV = process.env['ACCOUNT_INDEX'];
 const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '3', 10);
@@ -161,11 +160,34 @@ async function systemSetup() {
     await txClient.ensureWasmClient();
 
     // 6. Change API keys (register new public keys)
+    // Safety check: refuse to silently overwrite an already-registered key (e.g. the
+    // same index your .env's API_PRIVATE_KEY/API_KEY_INDEX is currently using for trading)
+    // unless explicitly confirmed. Overwriting rotates the on-chain pubkey for that index,
+    // immediately invalidating whatever private key was previously paired with it.
+    const existingKeys = await accountApi.getApiKeys(accountIndex, 255);
+    const registeredIndices = new Set((existingKeys || []).map((k: any) => k.api_key_index));
+    const allowOverwrite = (process.env['CONFIRM_OVERWRITE'] || '').toLowerCase() === '1';
+
     console.log(`📝 Registering ${NUM_API_KEYS} API Key(s) on server...`);
     for (let i = 0; i < NUM_API_KEYS; i++) {
       const targetApiKeyIndex = API_KEY_INDEX + i;
       const publicKey = publicKeys[i];
-      
+
+      if (registeredIndices.has(targetApiKeyIndex) && targetApiKeyIndex === EXISTING_API_KEY_INDEX) {
+        throw new Error(
+          `Refusing to overwrite API key index ${targetApiKeyIndex}: it is the same index you authenticated ` +
+          `with (EXISTING_API_KEY_INDEX). Overwriting it would invalidate the private key you're currently ` +
+          `using to sign transactions. Set CONFIRM_OVERWRITE=1 to proceed anyway, or pick a different API_KEY_INDEX.`
+        );
+      }
+      if (registeredIndices.has(targetApiKeyIndex) && !allowOverwrite) {
+        throw new Error(
+          `API key index ${targetApiKeyIndex} is already registered on-chain. Registering a new key here would ` +
+          `overwrite it and invalidate any private key currently paired with that index. Set CONFIRM_OVERWRITE=1 ` +
+          `to proceed anyway, or pick an unused API_KEY_INDEX.`
+        );
+      }
+
       const [changeResult, txHash, error] = await txClient.changeApiKey({
         ethPrivateKey: ETH_PRIVATE_KEY,
         newPubkey: publicKey,

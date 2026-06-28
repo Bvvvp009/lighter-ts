@@ -196,6 +196,99 @@ const [orderInfo, txHash, err] = await client.modifyOrder(
 );
 ```
 
+### transferSameMasterAccount(params: TransferSameMasterAccountParams)
+
+Transfers USDC between sub-accounts under the same master account. Unlike `transfer()`, this does not require an L1 (Ethereum) signature.
+
+**Parameters:**
+- `toAccountIndex: number` - Destination sub-account index (must share the same master account)
+- `usdcAmount: number` - Amount in USDC
+- `fee: number` - Transfer fee in USDC
+- `memo: string` - 32-byte memo (64 hex chars, with or without `0x` prefix)
+- `asset_id?: number` - Asset ID (default: 3 for USDC)
+- `is_spot_account?: boolean` - Destination route: `true` for spot, `false`/omitted for perp
+- `from_is_spot_account?: boolean` - Source route; defaults to `is_spot_account` (same-route transfer) — set explicitly opposite for a spot↔perp swap on the same account
+- `nonce?: number` - Optional nonce (auto-fetched if not provided)
+
+**Returns:** `Promise<[any, string, string | null]>` - `[transferInfo, txHash, error]`
+
+**Example:**
+```typescript
+const [tx, txHash, err] = await client.transferSameMasterAccount({
+  toAccountIndex: 281474976527303,
+  usdcAmount: 10,
+  fee: 0,
+  memo: '00000000000000000000000000000000',
+});
+```
+
+### approveIntegrator(integratorIndex, maxPerpsTakerFee, maxPerpsMakerFee, maxSpotTakerFee, maxSpotMakerFee, approvalExpiry, nonce?)
+
+Approves another account index (an "integrator" — a frontend, bot platform, or affiliate) to receive a share of taker/maker fees on orders that attach its index. Orders are attached via `integratorAccountIndex`/`integratorTakerFee`/`integratorMakerFee` on `createOrder()`/`modifyOrder()`.
+
+**Parameters:**
+- `integratorIndex: number` - The account index being approved as integrator
+- `maxPerpsTakerFee: number` / `maxPerpsMakerFee: number` - Max perps fee caps (1e6 scale, e.g. `1000` = 0.1%)
+- `maxSpotTakerFee: number` / `maxSpotMakerFee: number` - Max spot fee caps (1e6 scale)
+- `approvalExpiry: number` - **Millisecond** Unix timestamp; must be in the future
+- `nonce?: number` - Optional nonce (auto-fetched if not provided)
+
+**Returns:** `Promise<[any, string, string | null]>` - `[approveInfo, txHash, error]`
+
+To **revoke** a prior approval, call this again with all four fee caps and `approvalExpiry` set to `0` (the protocol treats `approvalExpiry === 0 && allFeesZero` as the revocation signal — there is no separate revoke transaction type).
+
+**Example:**
+```typescript
+const expiry = Date.now() + 86400 * 1000; // 1 day from now, in milliseconds
+const [info, txHash, err] = await client.approveIntegrator(
+  281474976527303, // integratorIndex
+  1000, 500,        // maxPerpsTakerFee, maxPerpsMakerFee
+  1000, 500,        // maxSpotTakerFee, maxSpotMakerFee
+  expiry
+);
+
+// Revoke:
+await client.approveIntegrator(281474976527303, 0, 0, 0, 0, 0);
+```
+
+### Self-Trade Prevention
+
+`createOrder()`, `modifyOrder()`, and the grouped-order methods accept `selfTradeBehaviorMode`/`selfTradeEqualityMode` options to control what happens when an order would otherwise match against the same account's own resting order:
+
+```typescript
+const [tx, txHash, err] = await client.createOrder({
+  marketIndex: 0,
+  clientOrderIndex: Date.now(),
+  baseAmount: 100,
+  price: 200000,
+  isAsk: true,
+  orderType: SignerClient.ORDER_TYPE_LIMIT,
+  selfTradeBehaviorMode: SignerClient.SELF_TRADE_BEHAVIOR_EXPIRE_MAKER,
+  selfTradeEqualityMode: SignerClient.SELF_TRADE_EQUALITY_ACCOUNT_INDEX,
+});
+```
+
+Behavior modes: `SELF_TRADE_BEHAVIOR_EXPIRE_MAKER` (0), `SELF_TRADE_BEHAVIOR_EXPIRE_TAKER` (1), `SELF_TRADE_BEHAVIOR_EXPIRE_BOTH` (2), `SELF_TRADE_BEHAVIOR_REDUCE` (3). Equality modes: `SELF_TRADE_EQUALITY_ACCOUNT_INDEX` (0), `SELF_TRADE_EQUALITY_MASTER_ACCOUNT_INDEX` (1).
+
+See `examples/self_trade_create_modify_order.ts` and `examples/self_trade_grouped_orders.ts` for full usage.
+
+### updateAccountConfig(accountTradingMode, nonce?) / updateAccountAssetConfig(assetIndex, assetMarginMode, nonce?)
+
+Configures Unified Trading Account (UTA) mode and per-asset margin eligibility:
+
+```typescript
+// Enable UTA (unifies USDC across spot and perp routes); 0 = disabled, 1 = enabled
+const [tx, txHash, err] = await client.updateAccountConfig(1);
+
+// Enable ETH (asset index 1) as usable margin collateral
+const [tx2, txHash2, err2] = await client.updateAccountAssetConfig(
+  1,
+  SignerClient.ASSET_MARGIN_MODE_ENABLED
+);
+```
+
+See `examples/enable_uta.ts`, `examples/disable_uta.ts`, `examples/enable_eth_as_margin.ts`, and `examples/disable_eth_as_margin.ts`.
+
 ### createSubAccount(nonce?)
 
 Creates a sub account from the master account.

@@ -5,7 +5,7 @@ import { BridgeApi } from '../api/bridge-api';
 import { WasmSignerClient, createWasmSignerClient, WasmManager } from './wasm-signer';
 import { RootApi } from '../api/root-api';
 import { logger, LogLevel } from '../utils/logger';
-import { TransactionException, NotFoundException } from '../utils/exceptions';
+import { TransactionException } from '../utils/exceptions';
 import { NonceCache } from '../utils/nonce-cache';
 import { NonceManager } from '../utils/nonce-manager';
 // Performance monitoring removed - not needed
@@ -65,6 +65,8 @@ export interface CreateOrderParams {
   orderExpiry?: number; // Add optional orderExpiry parameter
   nonce?: number; // Add optional nonce parameter
   skipNonce?: boolean;
+  selfTradeBehaviorMode?: number;
+  selfTradeEqualityMode?: number;
 }
 
 export interface CreateMarketOrderParams {
@@ -79,6 +81,8 @@ export interface CreateMarketOrderParams {
   integratorMakerFee?: number;
   nonce?: number; // Optional nonce (will be fetched automatically if not provided)
   skipNonce?: boolean;
+  selfTradeBehaviorMode?: number;
+  selfTradeEqualityMode?: number;
 }
 
 export interface CancelOrderParams {
@@ -300,6 +304,18 @@ export class SignerClient {
   static readonly ISOLATED_MARGIN_MODE = 1
   static readonly ISOLATED_MARGIN_REMOVE_COLLATERAL = 0
   static readonly ISOLATED_MARGIN_ADD_COLLATERAL = 1
+
+  static readonly SELF_TRADE_BEHAVIOR_EXPIRE_MAKER = 0
+  static readonly SELF_TRADE_BEHAVIOR_EXPIRE_TAKER = 1
+  static readonly SELF_TRADE_BEHAVIOR_EXPIRE_BOTH = 2
+  static readonly SELF_TRADE_BEHAVIOR_REDUCE = 3
+  static readonly SELF_TRADE_EQUALITY_ACCOUNT_INDEX = 0
+  static readonly SELF_TRADE_EQUALITY_MASTER_ACCOUNT_INDEX = 1
+  static readonly ASSET_MARGIN_MODE_DISABLED = 0
+  static readonly ASSET_MARGIN_MODE_ENABLED = 1
+  static readonly TX_TYPE_UPDATE_ACCOUNT_CONFIG = 46
+  static readonly TX_TYPE_UPDATE_ACCOUNT_ASSET_CONFIG = 47
+  static readonly NIL_MARKET_INDEX = 255
 
   /**
    * Creates a new SignerClient instance
@@ -579,9 +595,22 @@ export class SignerClient {
           chainIdNum = defaultChainId;
         }
 
+        // Handle composite/private key format.
+        // If the key contains '#', it's likely a comment delimiter from .env
+        // (dotenv treats '#' as a comment in unquoted values). Use only the part before '#'.
+        // The WASM module expects exactly 40 bytes (80 hex chars) for the private key.
+        const fullKey = this.config.privateKey || '';
+        let wasmKey: string;
+        if (fullKey.includes('#')) {
+          // '#' is a comment delimiter in .env — use only the part before it
+          wasmKey = fullKey.split('#')[0].trim();
+        } else {
+          wasmKey = fullKey;
+        }
+
         await (this.wallet as WasmSignerClient).createClient({
           url: this.config.url,
-          privateKey: this.config.privateKey?.startsWith('0x') ? this.config.privateKey : `0x${this.config.privateKey}`,
+          privateKey: wasmKey.startsWith('0x') ? wasmKey : `0x${wasmKey}`,
           chainId: chainIdNum,
           apiKeyIndex: this.config.apiKeyIndex,
           accountIndex: this.config.accountIndex,
@@ -736,7 +765,9 @@ export class SignerClient {
               skipNonce: params.skipNonce ? 1 : 0,
               nonce,
               apiKeyIndex: this.config.apiKeyIndex,
-              accountIndex: this.config.accountIndex
+              accountIndex: this.config.accountIndex,
+              selfTradeBehaviorMode: params.selfTradeBehaviorMode ?? 0,
+              selfTradeEqualityMode: params.selfTradeEqualityMode ?? 0,
             };
 
             const wasmResponse = await (this.wallet as WasmSignerClient).signCreateOrder(wasmParams);
@@ -832,7 +863,9 @@ export class SignerClient {
       skipNonce: params.skipNonce ? 1 : 0,
       nonce: nextNonce.nonce,
       apiKeyIndex: this.config.apiKeyIndex,
-      accountIndex: this.config.accountIndex
+      accountIndex: this.config.accountIndex,
+      selfTradeBehaviorMode: params.selfTradeBehaviorMode ?? 0,
+      selfTradeEqualityMode: params.selfTradeEqualityMode ?? 0,
     };
 
     if (process.env.NODE_ENV === 'development' || process.env.DEBUG) {
@@ -953,7 +986,9 @@ export class SignerClient {
         skipNonce: params.skipNonce ? 1 : 0,
         nonce: nextNonce.nonce,
         apiKeyIndex: this.config.apiKeyIndex,
-        accountIndex: this.config.accountIndex
+        accountIndex: this.config.accountIndex,
+        selfTradeBehaviorMode: params.selfTradeBehaviorMode ?? 0,
+        selfTradeEqualityMode: params.selfTradeEqualityMode ?? 0,
         };
 
       const wasmResponse = await (this.wallet as WasmSignerClient).signCreateOrder(wasmParams);
@@ -1295,6 +1330,7 @@ export class SignerClient {
       // Pass pubkey with 0x prefix - Go's hexutil.Decode handles it
       const wasmResponse = await (tempClient.wallet as WasmSignerClient).signChangePubKey({
         pubkey: `0x${pubkey}`,
+        skipNonce: 0,
         nonce,
         apiKeyIndex: newApiKeyIndex,
         accountIndex: this.config.accountIndex
@@ -1660,7 +1696,7 @@ export class SignerClient {
   /**
    * Cancel all orders
    */
-  async cancelAllOrders(timeInForce: number, time: number, nonce: number = -1): Promise<[any, any, string | null]> {
+  async cancelAllOrders(timeInForce: number, time: number, nonce: number = -1, cancelAllMarketIndex: number = 255): Promise<[any, any, string | null]> {
     try {
       // Get next nonce if not provided (with caching)
       const nextNonce = nonce === -1 ? 
@@ -1671,6 +1707,7 @@ export class SignerClient {
       const wasmResponse = await (this.wallet as WasmSignerClient).signCancelAllOrders({
         timeInForce,
         time,
+        cancelAllMarketIndex,
         nonce: nextNonce.nonce,
         apiKeyIndex: this.config.apiKeyIndex,
         accountIndex: this.config.accountIndex
@@ -1789,6 +1826,8 @@ export class SignerClient {
       integratorTakerFee?: number;
       integratorMakerFee?: number;
       skipNonce?: boolean;
+      selfTradeBehaviorMode?: number;
+      selfTradeEqualityMode?: number;
     }
   ): Promise<[any, string, string | null]> {
     return await this.processTransactionWithRetry(async () => {
@@ -1813,7 +1852,9 @@ export class SignerClient {
           skipNonce: options?.skipNonce ? 1 : 0,
           nonce: nextNonce.nonce,
           apiKeyIndex: this.config.apiKeyIndex,
-          accountIndex: this.config.accountIndex
+          accountIndex: this.config.accountIndex,
+          selfTradeBehaviorMode: options?.selfTradeBehaviorMode ?? 0,
+          selfTradeEqualityMode: options?.selfTradeEqualityMode ?? 0,
         });
 
         if (wasmResponse.error) {
@@ -1859,9 +1900,13 @@ export class SignerClient {
         // Use WASM signer - build params object conditionally
         const wasmParams: any = {
           toAccountIndex: params.toAccountIndex,
+          asset_id: params.asset_id ?? 3,
+          is_spot_account: params.is_spot_account ?? false,
+          from_is_spot_account: params.from_is_spot_account,
           usdcAmount: scaledAmount,
           fee: params.fee,
           memo: params.memo,
+          skipNonce: 0,
           nonce: nextNonce.nonce,
           apiKeyIndex: this.config.apiKeyIndex,
           accountIndex: this.config.accountIndex
@@ -1937,21 +1982,17 @@ export class SignerClient {
         // Use WASM signer - NO ethPrivateKey for same master account transfers
         const wasmParams: any = {
           toAccountIndex: params.toAccountIndex,
+          asset_id: params.asset_id ?? 3,
+          is_spot_account: params.is_spot_account ?? false,
+          from_is_spot_account: params.from_is_spot_account,
           usdcAmount: scaledAmount,
           fee: params.fee,
           memo: params.memo,
+          skipNonce: 0,
           nonce: nextNonce.nonce,
           apiKeyIndex: this.config.apiKeyIndex,
           accountIndex: this.config.accountIndex
         };
-        
-        // Include asset_id and is_spot_account if provided
-        if (params.asset_id !== undefined) {
-          wasmParams.asset_id = params.asset_id;
-        }
-        if (params.is_spot_account !== undefined) {
-          wasmParams.is_spot_account = params.is_spot_account;
-        }
         
         const wasmResponse = await (this.wallet as WasmSignerClient).signTransfer(wasmParams);
 
@@ -2718,6 +2759,8 @@ export class SignerClient {
       integratorAccountIndex?: number;
       integratorTakerFee?: number;
       integratorMakerFee?: number;
+      selfTradeBehaviorMode?: number;
+      selfTradeEqualityMode?: number;
     }
   ): Promise<[any, string, string | null]> {
     return await this.processTransactionWithRetry(async () => {
@@ -2756,7 +2799,9 @@ export class SignerClient {
           skipNonce: options?.skipNonce ? 1 : 0,
           nonce: nextNonce.nonce,
           apiKeyIndex: this.config.apiKeyIndex,
-          accountIndex: this.config.accountIndex
+          accountIndex: this.config.accountIndex,
+          selfTradeBehaviorMode: options?.selfTradeBehaviorMode ?? 0,
+          selfTradeEqualityMode: options?.selfTradeEqualityMode ?? 0,
         });
 
         if (wasmResponse.error) {
@@ -2776,6 +2821,90 @@ export class SignerClient {
           return [null, '', txHash.message || 'Transaction failed'];
         }
         
+        return [JSON.parse(wasmResponse.txInfo), txHash.tx_hash || txHash.hash || wasmResponse.txHash || '', null];
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return [null, '', errorMessage];
+      }
+    });
+  }
+
+  async updateAccountConfig(
+    accountTradingMode: number,
+    nonce: number = -1
+  ): Promise<[any, string, string | null]> {
+    return await this.processTransactionWithRetry(async () => {
+      try {
+        const nextNonce = (nonce === -1) ? 
+          await this.getNextNonce() :
+          { nonce };
+
+        const wasmResponse = await (this.wallet as WasmSignerClient).signUpdateAccountConfig({
+          accountTradingMode,
+          nonce: nextNonce.nonce,
+          apiKeyIndex: this.config.apiKeyIndex,
+          accountIndex: this.config.accountIndex
+        });
+
+        if (wasmResponse.error) {
+          return [null, '', wasmResponse.error];
+        }
+
+        const txHash = await this.transactionApi.sendTxWithIndices(
+          wasmResponse.txType || SignerClient.TX_TYPE_UPDATE_ACCOUNT_CONFIG,
+          wasmResponse.txInfo,
+          this.config.accountIndex,
+          this.config.apiKeyIndex
+        );
+
+        if (txHash.code && txHash.code !== 200) {
+          this.acknowledgeFailure();
+          return [null, '', txHash.message || 'Transaction failed'];
+        }
+
+        return [JSON.parse(wasmResponse.txInfo), txHash.tx_hash || txHash.hash || wasmResponse.txHash || '', null];
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return [null, '', errorMessage];
+      }
+    });
+  }
+
+  async updateAccountAssetConfig(
+    assetIndex: number,
+    assetMarginMode: number,
+    nonce: number = -1
+  ): Promise<[any, string, string | null]> {
+    return await this.processTransactionWithRetry(async () => {
+      try {
+        const nextNonce = (nonce === -1) ? 
+          await this.getNextNonce() :
+          { nonce };
+
+        const wasmResponse = await (this.wallet as WasmSignerClient).signUpdateAccountAssetConfig({
+          assetIndex,
+          assetMarginMode,
+          nonce: nextNonce.nonce,
+          apiKeyIndex: this.config.apiKeyIndex,
+          accountIndex: this.config.accountIndex
+        });
+
+        if (wasmResponse.error) {
+          return [null, '', wasmResponse.error];
+        }
+
+        const txHash = await this.transactionApi.sendTxWithIndices(
+          wasmResponse.txType || SignerClient.TX_TYPE_UPDATE_ACCOUNT_ASSET_CONFIG,
+          wasmResponse.txInfo,
+          this.config.accountIndex,
+          this.config.apiKeyIndex
+        );
+
+        if (txHash.code && txHash.code !== 200) {
+          this.acknowledgeFailure();
+          return [null, '', txHash.message || 'Transaction failed'];
+        }
+
         return [JSON.parse(wasmResponse.txInfo), txHash.tx_hash || txHash.hash || wasmResponse.txHash || '', null];
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -2892,8 +3021,8 @@ export class SignerClient {
     return await this.transactionApi.getTransaction({ by: 'hash', value: txHash });
   }
   async waitForTransaction(
-    txHash: string, 
-    maxWaitTime: number = 60000, 
+    txHash: string,
+    maxWaitTime: number = 120000,
     pollInterval: number = 2000
   ): Promise<Transaction> {
     const startTime = Date.now();
@@ -2925,9 +3054,33 @@ export class SignerClient {
       return `Transaction ${status}`;
     };
     
+    // The explorer (LogsApi) lags or 404s for transactions the core node already has -
+    // always fall back to the authoritative core transaction API rather than treating
+    // "explorer doesn't have it yet" as "not confirmed yet".
+    const checkCoreTxStatus = async (): Promise<Transaction | null> => {
+      const transaction = await this.transactionApi.getTransaction({
+        by: 'hash' as const,
+        value: txHash
+      });
+
+      const txStatus = typeof transaction.status === 'number'
+        ? transaction.status
+        : parseInt(String(transaction.status), 10);
+
+      if (txStatus === SignerClient.TX_STATUS_COMMITTED || txStatus === SignerClient.TX_STATUS_EXECUTED) {
+        return transaction;
+      }
+
+      if (txStatus === SignerClient.TX_STATUS_FAILED || txStatus === SignerClient.TX_STATUS_REJECTED) {
+        throw new TransactionException(`Transaction ${txStatus === SignerClient.TX_STATUS_FAILED ? 'failed' : 'rejected'}`, 'waitForTransaction', transaction);
+      }
+
+      return null;
+    };
+
     try {
       startAnimation();
-      
+
       while (Date.now() - startTime < maxWaitTime) {
         try {
           const log = await logsApi.getByHash(txHash);
@@ -2945,59 +3098,47 @@ export class SignerClient {
 
           // Some explorer records may be present with null/unknown status on testnet.
           // In that case, fallback to core transaction API status codes.
-          if (!status || status === 'pending') {
-            try {
-              const transaction = await this.transactionApi.getTransaction({
-                by: 'hash' as const,
-                value: txHash
-              });
-
-              const txStatus = typeof transaction.status === 'number'
-                ? transaction.status
-                : parseInt(String(transaction.status), 10);
-
-              if (txStatus === SignerClient.TX_STATUS_COMMITTED || txStatus === SignerClient.TX_STATUS_EXECUTED) {
-                stopAnimation();
-                return transaction;
-              }
-
-              if (txStatus === SignerClient.TX_STATUS_FAILED || txStatus === SignerClient.TX_STATUS_REJECTED) {
-                stopAnimation();
-                throw new TransactionException(`Transaction ${txStatus === SignerClient.TX_STATUS_FAILED ? 'failed' : 'rejected'}`, 'waitForTransaction', transaction);
-              }
-            } catch {
-              // If tx api lookup is unavailable yet, continue polling.
+          try {
+            const transaction = await checkCoreTxStatus();
+            if (transaction) {
+              stopAnimation();
+              return transaction;
             }
+          } catch (coreError) {
+            if (coreError instanceof TransactionException) {
+              stopAnimation();
+              throw coreError;
+            }
+            // Core API lookup unavailable yet, continue polling.
           }
 
           await new Promise(resolve => setTimeout(resolve, pollInterval));
-          
+
         } catch (error) {
-          // Check if it's a NotFoundException (404) - transaction not found yet
-          const isNotFound = error instanceof NotFoundException || 
-            (error instanceof Error && (
-              error.constructor.name === 'NotFoundException' ||
-              error.name === 'NotFoundException' ||
-              (error as any).status === 404 ||
-              error.message.includes('not found') || 
-              error.message.includes('404') ||
-              error.message.includes('No transaction found') ||
-              error.message.includes('Transaction not found')
-            ));
-          
-          if (isNotFound) {
-            await new Promise(resolve => setTimeout(resolve, pollInterval));
-            continue;
-          }
-          
           if (error instanceof TransactionException) {
             throw error;
           }
-          
+
+          // Explorer lookup failed (commonly a 404 because the explorer hasn't indexed
+          // this tx, or is down) - fall back to the core transaction API before retrying.
+          try {
+            const transaction = await checkCoreTxStatus();
+            if (transaction) {
+              stopAnimation();
+              return transaction;
+            }
+          } catch (coreError) {
+            if (coreError instanceof TransactionException) {
+              stopAnimation();
+              throw coreError;
+            }
+            // Core API lookup unavailable yet, continue polling.
+          }
+
           await new Promise(resolve => setTimeout(resolve, pollInterval));
         }
       }
-      
+
       stopAnimation();
       throw new Error(`Transaction ${txHash} did not confirm within ${maxWaitTime}ms`);
       

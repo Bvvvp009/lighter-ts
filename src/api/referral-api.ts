@@ -50,7 +50,7 @@ export class ReferralApi {
       headers['auth'] = authorization;
     }
 
-    const response = await this.client.get<ReferralPoints>(`/api/v1/referral/points?${params}`, headers);
+    const response = await this.client.get<ReferralPoints>(`/api/v1/referral/points?${params}`, undefined, { headers });
     return response.data;
   }
 
@@ -74,7 +74,7 @@ export class ReferralApi {
       headers['auth'] = authorization;
     }
 
-    return await this.client.get<ReferralPoints>(`/api/v1/referral/points?${params}`, headers);
+    return await this.client.get<ReferralPoints>(`/api/v1/referral/points?${params}`, undefined, { headers });
   }
 
   public async getUserReferrals(params: {
@@ -92,6 +92,101 @@ export class ReferralApi {
       },
       params.authorization ? { headers: { authorization: params.authorization } } : undefined
     );
+    return response.data;
+  }
+
+  public async referralCreate(params: {
+    account_index: number;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const formData = new URLSearchParams();
+    formData.append('account_index', params.account_index.toString());
+    if (params.auth) {
+      formData.append('auth', params.auth);
+    }
+    const response = await this.client.post<{ [key: string]: any }>('/api/v1/referral/create', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(params.authorization ? { authorization: params.authorization } : {}),
+      },
+    });
+    return response.data;
+  }
+
+  public async referralGet(params: {
+    account_index: number;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const response = await this.client.get<{ [key: string]: any }>('/api/v1/referral/get', {
+      account_index: params.account_index,
+    }, params.authorization ? { headers: { authorization: params.authorization } } : undefined);
+    return response.data;
+  }
+
+  public async referralKickbackUpdate(params: {
+    account_index: number;
+    kickback_rate: string;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const formData = new URLSearchParams();
+    formData.append('account_index', params.account_index.toString());
+    formData.append('kickback_rate', params.kickback_rate);
+    if (params.auth) {
+      formData.append('auth', params.auth);
+    }
+    const response = await this.client.post<{ [key: string]: any }>('/api/v1/referral/kickbackUpdate', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(params.authorization ? { authorization: params.authorization } : {}),
+      },
+    });
+    return response.data;
+  }
+
+  public async referralUpdate(params: {
+    account_index: number;
+    code?: string;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const formData = new URLSearchParams();
+    formData.append('account_index', params.account_index.toString());
+    if (params.code) {
+      formData.append('code', params.code);
+    }
+    if (params.auth) {
+      formData.append('auth', params.auth);
+    }
+    const response = await this.client.post<{ [key: string]: any }>('/api/v1/referral/update', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(params.authorization ? { authorization: params.authorization } : {}),
+      },
+    });
+    return response.data;
+  }
+
+  public async referralUse(params: {
+    account_index: number;
+    code: string;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const formData = new URLSearchParams();
+    formData.append('account_index', params.account_index.toString());
+    formData.append('code', params.code);
+    if (params.auth) {
+      formData.append('auth', params.auth);
+    }
+    const response = await this.client.post<{ [key: string]: any }>('/api/v1/referral/use', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(params.authorization ? { authorization: params.authorization } : {}),
+      },
+    });
     return response.data;
   }
 }

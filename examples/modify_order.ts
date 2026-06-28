@@ -26,14 +26,14 @@ async function getAuthToken(signerClient: SignerClient, expiryInSeconds: number 
 }
 
 async function modifyOrderExample() {
-  // Use testnet credentials (matching create_market_order.ts for consistency)
+  // Use mainnet credentials
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY environment variable is required');
   }
-  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
-  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
-  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '0', 10);
+  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '0', 10);
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   const MARKET_ID = 0; // ETH/USDC perps
 
   const signerClient = new SignerClient({
@@ -66,9 +66,9 @@ async function modifyOrderExample() {
       account = await accountApi.getAccount({ by: 'index', value: ACCOUNT_INDEX.toString() });
       const position = account.positions?.find(p => p.market_id === MARKET_ID);
       if (position) {
-        console.log(`   Position: ${position.side.toUpperCase()} ${position.size} @ $${parseInt(position.entry_price) / 100}`);
-        console.log(`   Mark Price: $${parseInt(position.mark_price) / 100}`);
-        console.log(`   Unrealized PnL: $${parseInt(position.unrealized_pnl) / 100}\n`);
+        const side = position.sign > 0 ? 'LONG' : 'SHORT';
+        console.log(`   Position: ${side} ${position.position} @ $${parseFloat(position.avg_entry_price)}`);
+        console.log(`   Unrealized PnL: $${position.unrealized_pnl}\n`);
       } else {
         console.log(`   No position found for market ${MARKET_ID}\n`);
       }
@@ -217,13 +217,13 @@ async function modifyOrderExample() {
         const updatedPosition = updatedAccount.positions?.find(p => p.market_id === MARKET_ID);
         
         if (updatedPosition) {
-          const positionSize = parseFloat(updatedPosition.size);
+          const positionSize = parseFloat(updatedPosition.position);
           const initialPosition = account?.positions?.find(p => p.market_id === MARKET_ID);
-          const initialSize = initialPosition ? parseFloat(initialPosition.size) : 0;
-          
-          console.log(`   Position: ${updatedPosition.side.toUpperCase()} ${updatedPosition.size} @ $${parseInt(updatedPosition.entry_price) / 100}`);
-          console.log(`   Mark Price: $${parseInt(updatedPosition.mark_price) / 100}`);
-          console.log(`   Unrealized PnL: $${parseInt(updatedPosition.unrealized_pnl) / 100}`);
+          const initialSize = initialPosition ? parseFloat(initialPosition.position) : 0;
+          const side = updatedPosition.sign > 0 ? 'LONG' : 'SHORT';
+
+          console.log(`   Position: ${side} ${updatedPosition.position} @ $${parseFloat(updatedPosition.avg_entry_price)}`);
+          console.log(`   Unrealized PnL: $${updatedPosition.unrealized_pnl}`);
           
           if (Math.abs(positionSize - initialSize) > 0.001) {
             console.log(`   Position Size Change: ${initialSize} → ${positionSize} (${positionSize - initialSize > 0 ? '+' : ''}${(positionSize - initialSize).toFixed(4)})\n`);

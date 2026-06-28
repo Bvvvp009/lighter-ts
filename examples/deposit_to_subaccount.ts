@@ -8,8 +8,7 @@
  * No need to create subaccounts if they already exist!
  */
 
-import { SignerClient } from '../src/signer/wasm-signer-client';
-import { ApiClient } from '../src/api/api-client';
+import { SignerClient, ApiClient } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -116,9 +115,13 @@ const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0', 10);
 
 // Example: Check if a specific account is a subaccount
 export async function checkIfSubAccount() {
+  const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || '';
+  if (!API_PRIVATE_KEY) {
+    throw new Error('API_PRIVATE_KEY environment variable is required');
+  }
   const config = {
-    url: process.env['API_URL'] || 'https://testnet.zklighter.elliot.ai',
-    privateKey: process.env['PRIVATE_KEY'] || '',
+    url: process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai',
+    privateKey: API_PRIVATE_KEY,
     accountIndex: parseInt(process.env['ACCOUNT_INDEX'] || '0'),
     apiKeyIndex: parseInt(process.env['API_KEY_INDEX'] || '0')
   };

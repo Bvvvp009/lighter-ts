@@ -1,149 +1,137 @@
 # Lighter TypeScript SDK Examples
 
-Complete, working examples for trading on Lighter Protocol. Each example is production-ready with comprehensive error handling, status monitoring, and detailed logging.
-
-## 🎯 What's in This Directory?
-
-These examples show you how to use the Lighter TypeScript SDK to:
-- Place orders (Market, Limit, TWAP)
-- Set stop-loss and take-profit automatically
-- Cancel orders
-- Close positions
-- Transfer funds
-- Monitor transaction status
-
-All examples follow the same patterns, so once you understand one, you understand them all.
-
-**Example usage:**
-```typescript
-try {
-  const [tx, hash, error] = await signerClient.createOrder(params);
-  if (error) {
-    console.error(`❌ Error: ${error}`);
-  }
-} catch (error) {
-  console.error(`❌ Error: ${trimException(error as Error)}`);
-  // Clean, readable error message
-}
-```
-
-## �� Example Overview
-
-### Core Trading Examples
-- **create_market_order.ts** - Create market orders with integrated SL/TP
-- **create_limit_order.ts** - Create limit orders with integrated SL/TP  
-- **create_twap_order.ts** - Create TWAP orders with integrated SL/TP
-- **cancel_order.ts** - Cancel specific orders
-- **cancel_all_orders.ts** - Cancel all open orders
-- **close_position.ts** - Close specific positions
-- **close_all_positions.ts** - Close all open positions
-
-### Account Management Examples
-- **onboarding.ts** - Complete onboarding flow for new users: deposit, account creation, API key generation, and configuration
-- **create_with_multiple_keys.ts** - Create orders using multiple API keys
-- **multi_client_advanced.ts** - Advanced multi-client operations (all new methods with multiple clients)
-- **create_subaccount.ts** - Create a sub account from master account
-- **deposit_to_subaccount.ts** - Deposit funds to subaccounts
-- **deposit.ts** - Deposit funds to main account
-- **withdraw_to_l1.ts** - Withdraw funds to L1 (Ethereum mainnet)
-- **update_leverage.ts** - Update leverage and margin mode (CROSS/ISOLATED) for markets
-- **update_margin.ts** - Add or remove margin from positions
-- **change_account_tier.ts** - Upgrade to premium tier or revert to standard tier
-- **public_pool_operations.ts** - Create, update, mint, and burn shares in public pools
-- **modify_order.ts** - Modify existing orders without canceling
-- **create_grouped_orders.ts** - Create OTO/OCO/OTOCO grouped orders
-- **create_grouped_ioc_with_attached_sl_tp.ts** - IOC order with attached SL/TP using OTOCO grouping
-- **create_position_tied_sl_tp.ts** - Position-tied SL/TP orders using OCO grouping
-- **create_market_order_max_slippage.ts** - Market orders with max slippage protection
-- **generate_api_key.ts** - Generate API key pairs from seed using WASM
-
-### Data & System Examples
-- **market_data.ts** - Fetch market data, order books, trades, candlesticks
-- **system_setup.ts** - Complete system setup and health checks
-- **send_tx_batch.ts** - Send multiple transactions in batches
-
-### WebSocket Examples
-- **ws.ts** - Basic WebSocket connection and data streaming
-- **ws_async.ts** - Async WebSocket operations with proper error handling
-- **ws_send_tx.ts** - Send transactions via WebSocket
-- **ws_send_batch_tx.ts** - Send batch transactions via WebSocket
-- **ws_ping_pong.ts** - Ping-pong mechanism to keep connections alive
-
-### Spot Market Examples
-See `examples/spot/` directory for complete spot trading examples:
-- **create_spot_limit_order.ts** - Create limit orders for spot markets
-- **create_spot_limit_order_with_sltp.ts** - Create limit orders with SL/TP (note: SL/TP created separately)
-- **create_market_spot_orders.ts** - Create market orders for multiple spot markets
-- **create_spot_twap_order.ts** - Create TWAP orders for spot markets
-- **modify_spot_order.ts** - Modify existing spot orders
-- **cancel_spot_order.ts** - Cancel active spot orders
-
-**Note**: Spot markets use market indices 2048-2050 (ETH SPOT, PROVE SPOT, ZK SPOT) and are available on mainnet.
+Complete, working examples for trading on Lighter Protocol. Every file below has been run against a live mainnet account as part of this SDK's release validation, using minimal order/transfer sizes.
 
 ## 🚀 Quick Start
 
-### Prerequisites
 ```bash
-# Install dependencies
 npm install
 
 # Set up environment variables
 cp .env.example .env
 ```
+
 ### Environment Variables
+
 ```bash
 # Required
-LIGHTER_URL=https://mainnet.zklighter.elliot.ai
-PRIVATE_KEY=your_private_key_here
+BASE_URL=https://mainnet.zklighter.elliot.ai
+API_PRIVATE_KEY=your_api_private_key_here
 ACCOUNT_INDEX=your_account_index
 API_KEY_INDEX=your_api_key_index
 
-# Optional (for specific examples)
-SUB_ACCOUNT_INDEX=1
-DEPOSIT_AMOUNT=0.1
-WITHDRAW_AMOUNT=0.1
-L1_ADDRESS=0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6
-ORDER_INDEX=12345
+# Optional (used by specific examples)
+ETH_PRIVATE_KEY=your_ethereum_wallet_private_key   # L1 signatures for transfers/withdrawals
+L1_ADDRESS=0x...                                    # withdrawal destination
+SUB_ACCOUNT_INDEX=...
+TO_ACCOUNT_INDEX=...
+INTEGRATOR_INDEX=...
 ```
 
 ### Running Examples
+
 ```bash
-# Run any example
 npx tsx examples/create_market_order.ts
-
-# Run all examples (development)
-npm run examples
-
-# Run specific example category
-npx tsx examples/create_market_order.ts
-npx tsx examples/create_limit_order.ts
-npx tsx examples/create_twap_order.ts
 ```
 
-## 🔧 Key Features
+Every example uses `import` (ESM). The SDK itself ships ESM, CJS, and UMD builds — see the root [README](../README.md#module-formats) for consuming it from a CommonJS project.
 
-### WebSocket Connection Maintenance
-For long-lived WebSocket connections, use the ping-pong mechanism to prevent disconnections:
+## 📋 Example Overview
+
+### Start Here
+- **quickstart.ts** — the smallest end-to-end flow: create a limit order, wait for confirmation, cancel it. Run this first to confirm your setup works.
+
+### Order Lifecycle (Perp)
+- **create_market_order.ts** — Market order with integrated SL/TP (OTOCO)
+- **create_market_order_max_slippage.ts** — Market order with max-slippage protection
+- **create_market_order_quote_amount.ts** — Market order sized by quote (USD) amount
+- **create_limit_order.ts** — Limit order with integrated SL/TP
+- **create_twap_order.ts** — TWAP order with integrated SL/TP
+- **create_order_skip_nonce.ts** — Order creation using the skip-nonce attribute
+- **modify_order.ts** — Modify an existing order without cancel/recreate
+- **cancel_order.ts** — Cancel a specific order
+- **cancel_all_orders.ts** — Cancel all open orders
+- **cancel_all_orders_single_market.ts** — Cancel all open orders on one market
+- **close_position.ts** — Close a specific position
+- **close_all_positions.ts** — Close every open position
+
+### Grouped & Conditional Orders
+- **create_grouped_orders.ts** — OTO / OCO / OTOCO grouped orders
+- **create_grouped_ioc_with_attached_sl_tp.ts** — IOC entry with attached SL/TP via OTOCO
+- **create_grouped_ioc_with_integrator.ts** — IOC grouped order with integrator fee routing
+- **create_position_tied_sl_tp.ts** — Position-tied SL/TP via OCO
+- **self_trade_create_modify_order.ts** — Self-trade-prevention modes on create/modify
+- **self_trade_grouped_orders.ts** — Self-trade-prevention modes on grouped orders
+
+### Spot Markets
+See [`examples/spot/`](./spot) — market indices 2048+ (ETH SPOT, etc.):
+- **create_spot_limit_order.ts** / **create_spot_limit_order_with_sltp.ts**
+- **create_market_spot_orders.ts**
+- **create_spot_twap_order.ts**
+- **modify_spot_order.ts**
+- **cancel_spot_order.ts**
+
+### Integrator (Fee Routing)
+A trading account can approve another account index ("the integrator" — a frontend, bot platform, or affiliate) to receive a share of taker/maker fees on routed orders:
+- **integrator_approve.ts** — Cross-account approval with L1 signature
+- **integrator_approve_same_master.ts** — Approve a sub-account under the same master (no L1 signature needed)
+- **integrator_create_modify_order.ts** — Place/modify an order with integrator fees attached
+- **integrator_revoke.ts** — Revoke a prior approval (re-approve with all fees and expiry set to 0)
+
+### Account & Margin Configuration
+- **update_margin_leverage.ts** — Update leverage and margin mode (CROSS/ISOLATED) per market
+- **update_margin.ts** — Add/remove isolated-margin collateral
+- **margin_eth_add_collateral_http.ts** / **margin_eth_remove_collateral_http.ts** — ETH-as-margin collateral management via HTTP endpoints
+- **enable_eth_as_margin.ts** / **disable_eth_as_margin.ts** — Toggle ETH as usable margin collateral
+- **enable_uta.ts** / **disable_uta.ts** — Toggle Unified Trading Account mode
+- **change_account_tier.ts** — Upgrade to premium tier or revert to standard
+
+### Sub-Accounts & Transfers
+- **create_subaccount.ts** — Create a sub-account from the master account
+- **deposit_to_subaccount.ts** — List existing sub-accounts and transfer USDC to one
+- **transfer_same_master_account.ts** — Transfer between sub-accounts under the same master (no L1 signature)
+- **transfer_spot_perp.ts** — Transfer USDC between the spot and perp routes of the same account
+- **withdraw_fast.ts** — Fast withdrawal via the fast-bridge pool
+- **withdraw_to_l1.ts** — Standard withdrawal to L1 (Ethereum mainnet)
+
+### Public Pools & Staking
+- **public_pool_info.ts** — Read pool metadata and share price
+- **public_pool_deposit.ts** / **public_pool_withdraw.ts** — Mint/burn pool shares
+- **public_pool_operations.ts** — Create, update, mint, and burn shares
+- **stake_and_unstake.ts** — Stake and unstake assets
+
+### RFQ & Referrals
+- **rfq_create_and_list.ts** — Create and list RFQs (requires `can_rfq` enabled on your account)
+- **referral_create.ts** — Create a referral code and check referral points
+
+### Bridge
+- **bridge_create_intent_address.ts** — Create an L1 bridge intent deposit address
+
+### Keys, Auth & Multi-Key
+- **system_setup.ts** — Full account/API-key health check and setup (registers a new API key — refuses to overwrite an in-use index unless `CONFIRM_OVERWRITE=1`)
+- **onboarding.ts** — End-to-end onboarding: deposit, account creation, API key generation
+- **create_auth_token.ts** — Generate a signed auth token for authenticated GET endpoints
+- **create_with_multiple_keys.ts** — Place orders using multiple API keys
+- **multi_client_advanced.ts** — Advanced operations across multiple `SignerClient` instances (needs a second funded account)
+- **revoke_api_key.ts** — Revoke an API key index
+- **get_set_maker_only_api_keys.ts** — Read/set maker-only API key restrictions
+
+### Data, Info & System
+- **market_data.ts** — Market data, order books, trades, candlesticks (HTTP + WebSocket)
+- **spot_get_account_assets_http.ts** — Fetch account asset/margin breakdown via HTTP
+- **info_api_new_endpoints.ts** — Additional `InfoApi` endpoints (transfer fee info, etc.)
+- **tokenlist.ts** — Fetch the supported token list
+- **send_tx_batch.ts** — Submit multiple transactions in a batch
+- **live_smoke.ts** — End-to-end smoke test (probes-only by default; set `SMOKE_SUBMIT_TX=1` to also submit a real order)
+
+### WebSocket
+- **websocket_subscribe.ts** — Connect, subscribe to channels, and stream real-time data
+
+## 🔧 Key Patterns
+
+### Grouped Order Construction (OTOCO)
 
 ```typescript
-// Basic ping-pong setup
-const pingInterval = setInterval(() => {
-  wsClient.send({ type: 'ping' });
-}, 30000); // Send ping every 30 seconds
-
-// Handle pong responses
-wsClient.onMessage = (message) => {
-  if (message.type === 'pong') {
-    console.log('Pong received - connection alive');
-  }
-};
-```
-
-### Grouped Order System
-All trading examples demonstrate grouped order creation with integrated SL/TP:
-
-```typescript
-// OTOCO order (entry + SL + TP)
 const result = await signerClient.createOtocoOrder({
   mainOrder: {
     marketIndex: 0,
@@ -153,95 +141,38 @@ const result = await signerClient.createOtocoOrder({
     isAsk: false,
     orderType: OrderType.LIMIT
   },
-  // Integrated SL/TP
-  stopLoss: {
-    triggerPrice: 4200, // Set your desired SL trigger
-    isLimit: false
-  },
-  takeProfit: {
-    triggerPrice: 4800, // Set your desired TP trigger
-    isLimit: false
-  }
+  stopLoss: { triggerPrice: 4200, isLimit: false },
+  takeProfit: { triggerPrice: 4800, isLimit: false }
 });
 ```
 
+Note: OCO legs must both be `reduceOnly`, with one Stop-Loss-type and one Take-Profit-type order — the protocol rejects two plain LIMIT legs.
+
 ### Transaction Status Monitoring
-All examples include comprehensive transaction status monitoring using the SignerClient's built-in method:
 
 ```typescript
-// Wait for transaction confirmation
 await signerClient.waitForTransaction(txHash, 30000, 2000);
 ```
 
 ### Error Handling
-Professional error handling with detailed logging:
 
 ```typescript
-try {
-  const result = await signerClient.createOtocoOrder(orderParams);
-  if (result.error || !result.hash) {
-    console.error('❌ Order failed:', result.error);
-  } else {
-    console.log('✅ Order created successfully!');
-  }
-} catch (error) {
-  console.error('❌ Error:', error);
+const [tx, hash, error] = await signerClient.createOrder(params);
+if (error || !hash) {
+  console.error('❌ Order failed:', error);
+  return;
 }
 ```
 
-## 📊 Example Categories
-
-### 1. Trading Operations
-- Market, Limit, and TWAP orders with SL/TP
-- Order cancellation and position management
-- All examples include transaction monitoring
-
-### 2. Account Management
-- Multi-API key operations
-- Deposit and withdrawal operations
-- Subaccount management
-- Leverage and margin mode updates
-- Account tier management (premium/standard)
-
-### 3. Data & System
-- Market data fetching
-- System setup and health checks
-- Batch transactions and WebSocket operations
-
 ## 🔒 Security Notes
 
-- Never commit private keys to version control
-- Use environment variables for sensitive data
-- Test with small amounts first
-- Monitor transaction status carefully
-
-## 📈 Performance Tips
-
-- Use batch transactions for multiple operations
-- Implement proper error handling and retry logic
-- Monitor WebSocket connections for real-time data
-- Use appropriate timeouts for different operations
+- Never commit `.env` or `api_key_config.json` — both contain real private keys and are gitignored by default.
+- Test with small amounts first (minimum lot/exchange size).
+- Examples that register or rotate API keys (`system_setup.ts`, `onboarding.ts`) refuse to overwrite the key index currently in active use unless explicitly confirmed — don't bypass that guard without understanding the consequences (it can invalidate your active trading credentials).
 
 ## 🆘 Troubleshooting
 
-### Common Issues
-1. **"go command not found"** - This is normal, the SDK handles WASM automatically
-2. **Order expiry errors** - Ensure proper timestamp format
-3. **WebSocket connection issues** - Check network connectivity and URL
-4. **Transaction failures** - Verify account balance and permissions
-
-### Getting Help
-- Check the main SDK documentation
-- Review error messages carefully
-- Ensure all environment variables are set correctly
-- Test with the system setup example first
-
-## 🎯 Production Usage
-
-These examples are designed for production use with:
-- Comprehensive error handling
-- Transaction status monitoring
-- Professional logging
-- Security best practices
-- Performance optimizations
-Each example can be adapted for your specific use case while maintaining the professional standards demonstrated.
+1. **"not enough asset balance" / "not enough margin"** — your account's real on-chain asset balance, not just its margin valuation, must cover the transfer/order. Check via `AccountApi.getAccount()`'s `assets[].balance` field.
+2. **WASM build issues** — Go is only needed if rebuilding the WASM signer from `lighter-go` source; the published package ships a prebuilt binary.
+3. **Order expiry errors** — `orderExpiry`/`approvalExpiry` fields are millisecond timestamps, not seconds.
+4. **Windows path issues** — examples detect direct execution via `process.argv[1]?.includes('<name>')`, not `import.meta.url`, for cross-platform compatibility.

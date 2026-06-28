@@ -102,7 +102,7 @@ async function createEthSpotTWAPOrder() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1]?.includes('create_spot_twap_order')) {
   createEthSpotTWAPOrder().catch(console.error);
 }
 

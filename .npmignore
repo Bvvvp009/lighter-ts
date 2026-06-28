@@ -1,5 +1,6 @@
 # Source files (only include compiled dist)
 src/
+lighter-go/
 temp-lighter-go/
 lighter-python/
 
@@ -22,6 +23,8 @@ tests/
 *.spec.ts
 jest.config.js
 examples/test_*.ts
+_test_*.ts
+**/_test_*.ts
 
 # Build artifacts
 node_modules/

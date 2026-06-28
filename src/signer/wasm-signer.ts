@@ -67,6 +67,8 @@ export interface CreateOrderParams {
   integratorAccountIndex?: number;
   integratorTakerFee?: number;
   integratorMakerFee?: number;
+  selfTradeBehaviorMode?: number;
+  selfTradeEqualityMode?: number;
   skipNonce?: number;
   nonce: number;
   apiKeyIndex?: number;
@@ -85,6 +87,7 @@ export interface CancelOrderParams {
 export interface CancelAllOrdersParams {
   timeInForce: number;
   time: number;
+  cancelAllMarketIndex?: number;
   skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
@@ -95,10 +98,12 @@ export interface TransferParams {
   toAccountIndex: number;
   usdcAmount: number;
   asset_id?: number; // Asset ID (required for spot transfers)
-  is_spot_account?: boolean; // true for spot account, false/undefined for perp account (only used for USDC transfers)
+  is_spot_account?: boolean; // destination route: true for spot account, false/undefined for perp account
+  from_is_spot_account?: boolean; // source route: defaults to is_spot_account (same-route transfer) if omitted; set explicitly (opposite of is_spot_account) for same-account spot<->perp swaps
   fee: number;
   memo: string;
   ethPrivateKey?: string; // Optional: ETH private key for L1 signature. If not provided, will try API private key (may fail)
+  skipNonce?: number;
   nonce?: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -108,6 +113,7 @@ export interface UpdateLeverageParams {
   marketIndex: number;
   fraction: number;
   marginMode: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -117,6 +123,7 @@ export interface WithdrawParams {
   usdcAmount: number;
   assetIndex?: number; // Asset index (default: 3 for USDCAssetIndex)
   routeType?: number; // Route type: 0 = Perps, 1 = Spot (default: 0)
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -131,6 +138,8 @@ export interface ModifyOrderParams {
   integratorAccountIndex?: number;
   integratorTakerFee?: number;
   integratorMakerFee?: number;
+  selfTradeBehaviorMode?: number;
+  selfTradeEqualityMode?: number;
   skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
@@ -141,12 +150,14 @@ export interface UpdateMarginParams {
   marketIndex: number;
   usdcAmount: number;
   direction: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
 }
 
 export interface CreateSubAccountParams {
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -156,6 +167,7 @@ export interface CreatePublicPoolParams {
   operatorFee: number;
   initialTotalShares: number;
   minOperatorShareRate: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -166,6 +178,7 @@ export interface UpdatePublicPoolParams {
   status: number;
   operatorFee: number;
   minOperatorShareRate: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -174,6 +187,7 @@ export interface UpdatePublicPoolParams {
 export interface MintSharesParams {
   publicPoolIndex: number;
   shareAmount: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -182,6 +196,7 @@ export interface MintSharesParams {
 export interface BurnSharesParams {
   publicPoolIndex: number;
   shareAmount: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -190,6 +205,7 @@ export interface BurnSharesParams {
 export interface StakeAssetsParams {
   stakingPoolIndex: number;
   shareAmount: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -198,6 +214,7 @@ export interface StakeAssetsParams {
 export interface UnstakeAssetsParams {
   stakingPoolIndex: number;
   shareAmount: number;
+  skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
   accountIndex: number;
@@ -210,6 +227,23 @@ export interface ApproveIntegratorParams {
   maxSpotTakerFee: number;
   maxSpotMakerFee: number;
   approvalExpiry: number;
+  skipNonce?: number;
+  nonce: number;
+  apiKeyIndex: number;
+  accountIndex: number;
+}
+
+export interface UpdateAccountConfigParams {
+  accountTradingMode: number;
+  skipNonce?: number;
+  nonce: number;
+  apiKeyIndex: number;
+  accountIndex: number;
+}
+
+export interface UpdateAccountAssetConfigParams {
+  assetIndex: number;
+  assetMarginMode: number;
   skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
@@ -230,6 +264,8 @@ export interface CreateGroupedOrderParams {
   integratorAccountIndex?: number;
   integratorTakerFee?: number;
   integratorMakerFee?: number;
+  selfTradeBehaviorMode?: number;
+  selfTradeEqualityMode?: number;
 }
 
 export interface CreateGroupedOrdersParams {
@@ -238,6 +274,8 @@ export interface CreateGroupedOrdersParams {
   integratorAccountIndex?: number;
   integratorTakerFee?: number;
   integratorMakerFee?: number;
+  selfTradeBehaviorMode?: number;
+  selfTradeEqualityMode?: number;
   skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
@@ -458,7 +496,6 @@ export class WasmSignerClient {
     // Access the functions
     this.wasmModule = {
       generateAPIKey: (window as any).GenerateAPIKey || (window as any).generateAPIKey,
-      // Note: GetPublicKey is not exported from lighter-go WASM - use GenerateAPIKey instead
       getPublicKey: (window as any).GetPublicKey || (window as any).getPublicKey || undefined,
       createClient: (window as any).CreateClient || (window as any).createClient,
       signChangePubKey: (window as any).SignChangePubKey || (window as any).signChangePubKey,
@@ -470,7 +507,6 @@ export class WasmSignerClient {
       signUpdateLeverage: (window as any).SignUpdateLeverage || (window as any).signUpdateLeverage,
       createAuthToken: (window as any).CreateAuthToken || (window as any).createAuthToken,
       checkClient: (window as any).CheckClient || (window as any).checkClient,
-      // All transaction signing functions from lighter-go WASM
       signModifyOrder: (window as any).SignModifyOrder || (window as any).signModifyOrder,
       signUpdateMargin: (window as any).SignUpdateMargin || (window as any).signUpdateMargin,
       signCreateSubAccount: (window as any).SignCreateSubAccount || (window as any).signCreateSubAccount,
@@ -478,8 +514,12 @@ export class WasmSignerClient {
       signUpdatePublicPool: (window as any).SignUpdatePublicPool || (window as any).signUpdatePublicPool,
       signMintShares: (window as any).SignMintShares || (window as any).signMintShares,
       signBurnShares: (window as any).SignBurnShares || (window as any).signBurnShares,
+      signStakeAssets: (window as any).SignStakeAssets || (window as any).signStakeAssets,
+      signUnstakeAssets: (window as any).SignUnstakeAssets || (window as any).signUnstakeAssets,
+      signApproveIntegrator: (window as any).SignApproveIntegrator || (window as any).signApproveIntegrator,
       signCreateGroupedOrders: (window as any).SignCreateGroupedOrders || (window as any).signCreateGroupedOrders,
-      // Note: SwitchAPIKey is not exported from lighter-go WASM - use CreateClient with different apiKeyIndex instead
+      signUpdateAccountConfig: (window as any).SignUpdateAccountConfig || (window as any).signUpdateAccountConfig,
+      signUpdateAccountAssetConfig: (window as any).SignUpdateAccountAssetConfig || (window as any).signUpdateAccountAssetConfig,
       switchAPIKey: (window as any).SwitchAPIKey || (window as any).switchAPIKey || undefined,
     };
 
@@ -581,7 +621,6 @@ export class WasmSignerClient {
     // Note: lighter-go WASM exports all functions with capitalized names
     this.wasmModule = {
       generateAPIKey: (global as any).GenerateAPIKey || (global as any).generateAPIKey || (global as any).lighterWasmFunctions?.generateAPIKey,
-      // Note: GetPublicKey is not exported from lighter-go WASM - use GenerateAPIKey instead
       getPublicKey: (global as any).GetPublicKey || (global as any).getPublicKey || (global as any).lighterWasmFunctions?.getPublicKey || undefined,
       createClient: (global as any).CreateClient || (global as any).createClient || (global as any).lighterWasmFunctions?.createClient,
       signChangePubKey: (global as any).SignChangePubKey || (global as any).signChangePubKey || (global as any).lighterWasmFunctions?.signChangePubKey,
@@ -593,7 +632,6 @@ export class WasmSignerClient {
       signUpdateLeverage: (global as any).SignUpdateLeverage || (global as any).signUpdateLeverage || (global as any).lighterWasmFunctions?.signUpdateLeverage,
       createAuthToken: (global as any).CreateAuthToken || (global as any).createAuthToken || (global as any).lighterWasmFunctions?.createAuthToken,
       checkClient: (global as any).CheckClient || (global as any).checkClient || (global as any).lighterWasmFunctions?.checkClient,
-      // All transaction signing functions from lighter-go WASM
       signModifyOrder: (global as any).SignModifyOrder || (global as any).signModifyOrder || (global as any).lighterWasmFunctions?.signModifyOrder,
       signUpdateMargin: (global as any).SignUpdateMargin || (global as any).signUpdateMargin || (global as any).lighterWasmFunctions?.signUpdateMargin,
       signCreateSubAccount: (global as any).SignCreateSubAccount || (global as any).signCreateSubAccount || (global as any).lighterWasmFunctions?.signCreateSubAccount,
@@ -605,7 +643,8 @@ export class WasmSignerClient {
       signUnstakeAssets: (global as any).SignUnstakeAssets || (global as any).signUnstakeAssets || (global as any).lighterWasmFunctions?.signUnstakeAssets,
       signApproveIntegrator: (global as any).SignApproveIntegrator || (global as any).signApproveIntegrator || (global as any).lighterWasmFunctions?.signApproveIntegrator,
       signCreateGroupedOrders: (global as any).SignCreateGroupedOrders || (global as any).signCreateGroupedOrders || (global as any).lighterWasmFunctions?.signCreateGroupedOrders,
-      // Note: SwitchAPIKey is not exported from lighter-go WASM - use CreateClient with different apiKeyIndex instead
+      signUpdateAccountConfig: (global as any).SignUpdateAccountConfig || (global as any).signUpdateAccountConfig || (global as any).lighterWasmFunctions?.signUpdateAccountConfig,
+      signUpdateAccountAssetConfig: (global as any).SignUpdateAccountAssetConfig || (global as any).signUpdateAccountAssetConfig || (global as any).lighterWasmFunctions?.signUpdateAccountAssetConfig,
       switchAPIKey: (global as any).SwitchAPIKey || (global as any).switchAPIKey || (global as any).lighterWasmFunctions?.switchAPIKey || undefined,
     };
 
@@ -663,6 +702,7 @@ export class WasmSignerClient {
    */
   async signChangePubKey(params: {
     pubkey: string;
+    skipNonce?: number;
     nonce: number;
     apiKeyIndex: number;
     accountIndex: number;
@@ -671,6 +711,7 @@ export class WasmSignerClient {
     
     const result = this.wasmModule.signChangePubKey(
       params.pubkey,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
@@ -733,11 +774,35 @@ export class WasmSignerClient {
       params.integratorAccountIndex ?? 0,
       params.integratorTakerFee ?? 0,
       params.integratorMakerFee ?? 0,
+      params.selfTradeBehaviorMode ?? 0,
+      params.selfTradeEqualityMode ?? 0,
       params.skipNonce ?? 0,
       params.nonce,
       apiKeyIndex,
       accountIndex
     );
+
+    if (result?.error && String(result.error).includes('expects 17 args')) {
+      result = this.wasmModule.signCreateOrder(
+        params.marketIndex,
+        params.clientOrderIndex,
+        params.baseAmount,
+        params.price,
+        params.isAsk,
+        params.orderType,
+        params.timeInForce,
+        params.reduceOnly,
+        params.triggerPrice,
+        params.orderExpiry,
+        params.integratorAccountIndex ?? 0,
+        params.integratorTakerFee ?? 0,
+        params.integratorMakerFee ?? 0,
+        params.skipNonce ?? 0,
+        params.nonce,
+        apiKeyIndex,
+        accountIndex
+      );
+    }
 
     // Backward compatibility:
     // - partner/no-skip build expects 16 args (no skipNonce)
@@ -857,11 +922,24 @@ export class WasmSignerClient {
     let result = this.wasmModule.signCancelAllOrders(
       params.timeInForce,
       params.time,
+      params.cancelAllMarketIndex ?? 255,
       params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
     );
+
+    // Legacy build expects 6 args (no cancelAllMarketIndex, no skipNonce)
+    if (result?.error && String(result.error).includes('expects 6 args')) {
+      result = this.wasmModule.signCancelAllOrders(
+        params.timeInForce,
+        params.time,
+        params.skipNonce ?? 0,
+        params.nonce,
+        params.apiKeyIndex,
+        params.accountIndex
+      );
+    }
 
     // Legacy build expects 5 args (no skipNonce)
     if (result?.error && String(result.error).includes('expects 5 args')) {
@@ -901,8 +979,8 @@ export class WasmSignerClient {
     // Default values for route types and asset
     // AssetIndex: 3 = USDC (based on protocol constants)
     const assetIndex = params.asset_id ?? 3; // 3 = USDC
-    const fromRouteType = params.is_spot_account === true ? 1 : 0; // 0 = Perp, 1 = Spot
     const toRouteType = params.is_spot_account === true ? 1 : 0; // 0 = Perp, 1 = Spot
+    const fromRouteType = (params.from_is_spot_account ?? params.is_spot_account) === true ? 1 : 0; // 0 = Perp, 1 = Spot
     
     // Ensure memo is exactly 32 bytes or 64 hex chars
     let memoBytes: string;
@@ -938,6 +1016,7 @@ export class WasmSignerClient {
       params.usdcAmount,
       params.fee,
       memoBytes,
+      params.skipNonce ?? 0,
       nonce,
       params.apiKeyIndex,
       params.accountIndex
@@ -969,10 +1048,11 @@ export class WasmSignerClient {
     const routeType = params.routeType ?? 0;   // Default to 0 (Perps)
     
     const result = this.wasmModule.signWithdraw(
-      assetIndex,        // assetIndex
-      routeType,         // routeType
-      params.usdcAmount, // amount
-      nonce,             // nonce (-1 for auto-fetch)
+      assetIndex,
+      routeType,
+      params.usdcAmount,
+      params.skipNonce ?? 0,
+      nonce,
       params.apiKeyIndex,
       params.accountIndex
     );
@@ -1000,6 +1080,7 @@ export class WasmSignerClient {
       params.marketIndex,
       params.fraction,
       params.marginMode,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
@@ -1033,11 +1114,31 @@ export class WasmSignerClient {
       params.integratorAccountIndex ?? 0,
       params.integratorTakerFee ?? 0,
       params.integratorMakerFee ?? 0,
+      params.selfTradeBehaviorMode ?? 0,
+      params.selfTradeEqualityMode ?? 0,
       params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
     );
+
+    // Backward compatibility: 12 args (no self-trade)
+    if (result?.error && String(result.error).includes('expects 12 args')) {
+      result = this.wasmModule.signModifyOrder(
+        params.marketIndex,
+        params.index,
+        params.baseAmount,
+        params.price,
+        params.triggerPrice,
+        params.integratorAccountIndex ?? 0,
+        params.integratorTakerFee ?? 0,
+        params.integratorMakerFee ?? 0,
+        params.skipNonce ?? 0,
+        params.nonce,
+        params.apiKeyIndex,
+        params.accountIndex
+      );
+    }
 
     // Backward compatibility:
     // - partner/no-skip build expects 11 args (no skipNonce)
@@ -1094,6 +1195,7 @@ export class WasmSignerClient {
       params.marketIndex,
       params.usdcAmount,
       params.direction,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
@@ -1119,6 +1221,7 @@ export class WasmSignerClient {
     await this.ensureInitialized();
     
     const result = this.wasmModule.signCreateSubAccount(
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
@@ -1147,6 +1250,7 @@ export class WasmSignerClient {
       params.operatorFee,
       params.initialTotalShares,
       params.minOperatorShareRate,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
@@ -1176,6 +1280,7 @@ export class WasmSignerClient {
       params.status,
       params.operatorFee,
       params.minOperatorShareRate,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
@@ -1203,6 +1308,7 @@ export class WasmSignerClient {
     const result = this.wasmModule.signMintShares(
       params.publicPoolIndex,
       params.shareAmount,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
@@ -1230,6 +1336,7 @@ export class WasmSignerClient {
     const result = this.wasmModule.signBurnShares(
       params.publicPoolIndex,
       params.shareAmount,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
@@ -1257,6 +1364,7 @@ export class WasmSignerClient {
     const result = this.wasmModule.signStakeAssets(
       params.stakingPoolIndex,
       params.shareAmount,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
@@ -1284,6 +1392,7 @@ export class WasmSignerClient {
     const result = this.wasmModule.signUnstakeAssets(
       params.stakingPoolIndex,
       params.shareAmount,
+      params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
@@ -1400,6 +1509,8 @@ export class WasmSignerClient {
       IntegratorAccountIndex: order.integratorAccountIndex ?? 0,
       IntegratorTakerFee: order.integratorTakerFee ?? 0,
       IntegratorMakerFee: order.integratorMakerFee ?? 0,
+      SelfTradeBehaviorMode: order.selfTradeBehaviorMode ?? 0,
+      SelfTradeEqualityMode: order.selfTradeEqualityMode ?? 0,
     }));
 
     let result = this.wasmModule.signCreateGroupedOrders(
@@ -1408,11 +1519,28 @@ export class WasmSignerClient {
       params.integratorAccountIndex ?? 0,
       params.integratorTakerFee ?? 0,
       params.integratorMakerFee ?? 0,
+      params.selfTradeBehaviorMode ?? 0,
+      params.selfTradeEqualityMode ?? 0,
       params.skipNonce ?? 0,
       params.nonce,
       params.apiKeyIndex,
       params.accountIndex
     );
+
+    // Backward compatibility: 9 args (no self-trade)
+    if (result?.error && String(result.error).includes('expects 9 args')) {
+      result = this.wasmModule.signCreateGroupedOrders(
+        params.groupingType,
+        ordersArray,
+        params.integratorAccountIndex ?? 0,
+        params.integratorTakerFee ?? 0,
+        params.integratorMakerFee ?? 0,
+        params.skipNonce ?? 0,
+        params.nonce,
+        params.apiKeyIndex,
+        params.accountIndex
+      );
+    }
 
     // Legacy grouped-orders builds expect 5 args
     if (result?.error && String(result.error).includes('expects 5 args')) {
@@ -1439,15 +1567,67 @@ export class WasmSignerClient {
 
   async checkClient(apiKeyIndex: number, accountIndex: number): Promise<void> {
     await this.ensureInitialized();
-    if (!this.wasmModule.checkClient) return; // optional
+    if (!this.wasmModule.checkClient) return;
     
-    // lighter-go CheckClient returns:
-    // - Success: {} (empty object)
-    // - Error: {error: "message"}
     const result = this.wasmModule.checkClient(apiKeyIndex, accountIndex);
     if (result && result.error) {
       throw new Error(typeof result.error === 'string' ? result.error : String(result.error));
     }
+  }
+
+  async signUpdateAccountConfig(params: UpdateAccountConfigParams): Promise<WasmTxResponse> {
+    await this.ensureInitialized();
+
+    if (!this.wasmModule.signUpdateAccountConfig) {
+      return { txType: 0, txInfo: '', txHash: '', error: 'signUpdateAccountConfig is not available in this WASM build' };
+    }
+
+    const result = this.wasmModule.signUpdateAccountConfig(
+      params.accountTradingMode,
+      params.skipNonce ?? 0,
+      params.nonce,
+      params.apiKeyIndex,
+      params.accountIndex
+    );
+
+    if (result.error) {
+      return { txType: 0, txInfo: '', txHash: '', error: result.error };
+    }
+
+    return {
+      txType: result.txType ?? 46,
+      txInfo: result.txInfo ?? '',
+      txHash: result.txHash ?? '',
+      messageToSign: result.messageToSign
+    };
+  }
+
+  async signUpdateAccountAssetConfig(params: UpdateAccountAssetConfigParams): Promise<WasmTxResponse> {
+    await this.ensureInitialized();
+
+    if (!this.wasmModule.signUpdateAccountAssetConfig) {
+      return { txType: 0, txInfo: '', txHash: '', error: 'signUpdateAccountAssetConfig is not available in this WASM build' };
+    }
+
+    const result = this.wasmModule.signUpdateAccountAssetConfig(
+      params.assetIndex,
+      params.assetMarginMode,
+      params.skipNonce ?? 0,
+      params.nonce,
+      params.apiKeyIndex,
+      params.accountIndex
+    );
+
+    if (result.error) {
+      return { txType: 0, txInfo: '', txHash: '', error: result.error };
+    }
+
+    return {
+      txType: result.txType ?? 47,
+      txInfo: result.txInfo ?? '',
+      txHash: result.txHash ?? '',
+      messageToSign: result.messageToSign
+    };
   }
 
   /**
@@ -1464,14 +1644,15 @@ export class WasmSignerClient {
    */
   private async loadScript(src: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      console.log(`[WASM] Loading script: ${src}`);
+      const debugWasm = typeof process !== 'undefined' && !!process.env?.['DEBUG_WASM'];
+      if (debugWasm) console.log(`[WASM] Loading script: ${src}`);
       const fullUrl = this.resolveScriptUrl(src);
-      console.log(`[WASM] Resolved URL: ${fullUrl}`);
-      
+      if (debugWasm) console.log(`[WASM] Resolved URL: ${fullUrl}`);
+
       const script = document.createElement('script');
       script.src = fullUrl;
       script.onload = () => {
-        console.log(`[WASM] Script loaded successfully: ${fullUrl}`);
+        if (debugWasm) console.log(`[WASM] Script loaded successfully: ${fullUrl}`);
         resolve();
       };
       script.onerror = (error) => {
@@ -1625,8 +1806,9 @@ export class WasmSignerClient {
     if (this.isBrowser) {
       // Browser path - resolve relative to document root
       const fullUrl = this.resolveWasmUrl(wasmPath);
-      console.log(`[WASM] Fetching WASM binary from: ${fullUrl}`);
-      
+      const debugWasm = typeof process !== 'undefined' && !!process.env?.['DEBUG_WASM'];
+      if (debugWasm) console.log(`[WASM] Fetching WASM binary from: ${fullUrl}`);
+
       try {
         const response = await fetch(fullUrl);
         if (!response.ok) {
@@ -1634,7 +1816,7 @@ export class WasmSignerClient {
           throw new Error(`Failed to load WASM binary: HTTP ${response.status} ${response.statusText} from ${fullUrl}`);
         }
         const data = await response.arrayBuffer();
-        console.log(`[WASM] WASM binary loaded successfully (${data.byteLength} bytes)`);
+        if (debugWasm) console.log(`[WASM] WASM binary loaded successfully (${data.byteLength} bytes)`);
         return data;
       } catch (error) {
         console.error(`[WASM] Failed to fetch WASM binary:`, error);
@@ -1666,7 +1848,9 @@ export class WasmSignerClient {
     ];
     
     const resolved = candidates[0]; // Use first candidate
-    console.log(`[WASM] Resolving WASM path "${wasmPath}" to: "${resolved}"`);
+    if (typeof process !== 'undefined' && process.env?.['DEBUG_WASM']) {
+      console.log(`[WASM] Resolving WASM path "${wasmPath}" to: "${resolved}"`);
+    }
     return resolved;
   }
 }

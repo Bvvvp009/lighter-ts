@@ -306,4 +306,27 @@ export class TransactionApi {
     }, auth ? { headers: { 'X-Auth-Token': auth } } : undefined);
     return response.data;
   }
+
+  public async setAccountMetadata(params: {
+    account_index: number;
+    key: string;
+    value: string;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const formData = new URLSearchParams();
+    formData.append('account_index', params.account_index.toString());
+    formData.append('key', params.key);
+    formData.append('value', params.value);
+    if (params.auth) {
+      formData.append('auth', params.auth);
+    }
+    const response = await this.client.post<{ [key: string]: any }>('/api/v1/setAccountMetadata', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(params.authorization ? { authorization: params.authorization } : {}),
+      },
+    });
+    return response.data;
+  }
 }
