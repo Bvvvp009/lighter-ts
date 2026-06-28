@@ -46,6 +46,8 @@ async function createAuthToken() {
 
   } catch (error) {
     console.error('Error creating auth token:', error);
+  } finally {
+    await signerClient.close();
   }
 }
 

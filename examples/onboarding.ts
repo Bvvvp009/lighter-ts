@@ -40,8 +40,7 @@
  *   npx ts-node examples/onboarding.ts
  */
 
-import { SignerClient, ApiClient, AccountApi } from '../src';
-import { createWasmSignerClient } from '../src/signer/wasm-signer';
+import { SignerClient, ApiClient, AccountApi, createWasmSignerClient } from '../src';
 import { ethers } from 'ethers';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
@@ -319,6 +318,12 @@ async function generateAPIKeys(accountIndex: number): Promise<Record<number, str
 
   for (let i = 0; i < NUM_API_KEYS; i++) {
     const idx = API_KEY_INDEX + i;
+    if (idx === AUTH_API_KEY_INDEX) {
+      // Refuse to overwrite the key we're currently authenticating with - doing so
+      // would rotate its on-chain pubkey and invalidate API_PRIVATE_KEY mid-script.
+      console.error(`❌ Key ${idx}: refusing to overwrite the API key index used for authentication (AUTH_API_KEY_INDEX=${AUTH_API_KEY_INDEX}). Choose a different API_KEY_INDEX.`);
+      continue;
+    }
     const [result, txHash, error] = await signer.changeApiKey({
       ethPrivateKey: ETH_PRIVATE_KEY,
       newPubkey: publicKeys[i],

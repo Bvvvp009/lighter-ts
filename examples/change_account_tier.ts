@@ -3,7 +3,7 @@ import { SignerClient, ApiClient, AccountApi } from '../src';
 
 dotenv.config();
 
-const BASE_URL = process.env.BASE_URL || 'https://api-testnet.lighter.xyz';
+const BASE_URL = process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai';
 const PRIVATE_KEY = process.env.API_PRIVATE_KEY || '';
 const ACCOUNT_INDEX = parseInt(process.env.ACCOUNT_INDEX || '10');
 const API_KEY_INDEX = parseInt(process.env.API_KEY_INDEX || '10');

@@ -12,9 +12,7 @@ All examples use environment variables for credentials:
 
 ## Market Indices
 
-- **2048**: ETH SPOT
-- **2049**: PROVE SPOT  
-- **2050**: ZK SPOT
+Spot markets start at index 2048 (ETH/USDC) and new markets are added over time — at the time of writing this includes ETH, LIT, LINK, UNI, AAVE, SKY, and LDO spot pairs. Don't hardcode a list; fetch the current set via `OrderApi.getOrderBookDetails({ market_id })` or the order-book-details list endpoint.
 
 ## Working Examples
 
@@ -54,18 +52,15 @@ All examples use environment variables for credentials:
 ### 📝 Notes
 
 - **SL/TP Orders**: Use separate `createOrder` calls for stop-loss and take-profit orders on spot markets.
-- **Market Orders**: Some market indices (like 2051 for SOL SPOT) may not be fully supported for market orders yet. ETH SPOT (2048) works.
 - **Position Checking**: All examples include position checking logic to verify order success.
 
 ## Running Examples
 
 ```bash
-# Run a specific example
-npx ts-node examples/spot/create_eth_spot_limit_order.ts
-
-# Make sure WASM is built first
-node scripts/build-wasm.cjs
+npx tsx examples/spot/create_spot_limit_order.ts
 ```
+
+WASM is prebuilt and bundled with the package — rebuilding via `npm run build:wasm` is only needed if you're modifying the vendored `lighter-go` signer source.
 
 ## Position Checking
 

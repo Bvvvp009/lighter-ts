@@ -15,32 +15,44 @@ export interface AccountAsset {
 }
 
 export interface Account {
-  index: string;
+  index: number;
+  account_index: number;
   l1_address: string;
-  l2_address: string;
-  nonce: string;
-  balance: string;
-  margin_balance: string;
-  free_margin: string;
-  margin_used: string;
-  margin_ratio: string;
+  status: number;
+  account_trading_mode: number;
+  available_balance: string;
+  collateral: string;
+  total_asset_value: string;
+  cross_asset_value: string;
+  cross_initial_margin_requirement: string;
+  cross_maintenance_margin_requirement: string;
+  total_order_count?: number;
+  total_isolated_order_count?: number;
+  pending_order_count?: number;
+  transaction_time?: number;
   sub_accounts?: SubAccount[];  // List of subaccounts under this master account
   positions: AccountPosition[];
-  orders: Order[];
-  trades: Trade[];
   assets?: AccountAsset[]; // Assets array with balance and locked_balance
+  shares?: any[];
 }
 
 export interface AccountPosition {
   market_id: number;
-  side: 'long' | 'short';
-  size: string;
-  entry_price: string;
-  mark_price: string;
+  symbol: string;
+  sign: number; // 1 = long, -1 = short
+  position: string; // position size (base units)
+  avg_entry_price: string;
+  position_value: string;
   unrealized_pnl: string;
   realized_pnl: string;
+  liquidation_price: string;
   total_funding_paid_out?: string;
-  margin_used: string;
+  margin_mode: number;
+  allocated_margin: string;
+  initial_margin_fraction?: string;
+  open_order_count?: number;
+  pending_order_count?: number;
+  position_tied_order_count?: number;
 }
 
 export interface Order {
@@ -207,11 +219,12 @@ export class AccountApi {
   }
 
   public async getAccount(params: AccountParams, auth?: string): Promise<Account> {
-    const response = await this.client.get<Account>('/api/v1/account', {
+    const response = await this.client.get<Account & { accounts?: Account[] }>('/api/v1/account', {
       by: params.by,
       value: params.value,
     }, auth ? { headers: { 'X-Auth-Token': auth } } : undefined);
-    return response.data;
+    const data = response.data;
+    return Array.isArray(data.accounts) ? data.accounts[0] : data;
   }
 
   public async getAccounts(params?: PaginationParams): Promise<Account[]> {
@@ -220,10 +233,11 @@ export class AccountApi {
   }
 
   public async getAccountsByL1Address(l1Address: string): Promise<Account[]> {
-    const response = await this.client.get<Account[]>('/api/v1/accountsByL1Address', {
+    const response = await this.client.get<{ sub_accounts?: Account[] } | Account[]>('/api/v1/accountsByL1Address', {
       l1_address: l1Address,
     });
-    return response.data;
+    const data = response.data;
+    return Array.isArray(data) ? data : (data.sub_accounts || []);
   }
 
   public async getApiKeys(accountIndex: number, apiKeyIndex: number): Promise<AccountApiKeys> {
@@ -464,6 +478,150 @@ export class AccountApi {
     }
 
     const response = await this.client.post<{ [key: string]: any }>('/api/v1/litLease', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(params.authorization ? { authorization: params.authorization } : {}),
+      },
+    });
+    return response.data;
+  }
+
+  public async getPartnerStats(accountIndex: number, auth?: string): Promise<{ [key: string]: any }> {
+    const response = await this.client.get<{ [key: string]: any }>('/api/v1/partnerStats', {
+      account_index: accountIndex,
+    }, auth ? { headers: { authorization: auth } } : undefined);
+    return response.data;
+  }
+
+  public async getMakerOnlyApiKeys(accountIndex: number, auth?: string): Promise<{ [key: string]: any }> {
+    const response = await this.client.get<{ [key: string]: any }>('/api/v1/makerOnlyApiKeys', {
+      account_index: accountIndex,
+    }, auth ? { headers: { authorization: auth } } : undefined);
+    return response.data;
+  }
+
+  public async setMakerOnlyApiKeys(params: {
+    account_index: number;
+    api_key_indices: string;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const formData = new URLSearchParams();
+    formData.append('account_index', params.account_index.toString());
+    formData.append('api_key_indices', params.api_key_indices);
+    if (params.auth) {
+      formData.append('auth', params.auth);
+    }
+    const response = await this.client.post<{ [key: string]: any }>('/api/v1/setMakerOnlyApiKeys', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(params.authorization ? { authorization: params.authorization } : {}),
+      },
+    });
+    return response.data;
+  }
+
+  public async rfqCreate(params: {
+    account_index: number;
+    market_id: number;
+    side: string;
+    size: string;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+    if (params.authorization) {
+      headers['authorization'] = params.authorization;
+    } else if (params.auth) {
+      headers['authorization'] = params.auth;
+    }
+    const formData = new URLSearchParams();
+    formData.append('account_index', params.account_index.toString());
+    formData.append('market_id', params.market_id.toString());
+    formData.append('side', params.side);
+    formData.append('size', params.size);
+    const response = await this.client.post<{ [key: string]: any }>('/api/v1/rfq/create', formData, {
+      headers,
+    });
+    return response.data;
+  }
+
+  public async rfqGet(params: {
+    account_index: number;
+    rfq_id: string;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const response = await this.client.get<{ [key: string]: any }>('/api/v1/rfq/get', {
+      account_index: params.account_index,
+      rfq_id: params.rfq_id,
+    }, params.authorization ? { headers: { authorization: params.authorization } } : undefined);
+    return response.data;
+  }
+
+  public async rfqList(params: {
+    account_index: number;
+    limit?: number;
+    cursor?: string;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const headers: Record<string, string> = {};
+    if (params.authorization) {
+      headers['authorization'] = params.authorization;
+    } else if (params.auth) {
+      headers['authorization'] = params.auth;
+    }
+    const response = await this.client.get<{ [key: string]: any }>('/api/v1/rfq/list', {
+      account_index: params.account_index,
+      ...(params.limit !== undefined ? { limit: params.limit } : {}),
+      ...(params.cursor ? { cursor: params.cursor } : {}),
+    }, Object.keys(headers).length > 0 ? { headers } : undefined);
+    return response.data;
+  }
+
+  public async rfqRespond(params: {
+    account_index: number;
+    rfq_id: string;
+    price: string;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const formData = new URLSearchParams();
+    formData.append('account_index', params.account_index.toString());
+    formData.append('rfq_id', params.rfq_id);
+    formData.append('price', params.price);
+    if (params.auth) {
+      formData.append('auth', params.auth);
+    }
+    const response = await this.client.post<{ [key: string]: any }>('/api/v1/rfq/respond', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(params.authorization ? { authorization: params.authorization } : {}),
+      },
+    });
+    return response.data;
+  }
+
+  public async rfqUpdate(params: {
+    account_index: number;
+    rfq_id: string;
+    status?: string;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    const formData = new URLSearchParams();
+    formData.append('account_index', params.account_index.toString());
+    formData.append('rfq_id', params.rfq_id);
+    if (params.status) {
+      formData.append('status', params.status);
+    }
+    if (params.auth) {
+      formData.append('auth', params.auth);
+    }
+    const response = await this.client.post<{ [key: string]: any }>('/api/v1/rfq/update', formData, {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         ...(params.authorization ? { authorization: params.authorization } : {}),

@@ -124,9 +124,9 @@ async function closeAllPositions() {
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY environment variable is required');
   }
-  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
-  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
-  const BASE_URL = 'https://testnet.zklighter.elliot.ai';
+  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '0', 10);
+  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '0', 10);
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   
   const signerClient = new SignerClient({
     url: BASE_URL,
@@ -264,12 +264,10 @@ async function closeAllPositions() {
       console.log(`   Direction: ${isAsk ? 'SELL' : 'BUY'} (opposite of ${positionSide})`);
       console.log(`   Base Amount: ${baseAmount} units`);
       
-      // Get current market price for better execution
-      // Try mark_price, or use avg_entry_price as fallback
-      const markPrice = parseFloat((position as any).mark_price || position.mark_price || '0');
-      const entryPrice = parseFloat((position as any).avg_entry_price || position.entry_price || '0');
-      const avgExecutionPrice = markPrice > 0 ? Math.floor(markPrice * 100) : 
-                                (entryPrice > 0 ? Math.floor(entryPrice * 100) : 450000); // Convert to price units
+      // Use the live order book price (not the stale entry price) so the reduce-only
+      // market order actually crosses the book, with a small slippage buffer for the cap.
+      const bestPrice = await signerClient.getBestPrice(marketIndex, isAsk);
+      const avgExecutionPrice = isAsk ? Math.floor(bestPrice * 0.99) : Math.ceil(bestPrice * 1.01);
       
       // Retry logic for "too many pending txs" error
       let retryCount = 0;

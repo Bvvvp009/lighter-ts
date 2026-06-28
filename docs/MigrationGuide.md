@@ -366,10 +366,11 @@ npm run build
 
 ## Version Compatibility
 
-| SDK Version | lighter-go Version | Node.js | TypeScript |
-|------------|-------------------|---------|------------|
-| v1.0.0+     | Latest from GitHub | 16+     | 4.5+       |
-| v0.x        | Local/temp        | 16+     | 4.5+       |
+| SDK Version | Node.js | TypeScript |
+|------------|---------|------------|
+| v1.0.0+     | 16+     | 4.5+       |
+
+The vendored WASM signer's source commit is tracked in `.wasm-commit` at the repo root.
 
 ## Need Help?
 

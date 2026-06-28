@@ -13,9 +13,9 @@ async function closePosition() {
 
   // Use testnet credentials (matching other examples)
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  const ACCOUNT_INDEX = parseInt(process.env['TESTNET_ACCOUNT_INDEX'] || process.env['ACCOUNT_INDEX'] || "271");
-  const API_KEY_INDEX = parseInt(process.env['TESTNET_API_INDEX'] || process.env['API_KEY_INDEX'] || "4");
-  const BASE_URL = process.env['TESTNET_BASE_URL'] || process.env['BASE_URL'] || 'https://testnet.zklighter.elliot.ai';
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "0");
+  const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "0");
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   const MARKET_INDEX = parseInt(process.env['MARKET_INDEX'] || '0'); // Default to market 0 (ETH/USDC)
   
   const signerClient = new SignerClient({
@@ -87,11 +87,10 @@ async function closePosition() {
     // SHORT position (sign < 0) -> need to BUY (isAsk: false) to close
     const isAsk = sign > 0; // true for long (sell to close), false for short (buy to close)
     
-    // Get current market price for better execution
-    const markPrice = parseFloat((position as any).mark_price || position.mark_price || '0');
-    const entryPrice = parseFloat((position as any).avg_entry_price || position.entry_price || '0');
-    const avgExecutionPrice = markPrice > 0 ? Math.floor(markPrice * 100) : 
-                              (entryPrice > 0 ? Math.floor(entryPrice * 100) : 450000); // Convert to price units
+    // Use the live order book price (not the stale entry price) so the reduce-only
+    // market order actually crosses the book, with a small slippage buffer for the cap.
+    const bestPrice = await signerClient.getBestPrice(MARKET_INDEX, isAsk);
+    const avgExecutionPrice = isAsk ? Math.floor(bestPrice * 0.99) : Math.ceil(bestPrice * 1.01);
 
     console.log('📋 Position Information:');
     console.log(`   Market: ${MARKET_INDEX}`);

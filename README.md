@@ -21,15 +21,43 @@ npm install lighter-ts-sdk
 yarn add lighter-ts-sdk
 ```
 
+### Module Formats
+
+The package ships ESM, CommonJS, and a browser UMD bundle, resolved automatically via `package.json`'s `exports` field. Both of the following work out of the box:
+
+```typescript
+// ESM (import)
+import { SignerClient, ApiClient, OrderType } from 'lighter-ts-sdk';
+```
+
+```javascript
+// CommonJS (require)
+const { SignerClient, ApiClient, OrderType } = require('lighter-ts-sdk');
+```
+
+```html
+<!-- Browser (UMD global) -->
+<script src="https://unpkg.com/lighter-ts-sdk/dist/umd/lighter-ts-sdk.js"></script>
+<script>
+  const { SignerClient } = window.LighterSDK;
+</script>
+```
+
 ## 🚀 What Does This SDK Do?
 
 The Lighter TypeScript SDK provides everything you need to:
-- **Trade perpetual futures and SPOT Markets** on Lighter Protocol
+- **Trade perpetual futures and spot markets** on Lighter Protocol
 - **Create orders** (Market, Limit, TWAP) with automatic SL/TP
-- **Manage positions** (open, close, update leverage)
-- **Transfer funds** between accounts
+- **Build grouped orders** (OTO, OCO, OTOCO) and self-trade-prevention orders
+- **Manage positions** (open, close, update leverage and margin mode)
+- **Manage sub-accounts** and transfer funds between accounts (including spot↔perp)
+- **Approve and route fees to integrators** (frontends, bots, affiliate platforms)
+- **Manage Unified Trading Account (UTA) and per-asset margin settings**
+- **Use public pools, staking, and RFQ** where available on your account
 - **Monitor transactions** with built-in status tracking
 - **Handle errors** automatically with retry logic
+
+See [`examples/`](./examples) for a runnable script covering every feature above.
 
 ## 🎯 Getting Started
 
@@ -362,7 +390,7 @@ await signerClient.updateMargin(
 - `direction` parameter is only used for isolated-margin positions
 - Always verify sufficient collateral before removing it
 
-## �🔧 Common Operations
+## 🔧 Common Operations
 
 ### Create a Market Order
 
@@ -584,11 +612,13 @@ try {
 
 ## 📖 Examples
 
-The `examples/` directory contains working examples for every feature:
+The `examples/` directory contains 60+ working examples covering every feature, all run against a live mainnet account as part of this SDK's release validation. Start with the quickstart, then browse [`examples/README.md`](./examples/README.md) for the full index.
 
 ```bash
-# Run examples
-npx tsx examples/create_market_order.ts   # Market order with SL/TP
+npx tsx examples/quickstart.ts             # Smallest possible flow: create, confirm, cancel an order
+
+# Then explore by feature
+npx tsx examples/create_market_order.ts    # Market order with SL/TP
 npx tsx examples/create_limit_order.ts     # Limit order with SL/TP
 npx tsx examples/cancel_order.ts           # Cancel orders
 npx tsx examples/close_position.ts         # Close positions
@@ -597,48 +627,14 @@ npx tsx examples/deposit_to_subaccount.ts  # Fund transfers
 
 ## 🎓 Learning Path
 
-1. **Start Here**: `examples/create_market_order.ts` - Simplest order creation
-2. **Next**: `examples/create_limit_order.ts` - Learn about limit orders
+1. **Start Here**: `examples/quickstart.ts` - Smallest possible end-to-end flow
+2. **Next**: `examples/create_limit_order.ts` / `examples/create_market_order.ts` - Orders with SL/TP
 3. **Then**: `examples/cancel_order.ts` - Learn about order management
-4. **Advanced**: `examples/send_tx_batch.ts` - Batch transactions
+4. **Advanced**: `examples/create_grouped_orders.ts`, `examples/send_tx_batch.ts` - Grouped and batch transactions
 
-## ✅ Live Executed Transactions (Testnet)
+## ✅ Live-Tested Against Mainnet
 
-The SDK has been thoroughly tested with real transactions on Lighter Protocol testnet. Here are verified transaction hashes from live example execution:
-
-### Real Transaction Examples
-
-**1. Market Order with OTOCO (SL/TP)**
-```
-Transaction Hash: c622140d6d15760bbf5462e3f472a97b0eac8fb138becc00cb7ce24b223c19e352fe7e15098337c5
-Example: examples/create_market_order.ts
-Details: 60 ETH order with $2800 SL / $3100 TP
-Status: ✅ Submitted to testnet
-```
-
-**2. Limit Order with Grouping**
-```
-Transaction Hash: 4349b469fa8d71161fc012a9d3224e1f4eda355527e91e83bb193ab9345bc19bfba22d7ab64721d1
-Example: examples/create_limit_order.ts
-Details: Limit entry with automatic SL/TP attachment
-Status: ✅ Submitted to testnet
-```
-
-**3. Market Order with Max Slippage (1%)**
-```
-Transaction Hash: f1d2ab2ca65f77310502298961c6e738e21a2b9f2e8e4614a75d2bbf5a4168d225bec7708675cdca
-Example: examples/create_market_order_max_slippage.ts
-Details: Market order with 1% slippage protection
-Status: ✅ Submitted to testnet
-```
-
-**4. IOC Order with Attached SL/TP**
-```
-Transaction Hash: 1d64b0bab34e2469a190558e53d13c8614ebd5075d4ed2eca079aab551a259b92343ad1c5d1fbed8
-Example: examples/create_grouped_ioc_with_attached_sl_tp.ts
-Details: Immediate-or-cancel with grouped exits
-Status: ✅ Submitted to testnet
-```
+Every example in [`examples/`](./examples), including `examples/spot/`, has been exercised against a live Lighter Protocol mainnet account as part of this SDK's release validation — order lifecycle (market/limit/TWAP, perp and spot), grouped orders (OTO/OCO/OTOCO), integrator approve/order/revoke, sub-accounts and transfers, margin/UTA toggles, and transaction status monitoring. Examples that depend on account-specific state (balances, whitelist access, a second funded account) are clearly marked as such in [`examples/README.md`](./examples/README.md) rather than reporting false success.
 
 ### Running Your Own Transactions
 
@@ -707,9 +703,9 @@ If you're upgrading from an older version that used `temp-lighter-go`:
 
 **None!** The API remains the same. The change is internal to signer implementation.
 
-### Removed Functions
+### Unsupported Functions
 
-These functions are no longer supported and have been removed:
+These methods still exist for backward compatibility but throw an informative error, since the underlying functionality is not exported by the `lighter-go` WASM signer:
 - `getPublicKey()` - Use `generateAPIKey()` instead (returns both keys)
 - `switchAPIKey()` - Use `createClient()` with different `apiKeyIndex` values instead
 

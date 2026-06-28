@@ -15,8 +15,8 @@ function trimException(e: Error): string {
 
 async function createEthSpotLimitOrder() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '271', 10);
-  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '4', 10);
+  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '0', 10);
+  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '0', 10);
   // Use BASE_URL from env or default to mainnet
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
 
@@ -39,10 +39,9 @@ async function createEthSpotLimitOrder() {
 
   await checkPositions(accountApi, ACCOUNT_INDEX, 2048);
 
-  // Note: Spot markets may not be available via Order API yet, so we use manual values
   // For ETH SPOT: 1 ETH = 1,000,000 units, $1 = 100 price units
   // 0.001 ETH = 1,000 units
-  // $3000 = 300,000 price units
+  // $2800 = 280,000 price units
     // Market indices: 2048 (ETH SPOT), 2049 (Prove SPOT), 2050 (Zk SPOT)
 
   const limitOrderParams = {
@@ -104,7 +103,8 @@ async function checkPositions(accountApi: any, accountIndex: number, marketIndex
     const spotPosition = positions.find((p: any) => p.market_id === marketIndex);
     
     if (spotPosition) {
-      console.log(`📊 Position: ${spotPosition.side} ${spotPosition.size} @ $${parseInt(spotPosition.entry_price) / 100}`);
+      const side = spotPosition.sign > 0 ? 'long' : 'short';
+      console.log(`📊 Position: ${side} ${spotPosition.position} @ $${parseFloat(spotPosition.avg_entry_price)}`);
       return spotPosition;
     }
     return null;
@@ -114,7 +114,7 @@ async function checkPositions(accountApi: any, accountIndex: number, marketIndex
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1]?.includes('create_spot_limit_order')) {
   createEthSpotLimitOrder().catch(console.error);
 }
 

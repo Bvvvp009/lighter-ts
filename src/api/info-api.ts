@@ -52,10 +52,9 @@ export class InfoApi {
     const headers: Record<string, string> = {};
     if (auth) {
       headers['Authorization'] = auth;
-      headers['auth'] = auth;
     }
 
-    const response = await this.client.get<TransferFeeInfo>('/api/v1/transferFeeInfo', params, headers);
+    const response = await this.client.get<TransferFeeInfo>('/api/v1/transferFeeInfo', params, { headers });
     return response.data;
   }
 
@@ -82,6 +81,18 @@ export class InfoApi {
       auth ? { auth } : undefined,
       auth ? { headers: { authorization: auth } } : undefined
     );
+    return response.data;
+  }
+
+  public async syntheticSpotInfo(symbol?: string): Promise<{ [key: string]: any }> {
+    const response = await this.client.get<{ [key: string]: any }>('/api/v1/syntheticSpotInfo', {
+      ...(symbol ? { symbol } : {}),
+    });
+    return response.data;
+  }
+
+  public async layer1BasicInfo(): Promise<{ [key: string]: any }> {
+    const response = await this.client.get<{ [key: string]: any }>('/api/v1/layer1BasicInfo');
     return response.data;
   }
 }

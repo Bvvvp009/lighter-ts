@@ -5,7 +5,7 @@
  * including share price, total value locked, and user share details.
  */
 
-import { ApiClient, AccountApi } from '../dist/esm/index.js';
+import { ApiClient, AccountApi } from '../src';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -29,7 +29,13 @@ async function main() {
 
     // Get public pools information
     console.log('\nFetching public pools...');
-    const pools = await accountApi.getPublicPools('all', 100, 0);
+    let pools: any[] = [];
+    try {
+      pools = await accountApi.getPublicPools('all', 100, 0);
+    } catch (poolError) {
+      console.log('Public pools endpoint requires authentication or is restricted.');
+      console.log('Error:', poolError instanceof Error ? poolError.message : String(poolError));
+    }
 
     console.log(`\n📊 Public Pools (found ${pools.length}):`);
     console.log('─'.repeat(80));

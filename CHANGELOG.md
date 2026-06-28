@@ -7,11 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.12] - 2026-06-26
+
 ### Added
+- `examples/quickstart.ts` — minimal end-to-end example (create → confirm → cancel a single order) for first-time setup, separate from the SL/TP-bundled `create_market_order.ts`.
+- New examples covering previously-unported protocol features: integrator approval/revocation (`integrator_approve.ts`, `integrator_approve_same_master.ts`, `integrator_revoke.ts`, `integrator_create_modify_order.ts`), self-trade prevention (`self_trade_create_modify_order.ts`, `self_trade_grouped_orders.ts`), UTA and per-asset margin toggles (`enable_uta.ts`, `disable_uta.ts`, `enable_eth_as_margin.ts`, `disable_eth_as_margin.ts`), skip-nonce orders (`create_order_skip_nonce.ts`), staking (`stake_and_unstake.ts`), RFQ (`rfq_create_and_list.ts`), referrals (`referral_create.ts`), bridge intent addresses (`bridge_create_intent_address.ts`), token list (`tokenlist.ts`), and additional info endpoints (`info_api_new_endpoints.ts`).
+- `src/api/tokenlist-api.ts` — token list API client.
+- `from_is_spot_account` option on `transfer()`/`transferSameMasterAccount()`, allowing same-account spot↔perp transfers (previously the source and destination route were always forced equal).
 
 ### Fixed
+- Rebuilt the WASM signer against `lighter-go` (was one commit behind, missing a validation fix for 0-fee integrator approval with non-zero expiry).
+- `approveIntegrator()`'s `approvalExpiry` is a millisecond timestamp, consistent with order expiry elsewhere in the SDK; the integrator example scripts previously computed it in seconds, causing approvals to be rejected as already-expired.
+- `AccountApi.getAccount()` and `getAccountsByL1Address()` now correctly unwrap the `{ accounts: [...] }` / `{ sub_accounts: [...] }` response wrappers instead of returning them as-is.
+- `Account`, `AccountPosition`, and `ExchangeStats` types corrected to match actual API response fields (previous fields such as `side`/`entry_price`/`mark_price` did not exist on the live API).
+- `InfoApi.getTransferFeeInfo()`, `NotificationApi.acknowledgeNotification()`/`acknowledgeNotificationWithResponse()`, and `ReferralApi.getReferralPoints()`/`getReferralPointsWithResponse()` were passing the auth headers object as the wrong argument to the underlying HTTP client, silently dropping the `Authorization` header.
+- `close_position.ts`/`close_all_positions.ts` used the stale `avg_entry_price` as the market order's execution price cap, which could prevent the closing order from crossing the book; now uses live best bid/ask with a slippage buffer.
+- `create_grouped_orders.ts`'s OCO example used two plain LIMIT legs; the protocol requires both legs to be reduce-only with one Stop-Loss and one Take-Profit type.
+- All `examples/spot/*.ts` files used `import.meta.url === \`file://${process.argv[1]}\`` to detect direct execution, which never matches on Windows; switched to `process.argv[1]?.includes(...)`.
+- `withdraw_fast.ts` referenced the wrong environment variable name in its error message and used `require()` under ESM.
+- `system_setup.ts` and `onboarding.ts` could silently re-register (and invalidate) the API key index currently in active use; both now refuse to overwrite an already-registered key unless explicitly confirmed.
+- `package.json` version and the `VERSION` constant in `src/index.ts` were out of sync (`1.0.11` vs `1.1.0`); both now track the same value.
+- **`waitForTransaction()` could time out on already-committed transactions.** It checks the Explorer API first and only fell back to the authoritative core transaction API when the explorer returned a successful-but-ambiguous response; if the explorer request itself failed (e.g. a 404 because the explorer hadn't indexed the transaction yet), the code treated that as "not confirmed yet" and kept retrying the explorer exclusively, never checking the core API — even though the core API already showed the transaction committed. Every example that calls `waitForTransaction()` was affected; many worked around it with a try/catch that downgraded the eventual timeout to a warning, masking the real cause as "network latency." The core API fallback now runs on any explorer-lookup failure, not just on an ambiguous explorer response.
+- `.env.example` was saved in UTF-16 encoding and rendered as garbled spaced-out text; rewritten as plain UTF-8 with corrected required/optional field guidance.
 
 ### Tested
+- Full example suite (66 files, including `examples/spot/`) exercised against a live mainnet account: order lifecycle (perp + spot), grouped/OCO/OTO/OTOCO orders, integrator approve/order/revoke lifecycle, sub-accounts, transfers, margin/UTA toggles, referrals, account tier changes, and withdrawal signing.
+- `npm run build` (CJS + ESM + browser + UMD), `npm run verify:wasm`, and `tsc --noEmit` all clean.
 
 ## [1.0.11] - 2026-04-06
 
@@ -31,365 +52,120 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CJS and ESM builds validated independently.
 - Live create/cancel order flow validated through both built artifacts (`dist/cjs` and `dist/esm`).
 
-## [1.1.0] - 2026-02-12
+## [1.0.10] - 2026-03-01
 
 ### Added
-
-#### Multi-Format Module Support
-- **ES Modules (ESM)** - Modern JavaScript module format with `dist/esm/index.js`
-- **CommonJS (CJS)** - Node.js compatible format with `dist/cjs/index.js`
-- **UMD Bundle** - Browser-ready universal module definition at `dist/umd/lighter-ts-sdk.js`
-- **Modern package.json exports field** - Dual module support in single package
-
-#### Browser & Next.js Support
-- **Environment detection utilities** - New `environment.ts` module with:
-  - `isBrowser()` - Detect browser environment
-  - `isNodeJS()` - Detect Node.js environment
-  - `isNextJS()` / `isNextJSClient()` / `isNextJSServer()` - Detect Next.js environments
-  - `isReactNative()` - Detect React Native environment
-  - `isDeno()` - Detect Deno runtime
-  - `detectEnvironment()` - Get current runtime name
-  - `getWebSocketConstructor()` - Get appropriate WebSocket for environment
-  - `hasCryptoSupport()` - Check crypto API availability
-  - `hasLocalStorageSupport()` / `hasIndexedDBSupport()` - Check storage APIs
-- **Isomorphic compatibility** - SDK works seamlessly in browser and server environments
-- **UMD global export** - Browser scripts can access `window.LighterSDK`
-
-#### API Method Enhancements (lighter-python alignment)
-- **AccountApi**
-  - `getAccountLimits()` - Get account-specific trading limits
-  - `getAccountMetadata()` - Retrieve account metadata
-  - `faucet()` - Request test funds (testnet only)
-  - `getLiquidations()` - Get liquidation history with filters
-  - `getPositionFundings()` - Get position funding history with pagination
-- **TransactionApi**
-  - `getTransferHistory()` - Retrieve transfer history with pagination
-- **OrderApi**
-  - `export()` - Export account data (trades, orders, positions)
-- **RootApi**
-  - `getStatus()` - Get system health status
-
-#### Type Definitions
-- New interfaces: `AccountLimits`, `AccountMetadata`, `Liquidation`, `LiquidationResponse`, `PositionFunding`, `PositionFundingResponse`, `SystemStatus`
-- Full TypeScript support for all new API methods
-- Improved type inference for environment detection
-
-#### Build System
-- `tsconfig.cjs.json` - TypeScript config for CommonJS builds
-- `tsconfig.esm.json` - TypeScript config for ES Modules  
-- Updated build scripts:
-  - `npm run build:cjs` - Build CommonJS version
-  - `npm run build:esm` - Build ES Modules version
-  - `npm run build:umd` - Build UMD browser bundle
-  - `npm run build` - Build all formats (CJS + ESM + UMD)
-- `scripts/build-umd.js` - New UMD bundler script
-- Added `sideEffects: false` for optimal tree-shaking
-
-#### Documentation
-- **MIGRATION_GUIDE_1_1_0.md** - Comprehensive migration guide with code examples
-- Updated package.json with proper module field declarations
+- Multi-format module support: ESM (`dist/esm`), CJS (`dist/cjs`), and a UMD browser bundle (`dist/umd`), with a modern `package.json` `exports` field for dual module resolution.
+- Browser & Next.js support via `environment.ts`: `isBrowser()`, `isNodeJS()`, `isNextJS()`/`isNextJSClient()`/`isNextJSServer()`, `isReactNative()`, `isDeno()`, `detectEnvironment()`, `getWebSocketConstructor()`, `hasCryptoSupport()`, `hasLocalStorageSupport()`/`hasIndexedDBSupport()`.
+- Expanded API method coverage: `AccountApi.getAccountLimits()`, `getAccountMetadata()`, `faucet()`, `getLiquidations()`, `getPositionFundings()`; `TransactionApi.getTransferHistory()`; `OrderApi.export()`; `RootApi.getStatus()`.
+- New type definitions: `AccountLimits`, `AccountMetadata`, `Liquidation`, `LiquidationResponse`, `PositionFunding`, `PositionFundingResponse`, `SystemStatus`.
+- `tsconfig.cjs.json` / `tsconfig.esm.json` and corresponding `build:cjs` / `build:esm` / `build:umd` scripts.
 
 ### Changed
-- **package.json `type` field** - Changed from `"commonjs"` to `"module"` (default is ESM)
-- **Main entry point** - Now points to ESM build
-- **Build output structure**:
-  - `dist/cjs/` - CommonJS files
-  - `dist/esm/` - ES Module files
-  - `dist/umd/` - UMD bundle
-- **Version bumped** to 1.1.0 (from 1.0.8)
+- `package.json` `type` field changed from `"commonjs"` to `"module"`.
+- Build output now split across `dist/cjs/`, `dist/esm/`, `dist/umd/`.
 
 ### Improved
-- **Module resolution** - Better compatibility with modern bundlers (Webpack 5+, Vite, esbuild, Rollup)
-- **Tree-shaking** - ESM build enables dead code elimination
-- **Package size** - Optimized output for different target environments
-- **Browser compatibility** - Full support for modern browsers and legacy environments via UMD
-- **Developer experience** - environment utilities for cleaner conditional logic
+- Better compatibility with modern bundlers (Webpack 5+, Vite, esbuild, Rollup) and tree-shaking via `sideEffects: false`.
 
 ### Fixed
-- Package exports field now properly declares all module formats
-- Correct type declarations for each build output
+- `package.json` exports field now correctly declares all module formats with matching type declarations.
 
-### Deprecated
-- Direct CommonJS require from main index (use conditional require or explicit CJS path)
+## [1.0.9] - 2026-01-10
+
+### Fixed
+- WASM build/publish pipeline: standalone browser ESM bundle, `.cjs` WASM build scripts under `"type": "module"`, and runtime-compatibility fixes for the bundled `wasm_exec.js`.
 
 ## [1.0.8] - 2025-12-15
 
 ### Changed
-- Repository URL updated
+- Repository URL updated.
+- Removed Proxy support in favor of simpler, more predictable request handling; reduced default debug logging.
 
 ## [1.0.7] - 2025-11-27
 
 ### Added
-- **Spot Market Support** - Full support for spot trading markets with dedicated examples
-  - `create_spot_limit_order.ts` - Create limit orders on spot markets
-  - `create_market_spot_orders.ts` - Create market orders on spot markets (ETH, SOL)
-  - `create_spot_twap_order.ts` - Create TWAP orders on spot markets
-  - `cancel_spot_order.ts` - Cancel spot market orders
-  - Spot market indices: 2048 (ETH SPOT), 2049 (BTC SPOT), 2051 (SOL SPOT)
-- **Grouped Orders (OTOCO)** - Support for One-Triggers-Other (OTO) and One-Cancels-Other (OCO) order types
-  - `createGroupedOrders()` method for creating OTOCO grouped orders
-  - Example in `multi_client_advanced.ts` demonstrating grouped order creation
-- **Additional API Methods** - Expanded API coverage
-  - Enhanced `modifyOrder()` for order modifications
-  - Public pool operations (create, update, mint, burn shares)
-  - Subaccount management and operations
-  - Account tier management (premium/standard)
-  - Margin and leverage management improvements
-- **Comprehensive Documentation** - Extensive documentation updates
-  - Complete API reference documentation
-  - Migration guide for version upgrades
-  - Enhanced Getting Started guide
-  - Detailed examples documentation
-  - Spot market examples README
+- Spot market support with dedicated examples: `create_spot_limit_order.ts`, `create_market_spot_orders.ts`, `create_spot_twap_order.ts`, `cancel_spot_order.ts`.
+- Grouped orders (OTO/OCO/OTOCO) via `createGroupedOrders()`, `createOcoOrder()`, `createOtocoOrder()`.
+- Public pool operations (create, update, mint, burn shares), subaccount management, and account tier management.
 
 ### Changed
-- **Market Index Support** - Extended from `uint8` to `uint16` to support larger market indices (spot markets)
+- Market index type extended from `uint8` to `uint16` to support larger market indices (spot markets).
 
 ### Fixed
-- **Position Detection** - Improved position fetching with retry logic for API synchronization
-- **Nonce Management** - Enhanced nonce handling to prevent "invalid nonce" errors
-- **Linter Errors** - Fixed undefined variables and type issues
+- Position detection retry logic for API synchronization lag.
+- Nonce handling to prevent spurious "invalid nonce" errors.
 
-### Improved
-- **Examples Quality** - All examples now use environment variables, improved error handling
-- **Error Messages** - More descriptive error messages throughout the SDK
-- **Type Safety** - Enhanced TypeScript types for better developer experience
+## [1.0.6] - 2025-12-01
 
-## [1.0.6] - 2025-01-XX
+### Added
+- `createOcoOrder()` and `createOtocoOrder()` as explicit methods for OCO/OTOCO order patterns, plus `GroupingType` enum and `OcoOrderParams`/`OtocoOrderParams` types.
+- `docs/MarketHelper.md` and `docs/Utilities.md`.
 
-### Changed
-- **Documentation** - Fixed repository URL placeholder in README
-- **Examples** - Removed dangerous default private key values
+### Removed
+- `createUnifiedOrder` — superseded by `createOtocoOrder()` (orders with SL/TP) and `createOrder()` (single orders).
 
 ### Fixed
-- **Linter Errors** - Fixed undefined `poolIndex` variable in `public_pool_operations.ts`
-- **Spot Examples** - Fixed references to non-existent files in spot README
+- `TypeError: activeOrders is not iterable` — `getAccountActiveOrders()`/`getAccountInactiveOrders()` now correctly extract the `orders` array from the response.
+- Order lookup now matches on `client_order_index` correctly.
+- TWAP batches now exclude SL/TP orders to avoid invalid reduce-only-direction errors.
+- `Order` type fields aligned with actual API response (`filled_base_amount`, `remaining_base_amount`, etc.).
+- Removed dangerous default private key values from examples.
+- Fixed repository URL placeholder in README.
 
 ## [1.0.5] - 2025-10-13
 
 ### Added
-- **Authentication Examples** - New `create_auth_token.ts` example for creating auth tokens
-- **Nonce Manager Example** - Comprehensive `nonce_manager.ts` example for single and multiple API key nonce management
-- **Deposit to Subaccounts** - New `deposit_to_subaccounts.ts` example for managing subaccount deposits
-- **Transaction Helper Utilities** - New `transaction-helper.ts` with reusable transaction confirmation functions
-- **Withdraw to L1** - New `withdraw.ts` example for withdraw funds to L1 Address
-- **Market Order with SL/TP** - New `market_order_with_sl_tp.ts` example showing complete workflow for opening position with protection
+- `create_auth_token.ts`, `nonce_manager.ts`, `deposit_to_subaccounts.ts`, `withdraw.ts`, `market_order_with_sl_tp.ts` examples.
+- `transaction-helper.ts` with reusable transaction-confirmation utilities.
 
 ### Fixed
-- **Logger Integration** - Improved consistency in error handling throughout codebase
-- **WebSocket Logging** - Removed verbose connection and reconnection logs
-
-### Improved
-- **Production Ready** - Source code now suitable for production with minimal logging
+- More consistent error handling/logging throughout the codebase.
+- Removed verbose WebSocket connection/reconnection logs.
 
 ## [1.0.4] - 2025-01-29
 
 ### Added
-- **Standalone WASM signer** - No Go installation required
-- **Auto path resolution** - Automatic detection of bundled WASM files
-- **Simplified configuration** - No `wasmConfig` needed for basic usage
-- **Cross-platform support** - Works on Windows, Linux, macOS without Go
-- **Referral points example** - New `get_points.ts` example with auth tokens
+- Standalone WASM signer — no local Go installation required.
+- Automatic WASM path resolution; simplified configuration (no `wasmConfig` needed for basic usage).
+- Cross-platform support (Windows, Linux, macOS) without a Go toolchain.
 
 ### Changed
-- **Removed Go dependency** - Users don't need Go installed to use the SDK
-- **Updated documentation** - All examples now show simplified configuration
-- **Improved WASM runtime** - Uses official Go `wasm_exec.js` instead of custom version
-- **Enhanced error handling** - Better runtime initialization error messages
+- Uses the official Go `wasm_exec.js` runtime instead of a custom version.
 
 ### Fixed
-- **WASM initialization** - Fixed `mem.set is not a function` error
-- **Runtime compatibility** - Replaced incompatible `wasm_exec_nodejs.js`
-- **Memory management** - Proper DataView initialization in WASM runtime
-- **Import resolution** - Correct module name mapping for Go runtime
-
-### Security
-- **Production ready** - Thoroughly tested on machines with and without Go installation
-
-## [1.0.0] - 2025-01-19
-
-### Added
-- Initial release of Lighter TypeScript SDK
-- Complete WASM-based signer client implementation
-- Full API client coverage for all Lighter Protocol endpoints
-- WebSocket client for real-time data streaming
-- Comprehensive TypeScript type definitions
-- 14 example scripts covering all major functionality
-- Complete documentation with API reference
-- Support for basic order types (limit, market)
-- Account management operations (transfer, leverage updates)
-- Batch transaction support
-- Automatic reconnection for WebSocket connections
-- Error handling and validation throughout
-- Environment variable configuration support
-- Node.js and browser compatibility
-
-### Features
-- **SignerClient**: High-level trading interface with WASM signer
-- **ApiClient**: Low-level HTTP API client
-- **WsClient**: Real-time WebSocket data streaming
-- **Account Management**: Complete account operations
-- **Order Management**: Full order lifecycle support
-- **Transaction Handling**: Transaction creation and management
-- **Type Safety**: Comprehensive TypeScript definitions
-- **Error Handling**: Robust error handling throughout
-- **Documentation**: Complete API documentation and examples
-
-### API Coverage
-- AccountApi: Account information and management
-- OrderApi: Order book and trading data
-- TransactionApi: Transaction management and history
-- BlockApi: Block information and data
-- RootApi: System information and status
-
-### Order Types Supported
-- Limit orders with various time-in-force options
-- Market orders with slippage protection
-- Reduce-only orders
-- Batch order operations
-
-### Transaction Types Supported
-- Create order transactions
-- Cancel order transactions
-- Cancel all orders transactions
-- USDC transfer transactions
-- Leverage update transactions
-
-### Examples Included
-- `create_market_order.ts` - Basic market order creation
-- `create_cancel_order.ts` - Limit order creation and cancellation
-- `create_market_order_max_slippage.ts` - Market orders with price protection
-- `create_with_multiple_keys.ts` - Multi-key trading
-- `system_setup.ts` - Account setup and API key generation
-- `transfer_update_leverage.ts` - Account management operations
-- `get_info.ts` - API information retrieval
-- `ws.ts` - WebSocket real-time data
-- `ws_async.ts` - Asynchronous WebSocket handling
-- `ws_send_tx.ts` - WebSocket transaction sending
-- `send_tx_batch.ts` - Batch transaction processing
-- `performance_test.ts` - Basic performance testing
-- `market_data_json.ts` - Market data retrieval
-- `wait_for_transaction.ts` - Transaction confirmation
-
-### Documentation
-- Complete API reference documentation
-- Type definitions for all interfaces
-- Getting started guide
-- Comprehensive examples
-- Error handling guidelines
-- WebSocket usage guide
-
-### Dependencies
-- axios: HTTP client
-- dotenv: Environment variable management
-- ethers: Ethereum utilities
-- ws: WebSocket client
-- TypeScript: Type definitions and compilation
-
-### Browser Support
-- Modern browsers with WebAssembly support
-- WebSocket API support required
-- ES2020+ features
-
-### Node.js Support
-- Node.js 16+ required
-- WebAssembly support
-- WebSocket support
-
-## [1.0.2] - 2025-01-26
-
-### Fixed
-- Updated README examples with correct method signatures
-- Fixed order type constants in documentation
-- Corrected transfer and leverage update method parameters
-- Updated changelog with precise enhancement descriptions
-
-### Documentation
-- Corrected all code examples to match actual API
-- Updated order type constants to use proper naming
-- Fixed method parameter order in examples
-- Enhanced changelog with detailed performance improvements
-- Added comprehensive list of new order types
-
-## [1.0.1] - 2025-01-26
-
-### Fixed
-- Fixed WASM path resolution issues in NPM packages
-- Resolved "Cannot find module" errors for relative WASM paths
-- Fixed automatic wasm_exec.js detection in Node.js environments
-
-### Performance
-- ~200ms performance improvement in WASM initialization
-- Enhanced nonce caching for improved transaction throughput
-- Optimized HTTP client with connection pooling
-- Memory pool management for reduced allocation overhead
-- Request batching for multiple operations
-- Advanced caching for frequently accessed data
-
-### Added
-- Stop Loss Orders (SL) - Market orders triggered by price levels
-- Stop Loss Limit Orders (SLL) - Limit orders triggered by price levels
-- Take Profit Orders (TP) - Market orders for profit taking
-- Take Profit Limit Orders (TPL) - Limit orders for profit taking
-- TWAP Orders - Time-weighted average price orders
-- Performance monitoring and benchmarking utilities
-- Enhanced error handling and recovery mechanisms
-- Comprehensive performance testing examples
-
-### Enhanced
-- Automatic WASM path resolution relative to package root
-- Improved error messages for better debugging
-- Enhanced WebSocket client with better reconnection logic
-- Optimized order creation and cancellation workflows
-- Better memory management and garbage collection
-
-### Examples
-- `final_optimized_performance_test.ts` - Comprehensive performance benchmarking
-- `create_sl_tp.ts` - Stop-loss and take-profit order examples
-- `ws_send_batch_tx.ts` - WebSocket batch transaction examples
-- `close_all_positions.ts` - Position management examples
-- Enhanced existing examples with better error handling
-
-### Technical
-- Improved TypeScript type definitions
-- Better Node.js compatibility across platforms
-- Enhanced WASM runtime detection and loading
-- Optimized build process and bundle size
-- Better documentation and code comments
+- `mem.set is not a function` WASM initialization error.
+- DataView initialization and Go-runtime module name mapping.
 
 ## [1.0.3] - 2025-01-26
 
 ### Fixed
-- Removed problematic private key length validation that was causing errors
-- Fixed validation issues that were breaking package functionality
+- Removed an overly strict private key length validation that was breaking package functionality.
 
-## [Unreleased]
-
-### Planned Features
-- Additional order types as of API supported 
-- Adding SL and Tp to transaction type instead of sending separately send with order
-- Additional WebSocket subscriptions 
-
-## [1.0.6] - 2025-01-21
+## [1.0.2] - 2025-01-26
 
 ### Fixed
-- **Order Status Checking** - Fixed `TypeError: activeOrders is not iterable` by correctly extracting `orders` array from API responses
-- **API Response Parsing** - Updated `getAccountActiveOrders()` and `getAccountInactiveOrders()` to extract `orders` field from response
-- **Order Matching** - Fixed order lookup to use `client_order_index` field correctly
-- **TWAP SL/TP Orders** - Prevented invalid reduce-only direction errors by excluding SL/TP from TWAP batches
-- **Field Mapping** - Updated Order interface to match actual API response fields (`filled_base_amount`, `remaining_base_amount`, etc.)
+- README examples updated to match actual method signatures and order-type constants.
+- Corrected transfer and leverage-update method parameter order.
+
+## [1.0.1] - 2025-01-26
 
 ### Added
-- **Grouped Order APIs** - Added explicit `createOcoOrder()` and `createOtocoOrder()` methods for OCO/OTOCO order patterns
-- **GroupingType Enum** - Added enum for grouped order types (OTO, OCO, OTOCO)
-- **Typed Order Parameters** - Added `OcoOrderParams`, `OtocoOrderParams` interfaces for better type safety
-- **MarketHelper Documentation** - Complete documentation for `docs/MarketHelper.md`
-- **Utilities Documentation** - Complete documentation for `docs/Utilities.md` covering order status checking
-- **TWAP Order Note** - Documented TWAP SL/TP limitation in README and GettingStarted docs
+- Stop Loss, Stop Loss Limit, Take Profit, and Take Profit Limit order types.
+- TWAP orders.
+- Performance monitoring/benchmarking utilities.
 
-### Removed
-- **createUnifiedOrder** - Removed in favor of explicit `createOtocoOrder()` for orders with SL/TP or `createOrder()` for single orders
+### Fixed
+- WASM path resolution issues when consumed from npm (relative-path "Cannot find module" errors).
+- Automatic `wasm_exec.js` detection in Node.js environments.
 
-### Changed
-- **Documentation Consistency** - Updated all comments to use industry-standard terminology
-- **TWAP SL/TP Handling** - TWAP orders now skip SL/TP in batch to prevent position-related errors
+### Performance
+- ~200ms improvement in WASM initialization via enhanced nonce caching and HTTP connection pooling.
+
+## [1.0.0] - 2025-01-19
+
+### Added
+- Initial release: WASM-based signer client, full API client coverage, WebSocket client for real-time data, comprehensive TypeScript types.
+- `SignerClient`, `ApiClient`, `WsClient`, account/order/transaction management.
+- Limit and market order types, batch transactions, automatic WebSocket reconnection.
+- 14 example scripts covering core functionality.

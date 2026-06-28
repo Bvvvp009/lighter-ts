@@ -28,7 +28,7 @@ async function withdrawFast() {
     throw new Error('API_PRIVATE_KEY environment variable is required');
   }
   if (!WITHDRAW_ADDRESS) {
-    throw new Error('WITHDRAW_ADDRESS environment variable is required');
+    throw new Error('L1_ADDRESS environment variable is required');
   }
 
   const signerClient = new SignerClient({
@@ -135,7 +135,7 @@ async function withdrawFast() {
     if (signedTx.messageToSign && ETH_PRIVATE_KEY) {
       console.log('🔐 Signing L1 message with Ethereum private key (optional)...');
       try {
-        const { ethers } = require('ethers');
+        const { ethers } = await import('ethers');
         const wallet = new ethers.Wallet(ETH_PRIVATE_KEY); // ETH_PRIVATE_KEY = Ethereum wallet private key
         
         // Sign the message - ethers.signMessage automatically adds Ethereum message prefix

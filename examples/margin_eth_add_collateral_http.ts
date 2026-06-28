@@ -5,7 +5,7 @@
  * isolated margin position to prevent liquidation or increase buying power.
  */
 
-import { SignerClient } from '../dist/esm/index.js';
+import { SignerClient } from '../src';
 import dotenv from 'dotenv';
 
 dotenv.config();

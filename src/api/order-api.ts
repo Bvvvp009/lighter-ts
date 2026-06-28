@@ -169,10 +169,11 @@ export interface CancelOrderParams {
 }
 
 export interface ExchangeStats {
-  total_volume_24h: string;
-  total_trades_24h: number;
-  total_orders_24h: number;
-  active_markets: number;
+  code: number;
+  total: { [key: string]: any };
+  order_book_stats: { [key: string]: any };
+  daily_usd_volume: string;
+  daily_trades_count: number;
 }
 
 export interface ExchangeMetrics {

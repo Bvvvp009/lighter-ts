@@ -53,9 +53,8 @@ async function fetchMarketData() {
     try {
       const exchangeStats = await orderApi.getExchangeStats();
       console.log('✅ Exchange Stats fetched successfully!');
-      console.log(`   Total Volume 24h: ${exchangeStats.total_volume_24h}`);
-      console.log(`   Total Trades 24h: ${exchangeStats.total_trades_24h}`);
-      console.log(`   Active Markets: ${exchangeStats.active_markets}\n`);
+      console.log(`   Daily USD Volume: ${exchangeStats.daily_usd_volume}`);
+      console.log(`   Daily Trades Count: ${exchangeStats.daily_trades_count}\n`);
     } catch (error) {
       console.log('❌ Exchange Stats error:', error);
     }

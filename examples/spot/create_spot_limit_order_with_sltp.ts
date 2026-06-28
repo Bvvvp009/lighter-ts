@@ -25,10 +25,9 @@ async function checkPositions(accountApi: AccountApi, accountIndex: number, mark
     
     if (spotPosition) {
       console.log(`\n📊 Position Details for Market ${marketIndex}:`);
-      console.log(`   Side: ${spotPosition.side}`);
-      console.log(`   Size: ${spotPosition.size}`);
-      console.log(`   Entry Price: ${spotPosition.entry_price}`);
-      console.log(`   Mark Price: ${spotPosition.mark_price}`);
+      console.log(`   Side: ${spotPosition.sign > 0 ? 'long' : 'short'}`);
+      console.log(`   Size: ${spotPosition.position}`);
+      console.log(`   Entry Price: ${spotPosition.avg_entry_price}`);
       console.log(`   Unrealized PnL: ${spotPosition.unrealized_pnl || 'N/A'}`);
       return spotPosition;
     } else {
@@ -43,8 +42,8 @@ async function checkPositions(accountApi: AccountApi, accountIndex: number, mark
 
 async function createSpotLimitOrderWithSLTP() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || '';
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '271', 10);
-  const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '4', 10);
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
+  const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0', 10);
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   const MARKET_INDEX = 2048; // ETH SPOT
 
@@ -149,7 +148,7 @@ async function createSpotLimitOrderWithSLTP() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1]?.includes('create_spot_limit_order_with_sltp')) {
   createSpotLimitOrderWithSLTP().catch(console.error);
 }
 

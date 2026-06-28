@@ -40,7 +40,7 @@ export class NotificationApi {
       headers['auth'] = authorization;
     }
 
-    const response = await this.client.post<ResultCode>(`/api/v1/notification/ack?${params}`, {}, headers);
+    const response = await this.client.post<ResultCode>(`/api/v1/notification/ack?${params}`, {}, { headers });
     return response.data;
   }
 
@@ -67,7 +67,7 @@ export class NotificationApi {
       headers['auth'] = authorization;
     }
 
-    return await this.client.post<ResultCode>(`/api/v1/notification/ack?${params}`, {}, headers);
+    return await this.client.post<ResultCode>(`/api/v1/notification/ack?${params}`, {}, { headers });
   }
 
   public async getPushNotifSettings(

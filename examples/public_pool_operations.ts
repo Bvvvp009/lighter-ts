@@ -14,11 +14,11 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 async function publicPoolOperationsExample() {
-  // Use testnet credentials (matching other examples)
-  const BASE_URL = process.env['TESTNET_BASE_URL'] || process.env['BASE_URL'] || 'https://testnet.zklighter.elliot.ai';
+  // Use mainnet credentials
+  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
-  const ACCOUNT_INDEX = Number.parseInt(process.env['TESTNET_ACCOUNT_INDEX'] || process.env['ACCOUNT_INDEX'] || '271', 10);
-  const API_KEY_INDEX = Number.parseInt(process.env['TESTNET_API_INDEX'] || process.env['API_KEY_INDEX'] || '4', 10);
+  const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
+  const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] || '0', 10);
 
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY must be set in .env file or provided as default');

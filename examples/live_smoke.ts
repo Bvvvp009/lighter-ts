@@ -75,7 +75,7 @@ async function sleep(ms: number): Promise<void> {
 }
 
 async function run(): Promise<void> {
-  const host = process.env.BASE_URL || 'https://testnet.zklighter.elliot.ai';
+  const host = process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai';
   const auth = process.env.API_PRIVATE_KEY || '';
   const accountIndex = parseEnvInt('ACCOUNT_INDEX', 0);
   const apiKeyIndex = parseEnvInt('API_KEY_INDEX', 0);
@@ -102,19 +102,29 @@ async function run(): Promise<void> {
   console.log(`👤 Account index: ${accountIndex}`);
   console.log(`🧪 Submit transaction: ${submitTx ? 'yes' : 'no (set SMOKE_SUBMIT_TX=1)'}`);
 
+  const signer = new SignerClient({
+    url: host,
+    privateKey: auth,
+    accountIndex,
+    apiKeyIndex,
+  });
+  await signer.initialize();
+  await signer.ensureWasmClient();
+  const authToken = await signer.createAuthToken();
+
   const probes: Array<[string, () => Promise<unknown>]> = [
-    ['systemConfig', async () => info.getSystemConfig(auth)],
+    ['systemConfig', async () => info.getSystemConfig(authToken)],
     ['exchangeMetrics', async () => order.getExchangeMetrics()],
     ['executeStats', async () => order.getExecuteStats()],
-    ['leaseOptions', async () => account.getLeaseOptions({ account_index: accountIndex, auth })],
-    ['leases', async () => account.getLeases({ account_index: accountIndex, auth })],
+    ['leaseOptions', async () => account.getLeaseOptions({ account_index: accountIndex, auth: authToken })],
+    ['leases', async () => account.getLeases({ account_index: accountIndex, auth: authToken })],
     [
       'userReferrals',
-      async () => referral.getUserReferrals({ l1Address: '0x0000000000000000000000000000000000000000', auth }),
+      async () => referral.getUserReferrals({ l1Address: '0x0000000000000000000000000000000000000000', auth: authToken }),
     ],
     [
       'pushNotifSettings',
-      async () => notif.getPushNotifSettings(accountIndex, 'ExponentPushToken[dev-placeholder]', { auth }),
+      async () => notif.getPushNotifSettings(accountIndex, 'ExponentPushToken[dev-placeholder]', { auth: authToken }),
     ],
   ];
 
@@ -148,82 +158,71 @@ async function run(): Promise<void> {
 
   if (submitTx) {
     console.log('\n== Transaction smoke ==');
-    const signer = new SignerClient({
-      url: host,
-      privateKey: auth,
-      accountIndex,
-      apiKeyIndex,
+
+    const [txInfo, txHash, submitError] = await signer.createMarketOrder_maxSlippage({
+      marketIndex,
+      clientOrderIndex: Date.now(),
+      baseAmount,
+      maxSlippage,
+      isAsk: false,
     });
 
-    try {
-      await signer.initialize();
-      await signer.ensureWasmClient();
+    if (submitError || !txHash) {
+      txSummary.submitted = true;
+      txSummary.classification = 'submit-error';
+      txSummary.detail = submitError || 'Missing tx hash';
+      console.log(`❌ submit-error :: ${txSummary.detail}`);
+    } else {
+      txSummary.submitted = true;
+      txSummary.hash = txHash;
+      console.log(`📨 submitted hash=${txHash}`);
 
-      const [txInfo, txHash, submitError] = await signer.createMarketOrder_maxSlippage({
-        marketIndex,
-        clientOrderIndex: Date.now(),
-        baseAmount,
-        maxSlippage,
-        isAsk: false,
-      });
+      let notFoundCount = 0;
+      let finalClass: TxClass = 'pending';
+      let finalDetail = 'pending after polling window';
 
-      if (submitError || !txHash) {
-        txSummary.submitted = true;
-        txSummary.classification = 'submit-error';
-        txSummary.detail = submitError || 'Missing tx hash';
-        console.log(`❌ submit-error :: ${txSummary.detail}`);
-      } else {
-        txSummary.submitted = true;
-        txSummary.hash = txHash;
-        console.log(`📨 submitted hash=${txHash}`);
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const tx = await txApi.getTransaction({ by: 'hash', value: txHash });
+          const numeric = typeof tx.status === 'number' ? tx.status : Number.parseInt(String(tx.status), 10);
+          const mapped = mapTxStatus(numeric);
+          finalClass = mapped;
+          finalDetail = `status=${numeric} code=${tx.code ?? 'n/a'}`;
+          console.log(`  poll#${i + 1} -> ${finalDetail}`);
 
-        let notFoundCount = 0;
-        let finalClass: TxClass = 'pending';
-        let finalDetail = 'pending after polling window';
-
-        for (let i = 0; i < attempts; i++) {
-          try {
-            const tx = await txApi.getTransaction({ by: 'hash', value: txHash });
-            const numeric = typeof tx.status === 'number' ? tx.status : Number.parseInt(String(tx.status), 10);
-            const mapped = mapTxStatus(numeric);
-            finalClass = mapped;
-            finalDetail = `status=${numeric} code=${tx.code ?? 'n/a'}`;
-            console.log(`  poll#${i + 1} -> ${finalDetail}`);
-
-            if (mapped === 'executed' || mapped === 'committed' || mapped === 'failed' || mapped === 'rejected') {
-              break;
-            }
-          } catch (error) {
-            const message = normalizeError(error).toLowerCase();
-            if (message.includes('not found') || message.includes('404')) {
-              notFoundCount += 1;
-              finalClass = 'not-indexed';
-              finalDetail = 'transaction not indexed yet';
-              console.log(`  poll#${i + 1} -> not-indexed`);
-            } else {
-              finalClass = 'pending';
-              finalDetail = normalizeError(error);
-              console.log(`  poll#${i + 1} -> error ${finalDetail}`);
-            }
+          if (mapped === 'executed' || mapped === 'committed' || mapped === 'failed' || mapped === 'rejected') {
+            break;
           }
-
-          const delay = Math.min(baseDelayMs * Math.pow(2, i), 10000);
-          await sleep(delay);
+        } catch (error) {
+          const message = normalizeError(error).toLowerCase();
+          if (message.includes('not found') || message.includes('404')) {
+            notFoundCount += 1;
+            finalClass = 'not-indexed';
+            finalDetail = 'transaction not indexed yet';
+            console.log(`  poll#${i + 1} -> not-indexed`);
+          } else {
+            finalClass = 'pending';
+            finalDetail = normalizeError(error);
+            console.log(`  poll#${i + 1} -> error ${finalDetail}`);
+          }
         }
 
-        if (notFoundCount === attempts) {
-          finalClass = 'not-indexed';
-          finalDetail = `not indexed after ${attempts} attempts`;
-        }
-
-        txSummary.classification = finalClass;
-        txSummary.detail = finalDetail;
-        txSummary.polls = attempts;
+        const delay = Math.min(baseDelayMs * Math.pow(2, i), 10000);
+        await sleep(delay);
       }
-    } finally {
-      await signer.close();
+
+      if (notFoundCount === attempts) {
+        finalClass = 'not-indexed';
+        finalDetail = `not indexed after ${attempts} attempts`;
+      }
+
+      txSummary.classification = finalClass;
+      txSummary.detail = finalDetail;
+      txSummary.polls = attempts;
     }
   }
+
+  await signer.close();
 
   console.log('\n== Smoke summary ==');
   console.log(

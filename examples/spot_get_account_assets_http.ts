@@ -5,7 +5,7 @@
  * showing both perp and spot asset balances with locked amounts.
  */
 
-import { ApiClient, AccountApi, SignerClient } from '../dist/esm/index.js';
+import { ApiClient, AccountApi } from '../src';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -30,10 +30,10 @@ async function main() {
     console.log('\n📈 Perpetual Assets:');
     console.log('─'.repeat(50));
     
-    if (account.margin_balance) {
-      console.log(`Total Asset Value: ${account.balance}`);
-      console.log(`Available Balance: ${account.free_margin}`);
-      console.log(`Margin Used: ${account.margin_used}`);
+    if (account.total_asset_value) {
+      console.log(`Total Asset Value: ${account.total_asset_value}`);
+      console.log(`Available Balance: ${account.available_balance}`);
+      console.log(`Cross Initial Margin Requirement: ${account.cross_initial_margin_requirement}`);
     }
 
     // Display spot assets if available

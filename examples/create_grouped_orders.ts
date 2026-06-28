@@ -49,13 +49,15 @@ async function createGroupedOrdersExample() {
 
     // ============================================================================
     // Example 1: OTO (One-Triggers-Other)
+    // Child order baseAmount MUST be 0 (nil) - it inherits size from parent
+    // Child order isAsk MUST be opposite of parent (one triggers the other)
     // ============================================================================
     console.log('\n📋 Example 1: OTO (One-Triggers-Other)');
     const otoOrders = [
       {
         marketIndex: 0,
         clientOrderIndex: 0, // MUST be 0 for grouped orders
-        baseAmount: baseAmount,
+        baseAmount: baseAmount, // Parent order has the size
         price: currentPrice - 100, // Buy order $100 below market
         isAsk: SignerClient.BUY, // BUY
         orderType: SignerClient.ORDER_TYPE_LIMIT,
@@ -67,13 +69,13 @@ async function createGroupedOrdersExample() {
       {
         marketIndex: 0,
         clientOrderIndex: 0, // MUST be 0 for grouped orders
-        baseAmount: baseAmount,
+        baseAmount: 0, // MUST be 0 (nil) - inherits size from parent
         price: currentPrice + 200, // Sell order $200 above entry
-        isAsk: SignerClient.SELL, // SELL (take profit)
-        orderType: SignerClient.ORDER_TYPE_LIMIT,
-        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-        reduceOnly: SignerClient.NOT_REDUCE_ONLY,
-        triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
+        isAsk: SignerClient.SELL, // SELL (take profit, opposite direction)
+        orderType: SignerClient.ORDER_TYPE_TAKE_PROFIT,
+        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+        reduceOnly: SignerClient.REDUCE_ONLY,
+        triggerPrice: currentPrice + 200,
         orderExpiry: orderExpiry,
       },
     ];
@@ -88,9 +90,16 @@ async function createGroupedOrdersExample() {
       console.error('❌ OTO orders failed:', otoError);
     } else {
       console.log('✅ OTO orders created:', otoTxHash);
-      if (otoTxHash) await signerClient.waitForTransaction(otoTxHash, 60000, 2000);
+      if (otoTxHash) { try { await signerClient.waitForTransaction(otoTxHash, 60000, 2000); } catch (e) { console.warn('   (confirmation poll timed out; tx may still be processing)'); } }
     }
 
+    // ============================================================================
+    // Example 2: OCO (One-Cancels-Other)
+    // Protocol requires OCO legs to be a reduce-only Stop-Loss + Take-Profit pair
+    // (closing an existing position) - not two arbitrary LIMIT orders. Both legs
+    // MUST have the same isAsk direction, same baseAmount, both reduceOnly=1, and
+    // the same non-nil orderExpiry.
+    // ============================================================================
     console.log('\n📋 Example 2: OCO (One-Cancels-Other)');
 
     const ocoOrders = [
@@ -98,24 +107,24 @@ async function createGroupedOrdersExample() {
         marketIndex: 0,
         clientOrderIndex: 0, // MUST be 0 for grouped orders
         baseAmount: baseAmount,
-        price: currentPrice - 50, // Buy limit $50 below market
-        isAsk: SignerClient.BUY, // BUY
-        orderType: SignerClient.ORDER_TYPE_LIMIT,
-        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-        reduceOnly: SignerClient.NOT_REDUCE_ONLY,
-        triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
+        price: currentPrice + 200, // Take-profit: sell $200 above market
+        isAsk: SignerClient.SELL, // SELL to close a LONG position
+        orderType: SignerClient.ORDER_TYPE_TAKE_PROFIT,
+        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+        reduceOnly: SignerClient.REDUCE_ONLY,
+        triggerPrice: currentPrice + 200,
         orderExpiry: orderExpiry,
       },
       {
         marketIndex: 0,
         clientOrderIndex: 0, // MUST be 0 for grouped orders
-        baseAmount: baseAmount,
-        price: currentPrice + 50, // Sell limit $50 above market
-        isAsk: SignerClient.SELL, // SELL
-        orderType: SignerClient.ORDER_TYPE_LIMIT,
-        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-        reduceOnly: SignerClient.NOT_REDUCE_ONLY,
-        triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
+        baseAmount: baseAmount, // OCO orders must have same baseAmount
+        price: currentPrice - 150, // Stop-loss: sell $150 below market
+        isAsk: SignerClient.SELL, // SELL to close a LONG position
+        orderType: SignerClient.ORDER_TYPE_STOP_LOSS,
+        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+        reduceOnly: SignerClient.REDUCE_ONLY,
+        triggerPrice: currentPrice - 150,
         orderExpiry: orderExpiry,
       },
     ];
@@ -130,16 +139,21 @@ async function createGroupedOrdersExample() {
       console.error('❌ OCO orders failed:', ocoError);
     } else {
       console.log('✅ OCO orders created:', ocoTxHash);
-      if (ocoTxHash) await signerClient.waitForTransaction(ocoTxHash, 60000, 2000);
+      if (ocoTxHash) { try { await signerClient.waitForTransaction(ocoTxHash, 60000, 2000); } catch (e) { console.warn('   (confirmation poll timed out; tx may still be processing)'); } }
     }
 
+    // ============================================================================
+    // Example 3: OTOCO (One-Triggers-One-Cancels-Other)
+    // Parent has baseAmount, child orders MUST have baseAmount=0 (nil)
+    // Children inherit size from parent; they must be opposite isAsk direction
+    // ============================================================================
     console.log('\n📋 Example 3: OTOCO (One-Triggers-One-Cancels-Other)');
 
     const otocoOrders = [
       {
         marketIndex: 0,
         clientOrderIndex: 0, // MUST be 0 for grouped orders
-        baseAmount: baseAmount,
+        baseAmount: baseAmount, // Parent order has the size
         price: currentPrice - 100, // Parent: Buy limit $100 below market
         isAsk: SignerClient.BUY, // BUY
         orderType: SignerClient.ORDER_TYPE_LIMIT,
@@ -151,25 +165,25 @@ async function createGroupedOrdersExample() {
       {
         marketIndex: 0,
         clientOrderIndex: 0, // MUST be 0 for grouped orders
-        baseAmount: baseAmount,
+        baseAmount: 0, // MUST be 0 (nil) - inherits size from parent
         price: currentPrice + 200, // Child 1: Take profit $200 above entry
-        isAsk: SignerClient.SELL, // SELL
-        orderType: SignerClient.ORDER_TYPE_LIMIT,
-        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-        reduceOnly: SignerClient.NOT_REDUCE_ONLY,
-        triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
+        isAsk: SignerClient.SELL, // SELL (opposite direction, close position)
+        orderType: SignerClient.ORDER_TYPE_TAKE_PROFIT,
+        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+        reduceOnly: SignerClient.REDUCE_ONLY, // Reduce only
+        triggerPrice: currentPrice + 200,
         orderExpiry: orderExpiry,
       },
       {
         marketIndex: 0,
         clientOrderIndex: 0, // MUST be 0 for grouped orders
-        baseAmount: baseAmount,
+        baseAmount: 0, // MUST be 0 (nil) - inherits size from parent
         price: currentPrice - 150, // Child 2: Stop loss $150 below entry
-        isAsk: SignerClient.SELL, // SELL
-        orderType: SignerClient.ORDER_TYPE_LIMIT,
-        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-        reduceOnly: SignerClient.REDUCE_ONLY, // Reduce only (stop loss)
-        triggerPrice: SignerClient.NIL_TRIGGER_PRICE,
+        isAsk: SignerClient.SELL, // SELL (opposite direction, close position)
+        orderType: SignerClient.ORDER_TYPE_STOP_LOSS,
+        timeInForce: SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+        reduceOnly: SignerClient.REDUCE_ONLY, // Reduce only
+        triggerPrice: currentPrice - 150,
         orderExpiry: orderExpiry,
       },
     ];
@@ -184,7 +198,7 @@ async function createGroupedOrdersExample() {
       console.error('❌ OTOCO orders failed:', otocoError);
     } else {
       console.log('✅ OTOCO orders created:', otocoTxHash);
-      if (otocoTxHash) await signerClient.waitForTransaction(otocoTxHash, 60000, 2000);
+      if (otocoTxHash) { try { await signerClient.waitForTransaction(otocoTxHash, 60000, 2000); } catch (e) { console.warn('   (confirmation poll timed out; tx may still be processing)'); } }
     }
     console.log('\n✅ Examples completed');
   } catch (error) {

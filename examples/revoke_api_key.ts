@@ -19,8 +19,8 @@ async function revokeApiKey() {
   console.log('🔐 API Key Revocation Example\n');
 
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || '';
-  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '271', 10);
-  const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '4', 10);
+  const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
+  const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0', 10);
   const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
   const TARGET_API_KEY_INDEX = parseInt(process.env['TARGET_API_KEY_INDEX'] || API_KEY_INDEX.toString(), 10); // Index to revoke
   const ACCOUNT_PRIVATE_KEY = process.env['ACCOUNT_PRIVATE_KEY'] || process.env['ETH_PRIVATE_KEY'] || '';

@@ -35,10 +35,14 @@ yarn add lighter-ts-sdk
 
 ### Step 1: Get Your Credentials
 
-You need three things from your Lighter account:
-- `ACCOUNT_INDEX` - Your account number
-- `API_KEY_INDEX` - Which API key to use (usually 0)
-- `API_PRIVATE_KEY` - Your API private key (get from Lighter app)
+You need three things:
+- `ACCOUNT_INDEX` - Your Lighter account number
+- `API_KEY_INDEX` - Which API key slot to use on that account
+- `API_PRIVATE_KEY` - Your API private key
+
+If this is your very first API key on a brand-new account, register it via the Lighter web app first — that gives you one working `API_PRIVATE_KEY`/`API_KEY_INDEX` pair to authenticate with.
+
+Once you have at least one working key, you can generate and register **additional** key slots entirely from the SDK (no web app needed) via `examples/onboarding.ts` or `examples/system_setup.ts`, both of which use your existing `API_PRIVATE_KEY` plus your Ethereum wallet's `ETH_PRIVATE_KEY` (for the one-time L1 signature) to register a new key on-chain. Both scripts refuse to overwrite the key index you're currently authenticating with, so they're safe to run without risking your active credentials.
 
 ### Step 2: Create Environment File
 
@@ -55,6 +59,8 @@ API_KEY_INDEX=0
 ```
 
 ### Step 3: Write Your First Trade
+
+The SDK ships a ready-to-run version of this exact walkthrough — `npx tsx examples/quickstart.ts` creates a small limit order, waits for confirmation, and cancels it. Read on to build it yourself, or skip straight to running that file.
 
 Create `my-first-trade.ts`:
 
@@ -124,7 +130,7 @@ myFirstTrade();
 ### Step 4: Run It
 
 ```bash
-npx ts-node my-first-trade.ts
+npx tsx my-first-trade.ts
 ```
 
 You'll see output like:
@@ -249,18 +255,22 @@ console.log('✅ Position closed');
 ### Check Your Orders
 
 ```typescript
+import { ApiClient, OrderApi } from 'lighter-ts-sdk';
+
 const apiClient = new ApiClient({ host: process.env.BASE_URL });
 const orderApi = new OrderApi(apiClient);
 
-// Get your active orders
+// Get your active orders (requires a signed auth token)
+const auth = await signerClient.createAuthToken();
 const orders = await orderApi.getAccountActiveOrders(
   parseInt(process.env.ACCOUNT_INDEX!),
-  0  // Market 0
+  0, // Market 0
+  auth
 );
 
 console.log(`You have ${orders.length} active orders:`);
 orders.forEach(order => {
-  console.log(`- Order ${order.id}: ${order.side} ${order.size} @ ${order.price}`);
+  console.log(`- Order ${order.order_index}: ${order.is_ask ? 'SELL' : 'BUY'} ${order.remaining_base_amount} @ ${order.price}`);
 });
 ```
 
@@ -317,12 +327,12 @@ All examples are in the `examples/` directory:
 
 ```bash
 # Start with these
-npx ts-node examples/create_market_order.ts
-npx ts-node examples/create_limit_order.ts
+npx tsx examples/create_market_order.ts
+npx tsx examples/create_limit_order.ts
 
 # Then try these
-npx ts-node examples/cancel_order.ts
-npx ts-node examples/close_position.ts
+npx tsx examples/cancel_order.ts
+npx tsx examples/close_position.ts
 ```
 
 ### Read the Full Documentation

@@ -70,6 +70,7 @@ id_rsa.pub
 *.secret
 secrets/
 .secrets/
+api_key_config.json
 
 # parcel-bundler cache
 .cache
@@ -118,6 +119,9 @@ pids
 *.swo
 *~
 
+# Claude Code local settings/permissions
+.claude/
+
 # OS generated files
 .DS_Store
 .DS_Store?
@@ -130,6 +134,11 @@ Thumbs.db
 # Build artifacts
 build/
 dist/
+
+# Stray compiled output from running tsc directly on files (bypasses tsconfig outDir)
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts.map
 
 # Test coverage
 coverage/

@@ -19,6 +19,7 @@ export { ReferralApi } from './api/referral-api';
 export { TransactionApi } from './api/transaction-api';
 export { RootApi } from './api/root-api';
 export { CandlestickApi } from './api/candlestick-api';
+export { TokenlistApi } from './api/tokenlist-api';
 
 // Explorer API Classes
 export { ExplorerApiClient } from './api/explorer-api-client';
@@ -67,6 +68,8 @@ export type {
   StakeAssetsParams,
   UnstakeAssetsParams,
   ApproveIntegratorParams,
+  UpdateAccountConfigParams,
+  UpdateAccountAssetConfigParams,
   CreateGroupedOrderParams,
   CreateGroupedOrdersParams,
   WasmSignerResponse,
@@ -307,16 +310,36 @@ export const LIGHTER_CONSTANTS = {
   // Order Types
   ORDER_TYPE_LIMIT: 0,
   ORDER_TYPE_MARKET: 1,
+  ORDER_TYPE_STOP_LOSS: 2,
+  ORDER_TYPE_STOP_LOSS_LIMIT: 3,
+  ORDER_TYPE_TAKE_PROFIT: 4,
+  ORDER_TYPE_TAKE_PROFIT_LIMIT: 5,
+  ORDER_TYPE_TWAP: 6,
   
   // Time in Force
   ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL: 0,
   ORDER_TIME_IN_FORCE_GOOD_TILL_TIME: 1,
   ORDER_TIME_IN_FORCE_FILL_OR_KILL: 2,
+  ORDER_TIME_IN_FORCE_POST_ONLY: 2,
   
   // Cancel All Orders Time in Force
   CANCEL_ALL_TIF_IMMEDIATE: 0,
   CANCEL_ALL_TIF_SCHEDULED: 1,
   CANCEL_ALL_TIF_ABORT: 2,
+  
+  // Self-Trade Behavior
+  SELF_TRADE_BEHAVIOR_EXPIRE_MAKER: 0,
+  SELF_TRADE_BEHAVIOR_EXPIRE_TAKER: 1,
+  SELF_TRADE_BEHAVIOR_EXPIRE_BOTH: 2,
+  SELF_TRADE_BEHAVIOR_REDUCE: 3,
+  
+  // Self-Trade Equality
+  SELF_TRADE_EQUALITY_ACCOUNT_INDEX: 0,
+  SELF_TRADE_EQUALITY_MASTER_ACCOUNT_INDEX: 1,
+  
+  // Asset Margin Mode
+  ASSET_MARGIN_MODE_DISABLED: 0,
+  ASSET_MARGIN_MODE_ENABLED: 1,
   
   // Margin Modes
   CROSS_MARGIN_MODE: 0,
@@ -325,14 +348,30 @@ export const LIGHTER_CONSTANTS = {
   ISOLATED_MARGIN_ADD_COLLATERAL: 1,
   
   // Transaction Types
-  TX_TYPE_CREATE_ORDER: 1,
-  TX_TYPE_CANCEL_ORDER: 2,
-  TX_TYPE_CANCEL_ALL_ORDERS: 3,
-  TX_TYPE_TRANSFER: 4,
+  TX_TYPE_CHANGE_PUB_KEY: 8,
+  TX_TYPE_CREATE_SUB_ACCOUNT: 9,
+  TX_TYPE_CREATE_PUBLIC_POOL: 10,
+  TX_TYPE_UPDATE_PUBLIC_POOL: 11,
+  TX_TYPE_TRANSFER: 12,
+  TX_TYPE_WITHDRAW: 13,
+  TX_TYPE_CREATE_ORDER: 14,
+  TX_TYPE_CANCEL_ORDER: 15,
+  TX_TYPE_CANCEL_ALL_ORDERS: 16,
+  TX_TYPE_MODIFY_ORDER: 17,
+  TX_TYPE_MINT_SHARES: 18,
+  TX_TYPE_BURN_SHARES: 19,
   TX_TYPE_UPDATE_LEVERAGE: 20,
+  TX_TYPE_CREATE_GROUPED_ORDERS: 28,
+  TX_TYPE_UPDATE_MARGIN: 29,
+  TX_TYPE_STAKE_ASSETS: 35,
+  TX_TYPE_UNSTAKE_ASSETS: 36,
+  TX_TYPE_APPROVE_INTEGRATOR: 45,
+  TX_TYPE_UPDATE_ACCOUNT_CONFIG: 46,
+  TX_TYPE_UPDATE_ACCOUNT_ASSET_CONFIG: 47,
   
   // Other Constants
   NIL_TRIGGER_PRICE: 0,
+  NIL_MARKET_INDEX: 255,
   DEFAULT_28_DAY_ORDER_EXPIRY: -1,
   DEFAULT_IOC_EXPIRY: 0,
   DEFAULT_10_MIN_AUTH_EXPIRY: -1,
@@ -357,4 +396,4 @@ export const DEFAULT_CONFIG = {
 } as const;
 
 // Version
-export const VERSION = '1.0.9';
+export const VERSION = '1.0.12';
