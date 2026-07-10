@@ -21,12 +21,16 @@ new SignerClient(config: SignerConfig)
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `url` | `string` | Yes | The Lighter API URL (e.g., `https://mainnet.zklighter.elliot.ai`) |
+| `network` | `Network \| 'mainnet' \| 'testnet' \| 'robinhood'` | No | Network selection. Its `apiUrl` (if `url` omitted) and `chainId` (if `chainId` omitted) are used. Recommended for Robinhood (chain_id 466324). |
+| `url` | `string` | No | The Lighter API URL. If omitted, resolved from `network` or `LIGHTER_NETWORK` env (default `mainnet`). |
+| `chainId` | `number` | No | Explicit signing chain id. Defaults to the `network`'s `chainId`, else the URL heuristic / API probe (mainnet 304, testnet 300). |
 | `privateKey` | `string` | Yes | Your API key private key |
 | `accountIndex` | `number` | Yes | Your account index |
 | `apiKeyIndex` | `number` | Yes | Your API key index |
 | ~~`signerServerUrl`~~ | ~~`string`~~ | ~~No~~ | ~~URL of the signer server (deprecated - use WASM signer)~~ |
 | `wasmConfig` | `WasmSignerConfig` | No | Configuration for WASM signer (optional - auto-resolves paths) |
+
+See `docs/types/SignerConfig.md` for a full example and `src/network.ts` for the network registry and env resolver (`resolveNetworkFromEnv`, `NETWORKS`, `getNetwork`).
 
 ## Methods
 

@@ -14,8 +14,16 @@ cp .env.example .env
 ### Environment Variables
 
 ```bash
-# Required
-BASE_URL=https://mainnet.zklighter.elliot.ai
+# Network: mainnet (default, L2 chain_id 304) | testnet (L2 chain_id 300) | robinhood (L2 chain_id 466324) | robinhood-testnet (L2 chain_id 300)
+# Drives both the API/WS host and the L2 signing chain_id (the first element of every L2 tx hash).
+# See the root README.md "Networks" table for the full host + L1/L2 chain_id breakdown.
+LIGHTER_NETWORK=mainnet
+# Optional overrides for a custom/local deployment (applied only when LIGHTER_NETWORK is unset):
+# BASE_URL=https://mainnet.zklighter.elliot.ai
+# WS_URL=wss://mainnet.zklighter.elliot.ai/stream
+# CHAIN_ID=304
+# WS_READONLY=true   # read-only stream for restricted regions (Robinhood)
+
 API_PRIVATE_KEY=your_api_private_key_here
 ACCOUNT_INDEX=your_account_index
 API_KEY_INDEX=your_api_key_index
@@ -40,6 +48,10 @@ Every example uses `import` (ESM). The SDK itself ships ESM, CJS, and UMD builds
 
 ### Start Here
 - **quickstart.ts** — the smallest end-to-end flow: create a limit order, wait for confirmation, cancel it. Run this first to confirm your setup works.
+- **robinhood_quickstart.ts** — read-only smoke test against Lighter-on-Robinhood (`LIGHTER_NETWORK=robinhood`): fetches the contract address, token list, system config, and L1 info. No key required.
+- **robinhood_ws_smoke.ts** — read-only WebSocket smoke against `wss://api.rh.lighter.xyz/stream?readonly=true`: connects, subscribes to `order_book/0`, prints a few messages, and exits. No key required.
+- **robinhood_authenticated_smoke.ts** — **authenticated signing smoke** against Robinhood (`LIGHTER_NETWORK=robinhood` + `API_PRIVATE_KEY`/`ACCOUNT_INDEX`/`API_KEY_INDEX`). The decisive chain_id test: it submits a signed L2 `cancelAllOrders` no-op tx (safe — skipped if you have open orders) and waits for on-chain confirmation. Auth-token/account reads do **not** bind the chain_id, so only a signed L2 tx can confirm it. Set `CHAIN_ID_OVERRIDE=4663` to A/B it — the L1 chainId `4663` is rejected with `invalid signature`, while the L2 signing chain_id `466324` is accepted and confirmed.
+- **robinhood_funded_order.ts** — **the real funded trading round-trip** on Robinhood (`LIGHTER_NETWORK=robinhood` + a funded account). Places a signed L2 limit BUY on market 0 (ETH perp) priced at ~50% of the last trade (so it rests and never fills), waits for on-chain confirmation, verifies it's resting on the book, cancels it, and verifies the cancel — the full create → confirm → cancel loop with chain_id `466324`. Safe by design: far-from-market price (no fill), smallest legal notional (margin ~$0.5–2 reserved, then released), cancels only its own order (never `cancelAll`), refuses to guess a price, and retries the post-cancel read to absorb read-after-write lag. Margin is returned to the exact starting balance on cancel (zero net cost). Run `robinhood_authenticated_smoke.ts` first (it proves the chain_id without needing funds).
 
 ### Order Lifecycle (Perp)
 - **create_market_order.ts** — Market order with integrated SL/TP (OTOCO)

@@ -30,6 +30,10 @@ export { LogsApi } from './api/logs-api';
 // Bridge Classes
 export { L1BridgeClient } from './bridge/l1-bridge-client';
 
+// Network registry + env-driven network selection (mainnet | testnet | robinhood)
+export { getNetwork, resolveNetworkFromEnv, resolveWsUrl, deriveWsUrl, NETWORKS } from './network';
+export type { Network, NetworkName } from './network';
+
 // Signer Client
 export { SignerClient } from './signer/wasm-signer-client';
 export type { 
@@ -396,4 +400,4 @@ export const DEFAULT_CONFIG = {
 } as const;
 
 // Version
-export const VERSION = '1.0.12';
+export const VERSION = '1.0.13';

@@ -16,14 +16,34 @@ import { FastBridgeInfo } from '../api/bridge-api';
 import { OrderApi } from '../api/order-api';
 import { ExplorerApiClient } from '../api/explorer-api-client';
 import { LogsApi } from '../api/logs-api';
+import { Network, NetworkName, NETWORKS, getNetwork, resolveNetworkFromEnv } from '../network';
 
 /**
  * Configuration interface for SignerClient
  * @interface SignerConfig
  */
 export interface SignerConfig {
-  /** Lighter Protocol API URL */
-  url: string;
+  /**
+   * Lighter Protocol API URL. Optional — if omitted, the host is resolved
+   * from `network`, or from `LIGHTER_NETWORK` in the environment (default
+   * `mainnet`). Set `LIGHTER_NETWORK=robinhood` to target Lighter-on-Robinhood.
+   */
+  url?: string;
+  /**
+   * Optional network selection: a `Network` object, or a registry name
+   * (`mainnet` | `testnet` | `robinhood`). When set, its `apiUrl` (if `url`
+   * is omitted) and `chainId` (if `chainId` is omitted) are used. This is the
+   * recommended way to target Robinhood, whose signing chain_id (466324)
+   * cannot be auto-detected from the URL.
+   */
+  network?: Network | NetworkName;
+  /**
+   * Optional explicit signing chain id. The first element of every L2 tx
+   * hash — must match the target network. When unset, the `network`'s
+   * `chainId` is used; failing that, the legacy URL heuristic / API probe
+   * runs (mainnet 304, testnet 300).
+   */
+  chainId?: number;
   /** Private key for signing transactions */
   privateKey: string;
   /** Account index (0 for master account) */
@@ -218,12 +238,54 @@ export enum TransactionType {
 }
 
 /**
+ * Resolve the effective `Network` and API URL for a SignerConfig.
+ *
+ * Network precedence:
+ *   1. `config.network` (a `Network` object or a registry name)
+ *   2. an explicit `config.url` matched against known network hosts
+ *   3. `LIGHTER_NETWORK` in the environment (default `mainnet`)
+ *
+ * The returned `url` is always a string: `config.url` when set, otherwise the
+ * resolved network's `apiUrl`. Matching an explicit URL to a known network
+ * lets `url: 'https://api.rh.lighter.xyz'` pick up the Robinhood chain_id
+ * (466324) without also setting `LIGHTER_NETWORK` or `chainId`.
+ */
+function resolveEffectiveNetwork(config: SignerConfig): { network: Network | undefined; url: string } {
+  if (config.network) {
+    const network = typeof config.network === 'string' ? getNetwork(config.network) : config.network;
+    return { network, url: config.url ?? network.apiUrl };
+  }
+  if (config.url) {
+    return { network: matchNetworkByUrl(config.url), url: config.url };
+  }
+  const network = resolveNetworkFromEnv();
+  return { network, url: network.apiUrl };
+}
+
+/** Extract the bare host (`api.rh.lighter.xyz`) from a URL for matching. */
+function normalizeHost(url: string): string {
+  return url.toLowerCase().replace(/^https?:\/\//, '').replace(/[/:].*$/, '');
+}
+
+/** Match an API URL to a known network by exact host. */
+function matchNetworkByUrl(url: string): Network | undefined {
+  const host = normalizeHost(url);
+  if (!host) return undefined;
+  for (const network of Object.values(NETWORKS)) {
+    if (normalizeHost(network.apiUrl) === host) return network;
+  }
+  return undefined;
+}
+
+/**
  * Main SignerClient class for interacting with Lighter Protocol
  * Handles order creation, account management, and transaction signing
  * @class SignerClient
  */
 export class SignerClient {
   private config: SignerConfig;
+  private resolvedNetwork: Network | undefined;
+  private apiUrl: string;
   private apiClient: ApiClient;
   private transactionApi: TransactionApi;
   private accountApi: AccountApi;
@@ -328,11 +390,25 @@ export class SignerClient {
    * @param config.logLevel - Optional logging level
    */
   constructor(config: SignerConfig) {
+    // Resolve the effective network and API URL before validation. When
+    // `url` is omitted we derive it from `network` (or `LIGHTER_NETWORK` in
+    // the environment, default `mainnet`). When `url` is given we also try to
+    // match it to a known network so the correct signing chain_id is used —
+    // e.g. the Robinhood host, which the URL heuristic would mis-resolve to 304.
+    const resolved = resolveEffectiveNetwork(config);
+    this.resolvedNetwork = resolved.network;
+    const apiHost = config.url ?? resolved.url;
+    if (!config.url) config.url = apiHost;
+    if (config.chainId === undefined && resolved.network) {
+      config.chainId = resolved.network.chainId;
+    }
+
     // Validate configuration
     this.validateConfig(config);
-    
+
     this.config = config;
-    this.apiClient = new ApiClient({ host: config.url });
+    this.apiUrl = apiHost;
+    this.apiClient = new ApiClient({ host: apiHost });
     this.transactionApi = new TransactionApi(this.apiClient);
     this.accountApi = new AccountApi(this.apiClient);
     this.bridgeApi = new BridgeApi(this.apiClient, config.l1BridgeConfig);
@@ -392,7 +468,7 @@ export class SignerClient {
     // Initialize WebSocket order client if enabled
     if (this.config.enableWebSocket) {
       this.wsOrderClient = new WebSocketOrderClient({
-        url: this.config.url,
+        url: this.apiUrl,
         reconnectInterval: 5000,
         maxReconnectAttempts: 10,
         heartbeatInterval: 30000,
@@ -552,47 +628,58 @@ export class SignerClient {
         // Double-check after acquiring the lock
         if (this.clientCreated) return;
 
-        // Initialize WASM client
-        // Determine chainId from API, try layer2BasicInfo first, then /info, fallback based on URL
-        const root = new RootApi(this.apiClient);
-        
-        // Determine default chain ID from URL (testnet = 300, mainnet = 304)
-        const urlLower = this.config.url.toLowerCase();
-        const defaultChainId = urlLower.includes('testnet') ? 300 : 304;
-        
-        let chainIdNum = defaultChainId;
-        try {
-          // Try modern endpoint
+        // Initialize WASM client.
+        // An explicit chain_id (from `config.chainId` or the resolved
+        // `network`) takes precedence over the URL heuristic / API probe. This
+        // is what makes Robinhood (chain_id 466324) sign correctly — the URL
+        // heuristic below would mis-resolve api.rh.lighter.xyz to 304.
+        const explicitChainId = this.config.chainId;
+        let chainIdNum: number;
+
+        if (typeof explicitChainId === 'number' && Number.isFinite(explicitChainId) && explicitChainId > 0) {
+          chainIdNum = explicitChainId;
+        } else {
+          // Legacy resolution: URL heuristic, then layer2BasicInfo, then /info.
+          const root = new RootApi(this.apiClient);
+
+          // Determine default chain ID from URL (testnet = 300, mainnet = 304)
+          const urlLower = this.apiUrl.toLowerCase();
+          const defaultChainId = urlLower.includes('testnet') ? 300 : 304;
+
+          chainIdNum = defaultChainId;
           try {
-            const basic: any = await (this.apiClient as any).get('/api/v1/layer2BasicInfo');
-            const data: any = basic?.data ?? basic; // ApiClient.get wraps in {data}
-            const cid = (data && (data.chain_id ?? data.chainId ?? data.chainID)) ?? undefined;
-            if (cid !== undefined) {
-              if (typeof cid === 'number') {
-                chainIdNum = cid;
-              } else {
+            // Try modern endpoint
+            try {
+              const basic: any = await (this.apiClient as any).get('/api/v1/layer2BasicInfo');
+              const data: any = basic?.data ?? basic; // ApiClient.get wraps in {data}
+              const cid = (data && (data.chain_id ?? data.chainId ?? data.chainID)) ?? undefined;
+              if (cid !== undefined) {
+                if (typeof cid === 'number') {
+                  chainIdNum = cid;
+                } else {
+                  const s = String(cid).toLowerCase();
+                  if (/^\d+$/.test(s)) chainIdNum = parseInt(s, 10);
+                  else if (s.includes('mainnet')) chainIdNum = 304;
+                  else if (s.includes('testnet')) chainIdNum = 300;
+                }
+              }
+            } catch {}
+
+            if (!Number.isFinite(chainIdNum) || chainIdNum <= 0) {
+              const info: any = await root.getInfo();
+              const cid = (info && (info.chain_id ?? info.chainId ?? info.chainID)) ?? defaultChainId;
+              if (typeof cid === 'number') chainIdNum = cid; else {
                 const s = String(cid).toLowerCase();
                 if (/^\d+$/.test(s)) chainIdNum = parseInt(s, 10);
                 else if (s.includes('mainnet')) chainIdNum = 304;
                 else if (s.includes('testnet')) chainIdNum = 300;
+                else chainIdNum = defaultChainId;
               }
             }
-          } catch {}
-
-          if (!Number.isFinite(chainIdNum) || chainIdNum <= 0) {
-            const info: any = await root.getInfo();
-            const cid = (info && (info.chain_id ?? info.chainId ?? info.chainID)) ?? defaultChainId;
-            if (typeof cid === 'number') chainIdNum = cid; else {
-              const s = String(cid).toLowerCase();
-              if (/^\d+$/.test(s)) chainIdNum = parseInt(s, 10);
-              else if (s.includes('mainnet')) chainIdNum = 304;
-              else if (s.includes('testnet')) chainIdNum = 300;
-              else chainIdNum = defaultChainId;
-            }
+            if (!Number.isFinite(chainIdNum) || chainIdNum <= 0) chainIdNum = defaultChainId;
+          } catch {
+            chainIdNum = defaultChainId;
           }
-          if (!Number.isFinite(chainIdNum) || chainIdNum <= 0) chainIdNum = defaultChainId;
-        } catch {
-          chainIdNum = defaultChainId;
         }
 
         // Handle composite/private key format.
@@ -609,7 +696,7 @@ export class SignerClient {
         }
 
         await (this.wallet as WasmSignerClient).createClient({
-          url: this.config.url,
+          url: this.apiUrl,
           privateKey: wasmKey.startsWith('0x') ? wasmKey : `0x${wasmKey}`,
           chainId: chainIdNum,
           apiKeyIndex: this.config.apiKeyIndex,
@@ -628,7 +715,9 @@ export class SignerClient {
 
   private validateConfig(config: SignerConfig): void {
     if (!config.url || typeof config.url !== 'string') {
-      throw new Error('URL is required and must be a string');
+      throw new Error(
+        'SignerClient requires an API URL: set `url`, `network`, or the LIGHTER_NETWORK env var (mainnet | testnet | robinhood).'
+      );
     }
     
     if (!config.privateKey || typeof config.privateKey !== 'string') {
@@ -1317,10 +1406,11 @@ export class SignerClient {
 
       // Create temporary client with new key to sign (WASM needs client for the new key index)
       const tempClient = new SignerClient({
-        url: this.config.url,
+        url: this.apiUrl,
         privateKey: params.newPrivateKey,
         accountIndex: this.config.accountIndex,
         apiKeyIndex: newApiKeyIndex,
+        ...(this.config.chainId !== undefined ? { chainId: this.config.chainId } : {}),
         wasmConfig: this.config.wasmConfig || { wasmPath: 'wasm/lighter-signer.wasm' }
       });
       await tempClient.initialize();
