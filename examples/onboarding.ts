@@ -40,7 +40,7 @@
  *   npx ts-node examples/onboarding.ts
  */
 
-import { SignerClient, ApiClient, AccountApi, createWasmSignerClient } from '../src';
+import { SignerClient, ApiClient, AccountApi, createWasmSignerClient, resolveNetworkFromEnv } from '../src';
 import { ethers } from 'ethers';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
@@ -48,7 +48,12 @@ import * as readline from 'readline';
 
 dotenv.config();
 
-const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+// REST base URL is driven by LIGHTER_NETWORK in .env (mainnet | testnet | robinhood).
+// NOTE: the L1 deposit step below uses the Lighter L2 mainnet contract + USDC
+// asset index (ZKLIGHTER_CONTRACT / ASSET_INDEX_USDC). Robinhood deposits need
+// the Robinhood contract address (0x94bAB9693Ba2f6358507eFfcbd372b0660AFfF9d)
+// and its own asset index — swap those before onboarding on Robinhood.
+const BASE_URL = resolveNetworkFromEnv().apiUrl;
 const ETH_PRIVATE_KEY = process.env['ETH_PRIVATE_KEY'] || '';
 const DEPOSIT_METHOD = (process.env['DEPOSIT_METHOD'] || 'direct').toLowerCase();
 const DEPOSIT_AMOUNT = parseFloat(process.env['DEPOSIT_AMOUNT'] || '6');

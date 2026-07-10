@@ -8,7 +8,7 @@
  * Run: npx tsx examples/quickstart.ts
  */
 
-import { SignerClient, OrderType } from '../src';
+import { SignerClient, OrderType, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -20,11 +20,14 @@ async function quickstart() {
   }
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '0', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '0', 10);
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  // Network is driven by LIGHTER_NETWORK in .env (mainnet | testnet | robinhood).
+  // Passing `network` lets SignerClient pick the host and the signing chain_id.
+  const network = resolveNetworkFromEnv();
+  console.log(`Using Lighter network: ${network.name} (${network.apiUrl}, chain_id ${network.chainId})`);
   const MARKET_INDEX = 0; // ETH/USDC perp
 
   const signerClient = new SignerClient({
-    url: BASE_URL,
+    network,
     privateKey: API_PRIVATE_KEY,
     accountIndex: ACCOUNT_INDEX,
     apiKeyIndex: API_KEY_INDEX,

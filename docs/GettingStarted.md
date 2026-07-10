@@ -49,14 +49,17 @@ Once you have at least one working key, you can generate and register **addition
 Create a `.env` file in your project:
 
 ```bash
-# Base URL for API
-BASE_URL=https://mainnet.zklighter.elliot.ai
+# Network: mainnet (default) | testnet | robinhood | robinhood-testnet
+# Drives both the API/WS host and the signing chain_id.
+LIGHTER_NETWORK=mainnet
 
 # Your credentials from Lighter app
 API_PRIVATE_KEY=0xabcdef123456789...
 ACCOUNT_INDEX=1000
 API_KEY_INDEX=0
 ```
+
+The SDK runs on four chains that share the same Lighter core. Pick one with a single `LIGHTER_NETWORK` line in `.env` — the API host, WebSocket host, and signing chain_id all switch together. See the [Networks table](../README.md#step-1-set-up-your-environment) in the root README for the full host/chain_id breakdown and the L1-vs-L2 chain_id distinction.
 
 ### Step 3: Write Your First Trade
 
@@ -65,15 +68,15 @@ The SDK ships a ready-to-run version of this exact walkthrough — `npx tsx exam
 Create `my-first-trade.ts`:
 
 ```typescript
-import { SignerClient, OrderType } from 'lighter-ts-sdk';
+import { SignerClient, OrderType, resolveNetworkFromEnv } from 'lighter-ts-sdk';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
 async function myFirstTrade() {
-  // Initialize client
+  // Initialize client — `network` reads LIGHTER_NETWORK from .env (mainnet | testnet | robinhood)
   const signerClient = new SignerClient({
-    url: process.env.BASE_URL!,
+    network: resolveNetworkFromEnv(),
     privateKey: process.env.API_PRIVATE_KEY!,
     accountIndex: parseInt(process.env.ACCOUNT_INDEX!),
     apiKeyIndex: parseInt(process.env.API_KEY_INDEX!)
@@ -255,9 +258,9 @@ console.log('✅ Position closed');
 ### Check Your Orders
 
 ```typescript
-import { ApiClient, OrderApi } from 'lighter-ts-sdk';
+import { ApiClient, OrderApi, resolveNetworkFromEnv } from 'lighter-ts-sdk';
 
-const apiClient = new ApiClient({ host: process.env.BASE_URL });
+const apiClient = new ApiClient({ host: resolveNetworkFromEnv().apiUrl });
 const orderApi = new OrderApi(apiClient);
 
 // Get your active orders (requires a signed auth token)

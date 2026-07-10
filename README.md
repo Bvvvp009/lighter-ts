@@ -66,17 +66,35 @@ See [`examples/`](./examples) for a runnable script covering every feature above
 Create a `.env` file in your project root:
 
 ```bash
+# Network: mainnet (default) | testnet | robinhood | robinhood-testnet
+# Drives both the API/WS host and the signing chain_id (see the table below).
+LIGHTER_NETWORK=mainnet
+
 # Required credentials
 API_PRIVATE_KEY=your_private_key_here
 ACCOUNT_INDEX=0
 API_KEY_INDEX=0
-BASE_URL=https://mainnet.zklighter.elliot.ai
 
 # Optional: for specific examples
 MARKET_ID=0
 SUB_ACCOUNT_INDEX=1
 DEPOSIT_AMOUNT=1
 ```
+
+The SDK runs on four chains that share the same Lighter core. Pick one with a single `LIGHTER_NETWORK` line in `.env` — the API host, WebSocket host, and signing chain_id all switch together.
+
+| `LIGHTER_NETWORK` | Network | API host | WS host | L1 chainId | L2 signing chain_id |
+|-------------------|---------|----------|---------|------------|---------------------|
+| `mainnet` (default) | **Lighter Mainnet** | `https://mainnet.zklighter.elliot.ai` | `wss://mainnet.zklighter.elliot.ai/stream` | `1` | **`304`** |
+| `testnet` | **Lighter Testnet** | `https://testnet.zklighter.elliot.ai` | `wss://testnet.zklighter.elliot.ai/stream` | `123456` | **`300`** |
+| `robinhood` | **Lighter-on-Robinhood** | `https://api.rh.lighter.xyz` | `wss://api.rh.lighter.xyz/stream` | `4663` | **`466324`** |
+| `robinhood-testnet` | **Lighter-on-Robinhood Testnet** | `https://api.rh-testnet.lighter.xyz` | `wss://api.rh-testnet.lighter.xyz/stream` | `123456` | **`300`** |
+
+> **L1 `chainId` ≠ L2 signing `chain_id` — don't confuse them.** The L1 chainId is the EVM settlement chain (what a wallet or the `/api/v1/layer1BasicInfo` endpoint reports). The **L2 signing chain_id** is the first element of every L2 transaction hash and the value the WASM signer signs with. Only the L2 signing chain_id matters when submitting orders — a tx signed with the wrong value is rejected with `invalid signature`. Setting `LIGHTER_NETWORK` makes the SDK pick the correct L2 signing chain_id automatically. Robinhood's `466324` cannot be auto-detected from the URL (the legacy heuristic would wrongly sign with `304`), which is why the explicit `Network` registry exists.
+
+**Lighter-on-Robinhood** (`robinhood`) shares the Lighter core; only the API/WS hosts, contract address (`0x94bAB9693Ba2f6358507eFfcbd372b0660AFfF9d`), signing chain_id (`466324`), and supported assets differ — it lists RWA stocks and `USDG` spot markets alongside crypto perps (the USDC you top up appears as USDG, Robinhood's native stable). Set `LIGHTER_NETWORK=robinhood` and the SDK connects with the correct host and chain_id. For read-only exploration without a key, run `npx tsx examples/robinhood_quickstart.ts`. For restricted regions, set `WS_READONLY=true` to use the read-only stream.
+
+**Lighter-on-Robinhood Testnet** (`robinhood-testnet`) is the test instance at `https://api.rh-testnet.lighter.xyz`. It shares the L2 signing chain_id `300` (and L1 chainId `123456`) with the original Lighter testnet, so the chain_id alone does not tell them apart — the **host** does. It has its own contract (`0x047dF90f783E98745f9b53F1a974c8e9Ac1fE56b`) and a faucet contract for topping up test funds. Set `LIGHTER_NETWORK=robinhood-testnet` to target it.
 
 ### Step 2: Install the SDK
 
@@ -87,15 +105,15 @@ npm install lighter-ts-sdk
 ### Step 3: Your First Trade
 
 ```typescript
-import { SignerClient, OrderType } from 'lighter-ts-sdk';
+import { SignerClient, OrderType, resolveNetworkFromEnv } from 'lighter-ts-sdk';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 async function placeOrder() {
-  // Initialize the client
+  // Initialize the client — `network` reads LIGHTER_NETWORK from .env
   const signerClient = new SignerClient({
-    url: process.env.BASE_URL!,
+    network: resolveNetworkFromEnv(),
     privateKey: process.env.API_PRIVATE_KEY!,
     accountIndex: parseInt(process.env.ACCOUNT_INDEX!),
     apiKeyIndex: parseInt(process.env.API_KEY_INDEX!)
@@ -641,9 +659,9 @@ Every example in [`examples/`](./examples), including `examples/spot/`, has been
 To execute transactions yourself:
 
 ```typescript
-// All credentials loaded from .env
+// All credentials + network loaded from .env (LIGHTER_NETWORK=mainnet|testnet|robinhood|robinhood-testnet)
 const signerClient = new SignerClient({
-  url: process.env.BASE_URL!,
+  network: resolveNetworkFromEnv(),
   privateKey: process.env.API_PRIVATE_KEY!,
   accountIndex: parseInt(process.env.ACCOUNT_INDEX!),
   apiKeyIndex: parseInt(process.env.API_KEY_INDEX!)

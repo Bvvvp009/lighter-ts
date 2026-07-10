@@ -20,6 +20,22 @@ new WsClient(config: WebSocketConfig)
 | `reconnectInterval` | `number` | No | Reconnection interval in ms (default: 5000) |
 | `maxReconnectAttempts` | `number` | No | Maximum reconnection attempts (default: 5) |
 
+### Networks & read-only streams
+
+Derive the WS URL from the active network with `resolveNetworkFromEnv()` and `resolveWsUrl()` so a single `LIGHTER_NETWORK` setting in `.env` drives both REST and WS. See the root README's [Networks table](../README.md#step-1-set-up-your-environment) for the full host/chain_id breakdown across `mainnet` | `testnet` | `robinhood` | `robinhood-testnet`.
+
+```typescript
+import { WsClient, resolveNetworkFromEnv, resolveWsUrl } from 'lighter-ts-sdk';
+
+const network = resolveNetworkFromEnv(); // LIGHTER_NETWORK=mainnet|testnet|robinhood|robinhood-testnet
+const wsClient = new WsClient({
+  // ?readonly=true is for restricted regions (used by the Robinhood instance)
+  url: resolveWsUrl(network, { readonly: process.env.WS_READONLY === 'true' }),
+  onMessage: (msg) => console.log(msg),
+});
+await wsClient.connect();
+```
+
 ## Methods
 
 ### connect()

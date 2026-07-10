@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.13] - 2026-07-11
+
+### Added
+- `src/network.ts` — a network registry (`mainnet`, `testnet`, `robinhood`, `robinhood-testnet`) and `resolveNetworkFromEnv()`, so a single `LIGHTER_NETWORK` env var selects the API/WS host and signing chain_id together. `BASE_URL`/`WS_URL`/`CHAIN_ID` remain available as overrides for local or custom deployments.
+- `SignerClient` accepts a `network` (registry name or `Network` object) and an explicit `chainId`. This replaces the old URL-substring heuristic for chain_id detection, which could not distinguish Lighter-on-Robinhood (`api.rh.lighter.xyz`, chain_id `466324`) from Lighter mainnet and would sign with the wrong chain_id.
+- New Robinhood example scripts: `robinhood_quickstart.ts` (read-only), `robinhood_ws_smoke.ts` (read-only WebSocket), `robinhood_authenticated_smoke.ts` (signed no-op chain_id proof), and `robinhood_funded_order.ts` (full signed create → confirm → cancel round-trip).
+
 ## [1.0.12] - 2026-06-26
 
 ### Added
