@@ -153,9 +153,10 @@ export class PerpetualMMStrategy extends StrategyBase {
     const desiredAsk = fair * (1 + askBps / 10000);
 
     // Skip the cycle if quotes are fresh and both desired sides are live —
-    // unless a hot-config edit is pending reflection (configNeedsRequote):
-    // a spread/skew edit smaller than the drift threshold must still
-    // requote, or the resting orders keep quoting the OLD config.
+    // unless a hot-config change is pending reflection (configNeedsRequote):
+    // a spread/skew change that moves quotes by less than the drift
+    // threshold must still requote, otherwise the resting orders keep the
+    // previous config.
     const bidDrift = Math.abs(desiredBid - this.currentBidPrice);
     const askDrift = Math.abs(desiredAsk - this.currentAskPrice);
     if (bidDrift < requoteThreshold && askDrift < requoteThreshold && !this.configNeedsRequote()) {

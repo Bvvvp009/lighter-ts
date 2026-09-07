@@ -447,12 +447,11 @@ export abstract class StrategyBase extends EventEmitter {
    * for bookkeeping when due.
    *
    * Also due when a hot-config change has not been reflected in live orders
-   * yet (`markConfigApplied` clears it): every strategy's skip logic is
-   * "drift < requoteThreshold → keep resting orders", so a spread/spacing/
-   * gamma edit that moves the desired quote by less than the threshold would
-   * otherwise NEVER requote — the config value changes but the live orders
-   * keep quoting with the old one (the "config shows but nothing changes"
-   * report). Forcing one requote makes every edit visible on the next cycle.
+   * yet (`markConfigApplied` clears it): the drift-based skip logic below
+   * ("drift < requoteThreshold → keep resting orders") would otherwise keep
+   * the old quotes live when a config change moves the desired quote by
+   * less than the threshold. Forcing one requote guarantees every config
+   * change reaches the venue's order book on the next cycle.
    */
   protected cycleDue(lastCycleTime: number): { due: boolean; now: number } {
     if (this.configDirty) return { due: true, now: Date.now() };
@@ -591,12 +590,9 @@ export abstract class StrategyBase extends EventEmitter {
    * display metadata. Subclasses extend this with their own knobs; the
    * dashboard renders it as the editable-config list.
    *
-   * `leverage` is ALWAYS listed (even when unset — showing "(unset)") so a
-   * running strategy can be given a leverage for the first time from the
-   * menu; hiding fields whose value is undefined makes them un-introducible
-   * live (the exact trap the cross-venue run fell into: RH never got any
-   * leverage because the run was started without one and the menu did not
-   * offer the field).
+   * `leverage` is always listed, including when unset, so a running strategy
+   * can be given a leverage from the menu. Fields whose value is undefined
+   * must not be filtered out — that would make them impossible to set live.
    */
   getEditableConfig(): EditableConfigField[] {
     return [

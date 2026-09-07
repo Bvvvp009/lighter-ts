@@ -339,9 +339,9 @@ function knobError(envVar: string, raw: string, expected: string): never {
  *
  * Sizes and positions are counts of SCALED base units (BTC has 5 size
  * decimals, so 50 means 0.0005 BTC), which is why these are integers and not
- * decimals. The trap is that `parseInt` accepts a decimal and throws the
- * fraction away -- `--size=0.000125` became `0`, and a zero `baseAmount` is a
- * live order the caller never intended. Fail here instead.
+ * decimals. `parseInt` accepts a decimal and silently discards the fraction
+ * -- `--size=0.000125` would become `0`, and a zero `baseAmount` is a live
+ * order the caller never intended. Fail here instead.
  */
 function intKnob(envVar: string, fallback: string, min: number): number {
   const raw = (process.env[envVar] ?? fallback).trim();
@@ -526,7 +526,7 @@ function wireLogging(
   // The venue tag is load-bearing: StatsAggregator buckets every fill/PnL
   // delta per tag, and the cross-venue dashboard reads getVenueStats(tag).
   // Attaching both venues' trackers under the default tag merges their PnL
-  // into one bucket and shows "--" per venue — the Core-PnL-not-showing bug.
+  // into one bucket and leaves the per-venue rows empty.
   const pfx = venueTag !== 'default' ? `[${venueTag}] ` : '';
   tracker.on('orderPlaced', (event: any) => {
     counters.orders++;
@@ -1125,8 +1125,8 @@ async function main() {
         value: f.get(),
       })),
     );
-    // Seed EVERY editable key (undefined = known-but-unset) so the file can
-    // introduce a value the run started without — e.g. leverage.
+    // Seed every editable key (undefined = known-but-unset) so the file can
+    // also set knobs the run started without — e.g. leverage.
     for (const f of editable) hotKnown[f.key] = f.get();
   }
 
@@ -1200,8 +1200,7 @@ async function main() {
     }
     // Final PnL line — same source the dashboard showed. Cross-venue runs
     // also print each venue's bucket so the totals can be reconciled against
-    // the venues' own UIs (a "core PnL missing" report means the bucket was
-    // empty or merged — the per-tag attach fixes exactly that).
+    // the venues' own reporting.
     if (statsAgg) {
       statsAgg.updateUnrealizedPnl();
       console.log(

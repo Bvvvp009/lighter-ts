@@ -427,10 +427,10 @@ export class AvellanedaStoikovMM extends StrategyBase {
     const wantAsk = invRatio > -maxInvFraction;
 
     // Leave resting orders alone while they are still close enough and the
-    // sides we want are actually live — except right after a hot-config edit
-    // (configNeedsRequote): a gamma/kappa/sigma change smaller than the drift
-    // threshold must still requote or the resting orders keep quoting the
-    // OLD parameters.
+    // sides we want are actually live — except while a hot-config change is
+    // pending (configNeedsRequote): a parameter change that moves the desired
+    // quotes by less than the drift threshold must still requote, otherwise
+    // the resting orders keep the previous parameters.
     const bidDrift = Math.abs(desiredBid - this.currentBidPrice);
     const askDrift = Math.abs(desiredAsk - this.currentAskPrice);
     if (bidDrift < requoteThreshold && askDrift < requoteThreshold && !this.configNeedsRequote()) {

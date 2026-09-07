@@ -64,7 +64,7 @@ export class BridgeApi {
    * @returns Promise<BridgeSupportedNetwork[]>
    */
   public async getSupportedNetworks(): Promise<BridgeSupportedNetwork[]> {
-    // This endpoint might not exist yet, but we'll prepare for it
+    // Endpoint may not exist on all deployments; kept for forward compatibility
     try {
       const response = await this.client.get<BridgeSupportedNetwork[]>('/api/v1/bridge/networks');
       return response.data;

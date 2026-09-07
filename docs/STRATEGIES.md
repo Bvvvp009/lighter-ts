@@ -127,11 +127,11 @@ cancels without committing, Esc again closes the menu. Inside the menu `q`
 only closes the menu; it never quits the run.
 
 Applied changes take effect on the **next strategy cycle** — no stop, no
-restart — and **force a requote**: every edit, even one smaller than
-`requoteThreshold`, cancels and re-places the resting orders with the new
-value on the next cycle. (Before this, a sub-threshold edit left the old
-orders quoting the old config indefinitely — the "config shows but nothing
-changes" trap.) A `cycleMs` edit re-arms the cycle timer's gate immediately.
+restart — and **force a requote**: every edit, even one that moves quotes by
+less than `requoteThreshold`, cancels and re-places the resting orders with
+the new value on the next cycle. (Without this, a sub-threshold edit would
+leave the previous orders live indefinitely.) A `cycleMs` edit re-arms the
+cycle timer's gate immediately.
 
 **2. The hot config file** — `MM_HOT_CONFIG=1` (or `--hot-config`):
 

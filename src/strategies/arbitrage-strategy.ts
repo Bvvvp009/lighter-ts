@@ -190,9 +190,10 @@ export class ArbitrageStrategy extends StrategyBase {
     const desiredAsk = fairPrice + threshold - skew;
 
     // Check if we need to requote (fair price drifted beyond tolerance).
-    // A pending hot-config edit (configNeedsRequote) forces through too:
-    // threshold/size edits smaller than the drift tolerance must still
-    // requote, or the resting orders keep quoting the OLD config.
+    // A pending hot-config change (configNeedsRequote) forces through too:
+    // threshold/size changes that move quotes by less than the tolerance
+    // must still requote, otherwise the resting orders keep the previous
+    // config.
     const bidDrift = Math.abs(desiredBid - this.currentBidPrice);
     const askDrift = Math.abs(desiredAsk - this.currentAskPrice);
 

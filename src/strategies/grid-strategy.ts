@@ -111,9 +111,9 @@ export class GridStrategy extends StrategyBase {
     if (center <= 0) return;
 
     // Check if we need to re-level: mid drifted past the threshold, OR a
-    // hot-config edit is pending reflection — a levels/spacing/size change
-    // smaller than the drift threshold must still rebuild the grid, or the
-    // resting orders keep quoting the OLD geometry.
+    // hot-config change is pending reflection — a levels/spacing/size change
+    // that moves prices by less than the drift threshold must still rebuild
+    // the grid, otherwise the resting orders keep the previous geometry.
     const needsRelevel = this.shouldRelevel(center, md.midPrice) || this.configNeedsRequote();
 
     // Order operations run at most once per user-defined cycle (cycleMs).

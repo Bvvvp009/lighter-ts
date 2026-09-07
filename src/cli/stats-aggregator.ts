@@ -190,11 +190,10 @@ export class StatsAggregator {
     });
 
     tracker.on('positionOpen', (event: any) => {
-      // A re-open after a close can land with a realized-PnL delta on the
-      // same update (the venue reports it against the previous total). Drop
-      // it and the venue-side realized total and the dashboard's running
-      // total disagree by exactly those amounts — the cross-venue PnL
-      // mismatch.
+      // A re-open after a close can carry a realized-PnL delta on the same
+      // update (the venue reports it against the previous total). Skipping
+      // it would leave the running total out of sync with the venue's own
+      // realized total.
       const delta: number = event.realizedPnlDelta || 0;
       if (delta !== 0) {
         this.realizedPnl += delta;

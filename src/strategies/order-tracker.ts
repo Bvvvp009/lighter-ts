@@ -231,8 +231,9 @@ export class OrderTracker extends EventEmitter {
   /**
    * Inject the unit scales for a market. Call once the market config is
    * loaded (price/size decimals from the venue); without this the tracker
-   * assumes 1e6 base / 1e2 quote, which is wrong for e.g. BTC (1e5/1e2)
-   * and silently mis-sizes every hedge and volume figure.
+   * assumes 1e6 base / 1e2 quote, which is incorrect for markets with
+   * different decimals (e.g. BTC is 1e5/1e2) and skews hedge sizing and
+   * volume figures.
    */
   setMarketScales(marketId: number, scales: MarketScales): void {
     this.marketScales.set(marketId, scales);
@@ -299,21 +300,16 @@ export class OrderTracker extends EventEmitter {
    * Register a locally-placed order so the tracker expects it.
    * Call this right after sending an order via WsExecutor/SignerClient,
    * before the WS account_orders update arrives.
-   */
-  /**
-   * Register a locally-placed order so the tracker expects it.
-   * Call this right after sending an order via WsExecutor/SignerClient,
-   * before the WS account_orders update arrives.
    *
    * `price` is HUMAN dollars and `baseAmount` is SCALED base units — the
    * conventions every strategy already uses (prices are converted at signing
    * time, amounts are signed in scaled units). The tracker's WS-fed orders
    * carry HUMAN amounts (`initial_base_amount` is a human string per the WS
    * reference), so the scaled amount is converted here to keep one unit
-   * convention across the two paths. Without it, `remainingBaseAmount` from
-   * a registered order is 1e5-1e6x the WS-reported filled amount and every
-   * comparison between them (partial-fill detection, dashboard rows) is
-   * meaningless.
+   * convention across the two paths. Without the conversion, a registered
+   * order's amounts differ from the WS-reported amounts by the base scale
+   * factor, and comparisons between them (partial-fill detection, dashboard
+   * rows) are invalid.
    */
   registerOrder(params: {
     clientOrderIndex: number;

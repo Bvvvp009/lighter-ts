@@ -538,8 +538,9 @@ export class CrossVenueMM extends EventEmitter {
   /**
    * Push the configured leverage to BOTH venues. Called on every start()
    * and on a hot leverage change. A failure on any venue is fatal for the
-   * start — quoting with one venue's unverified margin setting is exactly
-   * the asymmetry the cross-venue PnL mismatch is made of.
+   * start: quoting with an unverified margin setting on one venue creates
+   * an asymmetric book where fills can be rejected or accepted at different
+   * margin than configured.
    */
   private async applyLeverage(): Promise<void> {
     const marginMode = this.config.marginMode ?? 0;
@@ -549,10 +550,10 @@ export class CrossVenueMM extends EventEmitter {
       if (!Number.isFinite(leverage) || leverage <= 0) {
         throw new Error(`CrossVenueMM: leverage for venue ${tag} must be a positive number, got ${leverage}`);
       }
-      // Pre-validate against the venue's cap (min IMF, bps): venues cap
-      // leverage independently (e.g. BTC: 50x Core, 5x RH), and a shared
-      // number that only one venue accepts is precisely how "one 3x, one
-      // 0x" happens. Fail here, with the cap in the message.
+      // Pre-validate against the venue's cap (min IMF, bps). Venues cap
+      // leverage independently (e.g. BTC: 50x Core, 5x RH), so a single
+      // shared value can exceed the tighter cap. Reject here with the
+      // venue's max in the message.
       const minImf = this.venueMarketConfigFor(tag)?.minInitialMarginFractionBps;
       if (minImf !== undefined && Math.floor(10_000 / leverage) < minImf) {
         const maxLeverage = Math.floor(10_000 / minImf);
@@ -628,9 +629,10 @@ export class CrossVenueMM extends EventEmitter {
     const askHuman = fairPrice + edge;
 
     // Skip the cycle if quotes are fresh (both venues quoting both sides
-    // within requoteThreshold of the desired prices) — except right after a
-    // hot-config edit: an edge/size change smaller than the threshold must
-    // still requote, or the resting orders keep quoting the OLD config.
+    // within requoteThreshold of the desired prices) — except while a
+    // hot-config change is pending: an edge/size change that moves quotes
+    // by less than the threshold must still requote, otherwise the resting
+    // orders keep the previous config.
     const requoteThreshold = this.config.requoteThreshold ?? 10;
     if (this.quotesFresh(bidHuman, askHuman, requoteThreshold) && !this.configDirty) return;
 

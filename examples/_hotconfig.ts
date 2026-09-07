@@ -68,8 +68,8 @@ export function setupHotConfig(): HotConfig {
         comments[f.key] = f.label;
       } else {
         // Keep unset-but-editable keys visible as commented placeholders so
-        // the user can introduce them (e.g. leverage on a run started
-        // without one) — dropping them would make them un-settable here too.
+        // they can still be enabled (e.g. leverage on a run started without
+        // one) — dropping them would remove them from the file entirely.
         unsetKeys.push(f.key);
         comments[f.key] = f.label;
       }
@@ -137,8 +137,8 @@ export function setupHotConfig(): HotConfig {
     const changes: HotConfigFile = {};
     for (const [k, v] of Object.entries(parsed)) {
       if (!(k in known)) continue; // unknown keys are ignored, never applied
-      // `undefined` = known-but-unset: any value the user introduces counts
-      // as a change (this is how leverage gets set on a run started without).
+      // `undefined` = known-but-unset: any value found in the file counts as
+      // a change (this is how a leverage is first set mid-run).
       if (known[k] !== v) changes[k] = v;
     }
     return changes;

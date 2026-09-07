@@ -739,7 +739,7 @@ npx tsx examples/run_mm.ts cross_mm --print-config      # both venues
   (`LIGHTER_MAINNET_*` env vars carry the Core mainnet credentials).
 - `cross_mm` quotes both venues simultaneously and hedges fills across them.
 - **Live CLI dashboard** (TTY only): positions, orders, per-venue PnL, event
-  log. Press **Space** for the on-the-go config menu — scroll with arrows,
+  log. Press **Space** for the config menu — scroll with arrows,
   Enter to edit any knob inline, Enter to commit; it applies on the next
   cycle and forces a requote, no restart (works on Windows too). `P` pause,
   `E` emergency stop, `R` reset stats, `Q` quit. Disable with
