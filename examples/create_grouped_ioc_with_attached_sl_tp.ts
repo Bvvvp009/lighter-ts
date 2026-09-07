@@ -11,14 +11,14 @@
  * - SL/TP orders size matches executed size of parent order
  */
 
-import { SignerClient, MarketHelper, OrderApi, ApiClient } from '../src';
+import { SignerClient, MarketHelper, OrderApi, ApiClient, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
 
 async function createGroupedIOCWithAttachedSLTPExample() {
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || '';
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '1000', 10);
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '4', 10);

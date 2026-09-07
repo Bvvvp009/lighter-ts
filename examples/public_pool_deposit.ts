@@ -5,7 +5,7 @@
  * to earn a percentage of the pool's trading profits.
  */
 
-import { SignerClient } from '../src';
+import { SignerClient, resolveNetworkFromEnv } from '../src';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -14,7 +14,7 @@ async function main() {
   try {
     console.log('💰 Depositing to Public Pool...\n');
 
-    const baseUrl = process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai';
+    const baseUrl = resolveNetworkFromEnv().apiUrl;
     const privateKey = process.env.API_PRIVATE_KEY;
     const accountIndex = parseInt(process.env.ACCOUNT_INDEX || '0');
     const apiKeyIndex = parseInt(process.env.API_KEY_INDEX || '0');

@@ -99,6 +99,9 @@ temp/
 logs
 *.log
 
+# Runtime-generated hot config (MM_HOT_CONFIG)
+mm-config.json
+
 # SDK directories (separate repos)
 lighter-go/
 lighter-python/

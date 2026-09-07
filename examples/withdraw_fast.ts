@@ -8,7 +8,7 @@
  *    - If provided, must be an Ethereum wallet private key (NOT the API key)
  */
 
-import { SignerClient, ApiClient, TransactionApi } from '../src';
+import { SignerClient, ApiClient, TransactionApi, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -19,7 +19,7 @@ async function withdrawFast() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || '';
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0');
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0');
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
   const ETH_PRIVATE_KEY = process.env['ETH_PRIVATE_KEY'] || process.env['ACCOUNT_PRIVATE_KEY'] || '';
   const WITHDRAW_ADDRESS = process.env['L1_ADDRESS'] || '';
   const AMOUNT_USDC = parseFloat(process.env['WITHDRAW_AMOUNT'] || '5.0');

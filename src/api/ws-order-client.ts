@@ -85,7 +85,6 @@ export class WebSocketOrderClient extends EventEmitter {
       maxReconnectAttempts: 10,
       heartbeatInterval: 30000,
       timeout: 10000,
-      endpointPath: '/jsonapi',
       ...config
     };
   }
@@ -135,16 +134,22 @@ export class WebSocketOrderClient extends EventEmitter {
           };
 
           const handleError = (error: Error) => {
-            // Check for 404 errors in multiple formats
+            // Check for 404/403 errors in multiple formats — both mean the endpoint
+            // isn't available for WebSocket, so try the next candidate
             const errorMsg = error.message || String(error);
             const errorCode = (error as any).code;
             const is404 = errorMsg.includes('404') || 
                          errorMsg.includes('Unexpected server response: 404') ||
                          errorCode === 404 ||
                          errorMsg.includes('Not Found');
+            const is403 = errorMsg.includes('403') ||
+                         errorMsg.includes('Unexpected server response: 403') ||
+                         errorCode === 403 ||
+                         errorMsg.includes('Forbidden');
+            const isRetryable = is404 || is403;
             
-            // If not connected and 404 occurred, try next candidate when endpointPath not explicitly set
-            const canFallback = !explicitPath && is404 && attemptIndex < candidates.length - 1;
+            // If not connected and retryable error occurred, try next candidate when endpointPath not explicitly set
+            const canFallback = !explicitPath && isRetryable && attemptIndex < candidates.length - 1;
             if (canFallback) {
               attemptIndex += 1;
               // Close current socket if any and try next

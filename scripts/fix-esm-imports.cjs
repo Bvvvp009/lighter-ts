@@ -21,37 +21,53 @@ function listFiles(dir) {
   return files;
 }
 
-function shouldRewrite(specifier) {
-  if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
-    return false;
-  }
-  if (specifier.endsWith('.js') || specifier.endsWith('.mjs') || specifier.endsWith('.cjs')) {
-    return false;
-  }
-  if (specifier.endsWith('.json') || specifier.endsWith('.wasm')) {
-    return false;
-  }
-  return true;
+function alreadyExplicit(specifier) {
+  return (
+    specifier.endsWith('.js') ||
+    specifier.endsWith('.mjs') ||
+    specifier.endsWith('.cjs') ||
+    specifier.endsWith('.json') ||
+    specifier.endsWith('.wasm')
+  );
 }
 
-function rewriteContent(content) {
-  return content
-    .replace(/(from\s+['"])(\.{1,2}\/[^'"\n]+)(['"])/g, (m, p1, spec, p3) => {
-      if (!shouldRewrite(spec)) return m;
-      return `${p1}${spec}.js${p3}`;
-    })
-    .replace(/(import\s*\(\s*['"])(\.{1,2}\/[^'"\n]+)(['"]\s*\))/g, (m, p1, spec, p3) => {
-      if (!shouldRewrite(spec)) return m;
-      return `${p1}${spec}.js${p3}`;
-    })
-    .replace(/(export\s+\*\s+from\s+['"])(\.{1,2}\/[^'"\n]+)(['"])/g, (m, p1, spec, p3) => {
-      if (!shouldRewrite(spec)) return m;
-      return `${p1}${spec}.js${p3}`;
-    })
-    .replace(/(export\s+\{[^}]*\}\s+from\s+['"])(\.{1,2}\/[^'"\n]+)(['"])/g, (m, p1, spec, p3) => {
-      if (!shouldRewrite(spec)) return m;
-      return `${p1}${spec}.js${p3}`;
+/**
+ * Node ESM needs a real file path, and `./foo` can mean either `./foo.js` or
+ * `./foo/index.js`. Appending `.js` unconditionally silently breaks every
+ * directory import -- `src/attribution/` shipped that way and only surfaced
+ * when the browser bundler refused to resolve `../attribution.js`. So ask the
+ * filesystem which one exists instead of guessing.
+ *
+ * Returns the rewritten specifier, or null if neither form is on disk.
+ */
+function resolveSpecifier(specifier, fileDir) {
+  const base = path.resolve(fileDir, specifier);
+  if (fs.existsSync(base + '.js')) return specifier + '.js';
+  if (fs.existsSync(path.join(base, 'index.js'))) return specifier + '/index.js';
+  return null;
+}
+
+const PATTERNS = [
+  /(from\s+['"])(\.{1,2}\/[^'"\n]+)(['"])/g,
+  /(import\s*\(\s*['"])(\.{1,2}\/[^'"\n]+)(['"]\s*\))/g,
+  /(export\s+\*\s+from\s+['"])(\.{1,2}\/[^'"\n]+)(['"])/g,
+  /(export\s+\{[^}]*\}\s+from\s+['"])(\.{1,2}\/[^'"\n]+)(['"])/g,
+];
+
+function rewriteContent(content, fileDir, unresolved) {
+  let out = content;
+  for (const pattern of PATTERNS) {
+    out = out.replace(pattern, (match, pre, spec, post) => {
+      if (alreadyExplicit(spec)) return match;
+      const resolved = resolveSpecifier(spec, fileDir);
+      if (resolved === null) {
+        unresolved.push(spec);
+        return match;
+      }
+      return `${pre}${resolved}${post}`;
     });
+  }
+  return out;
 }
 
 function run() {
@@ -62,10 +78,15 @@ function run() {
 
   const files = listFiles(ROOT);
   let changed = 0;
+  const problems = [];
 
   for (const file of files) {
     const original = fs.readFileSync(file, 'utf8');
-    const updated = rewriteContent(original);
+    const unresolved = [];
+    const updated = rewriteContent(original, path.dirname(file), unresolved);
+    for (const spec of unresolved) {
+      problems.push(`${path.relative(ROOT, file)} -> ${spec}`);
+    }
     if (updated !== original) {
       fs.writeFileSync(file, updated, 'utf8');
       changed += 1;
@@ -73,6 +94,17 @@ function run() {
   }
 
   console.log(`fix-esm-imports: processed=${files.length} changed=${changed}`);
+
+  if (problems.length > 0) {
+    console.error(
+      '\nfix-esm-imports: these relative imports resolve to neither <spec>.js\n' +
+        'nor <spec>/index.js, so the ESM build would fail at import time:\n' +
+        problems.map((p) => `  ${p}`).join('\n') +
+        '\n\nThis is a build error rather than a warning on purpose: an\n' +
+        'unresolvable specifier breaks consumers at runtime, not here.\n',
+    );
+    process.exit(1);
+  }
 }
 
 run();

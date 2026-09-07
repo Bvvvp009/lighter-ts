@@ -38,8 +38,10 @@ The initialization process is the same:
 
 ```typescript
 // ✅ This still works exactly the same
+import { SignerClient, resolveNetworkFromEnv } from 'lighter-ts-sdk';
+
 const client = new SignerClient({
-  url: process.env.BASE_URL!,
+  network: resolveNetworkFromEnv(),   // reads LIGHTER_NETWORK from .env
   privateKey: process.env.API_PRIVATE_KEY!,
   accountIndex: parseInt(process.env.ACCOUNT_INDEX!),
   apiKeyIndex: parseInt(process.env.API_KEY_INDEX!)
@@ -48,6 +50,13 @@ const client = new SignerClient({
 await client.initialize();
 await client.ensureWasmClient();
 ```
+
+Passing a bare `url: process.env.BASE_URL!` still compiles, but it selects the
+host without selecting the matching signing `chain_id`, which cannot be inferred
+from the URL for every venue (Robinhood's `466324` in particular). Prefer
+`resolveNetworkFromEnv()`, which returns both together. See the
+[Networks table](../README.md#step-1-set-up-your-environment) for the rule on
+which setting wins when `LIGHTER_NETWORK` and `BASE_URL` are both present.
 
 ### Step 4: Review Removed Methods
 

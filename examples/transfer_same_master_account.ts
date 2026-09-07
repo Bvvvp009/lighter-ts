@@ -1,10 +1,10 @@
 import * as dotenv from 'dotenv';
-import { SignerClient, InfoApi, ApiClient } from '../src';
+import { SignerClient, InfoApi, ApiClient, resolveNetworkFromEnv } from '../src';
 
 dotenv.config();
 
 async function main() {
-  const BASE_URL = process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
   const API_PRIVATE_KEY = process.env.API_PRIVATE_KEY || '';
   if (!API_PRIVATE_KEY) {
     throw new Error('API_PRIVATE_KEY environment variable is required');

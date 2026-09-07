@@ -8,6 +8,7 @@ import { logger, LogLevel } from '../utils/logger';
 import { TransactionException } from '../utils/exceptions';
 import { NonceCache } from '../utils/nonce-cache';
 import { NonceManager } from '../utils/nonce-manager';
+import { OptimisticNonceManager } from '../utils/nonce-manager-v2';
 // Performance monitoring removed - not needed
 import { RequestBatcher } from '../utils/request-batcher';
 import { WebSocketOrderClient } from '../api/ws-order-client';
@@ -44,11 +45,17 @@ export interface SignerConfig {
    * runs (mainnet 304, testnet 300).
    */
   chainId?: number;
-  /** Private key for signing transactions */
+  /** Private key for signing transactions (single-key mode). */
   privateKey: string;
+  /**
+   * Multi-key mode: map of apiKeyIndex → private key. When provided, the
+   * signer registers a WASM client per key and `apiKeyIndex` selects the
+   * default. Mutually exclusive with (and takes precedence over) `privateKey`.
+   */
+  apiPrivateKeys?: Record<number, string>;
   /** Account index (0 for master account) */
   accountIndex: number;
-  /** API key index for authentication */
+  /** API key index for authentication (default key in multi-key mode) */
   apiKeyIndex: number;
   /** Optional WASM signer configuration */
   wasmConfig?: {
@@ -142,7 +149,10 @@ export interface OcoOrderParams {
   skipNonce?: boolean;
   integratorAccountIndex?: number;
   integratorTakerFee?: number;
-  integratorMakerFee?: number;
+  integratorMakerFee?: number;  /** Self-trade prevention mode applied to every leg (see SignerClient.SELF_TRADE_BEHAVIOR_*). */
+  selfTradeBehaviorMode?: number;
+  /** Which identity counts as "self" for the check (see SignerClient.SELF_TRADE_EQUALITY_*). */
+  selfTradeEqualityMode?: number;
 }
 
 export interface OtocoMainOrderParams {
@@ -182,7 +192,10 @@ export interface OtocoOrderParams {
   skipNonce?: boolean;
   integratorAccountIndex?: number;
   integratorTakerFee?: number;
-  integratorMakerFee?: number;
+  integratorMakerFee?: number;  /** Self-trade prevention mode applied to every leg (see SignerClient.SELF_TRADE_BEHAVIOR_*). */
+  selfTradeBehaviorMode?: number;
+  /** Which identity counts as "self" for the check (see SignerClient.SELF_TRADE_EQUALITY_*). */
+  selfTradeEqualityMode?: number;
 }
 
 /**
@@ -298,6 +311,8 @@ export class SignerClient {
   private clientCreated: boolean = false;
   private clientCreationPromise: Promise<void> | null = null;
   private nonceCache: NonceCache | null = null;
+  /** Optimistic nonce manager (multi-key, lazy, per-key locks). */
+  private optimisticNonceManager: OptimisticNonceManager | null = null;
   private wsOrderClient: WebSocketOrderClient | null = null;
   private orderBatcher: RequestBatcher | null = null;
 
@@ -682,26 +697,42 @@ export class SignerClient {
           }
         }
 
-        // Handle composite/private key format.
-        // If the key contains '#', it's likely a comment delimiter from .env
-        // (dotenv treats '#' as a comment in unquoted values). Use only the part before '#'.
-        // The WASM module expects exactly 40 bytes (80 hex chars) for the private key.
-        const fullKey = this.config.privateKey || '';
-        let wasmKey: string;
-        if (fullKey.includes('#')) {
-          // '#' is a comment delimiter in .env — use only the part before it
-          wasmKey = fullKey.split('#')[0].trim();
+        // Normalize keys into a map: multi-key mode uses `apiPrivateKeys`;
+        // single-key mode wraps `privateKey` under `apiKeyIndex`.
+        const keyMap: Record<number, string> = {};
+        if (this.config.apiPrivateKeys !== undefined) {
+          for (const [k, v] of Object.entries(this.config.apiPrivateKeys)) {
+            keyMap[Number(k)] = v;
+          }
         } else {
-          wasmKey = fullKey;
+          keyMap[this.config.apiKeyIndex] = this.config.privateKey || '';
         }
 
-        await (this.wallet as WasmSignerClient).createClient({
-          url: this.apiUrl,
-          privateKey: wasmKey.startsWith('0x') ? wasmKey : `0x${wasmKey}`,
-          chainId: chainIdNum,
-          apiKeyIndex: this.config.apiKeyIndex,
-          accountIndex: this.config.accountIndex,
-        } as any);
+        // Register one WASM client per API key (lighter-go semantics: the
+        // signer keeps a client per apiKeyIndex; sign calls select by index).
+        for (const [apiKeyIndex, rawKey] of Object.entries(keyMap)) {
+          // Handle composite/private key format.
+          // If the key contains '#', it's likely a comment delimiter from .env
+          // (dotenv treats '#' as a comment in unquoted values). Use only the
+          // part before '#'. The WASM module expects exactly 40 bytes (80 hex
+          // chars) for the private key.
+          const fullKey = rawKey || '';
+          let wasmKey: string;
+          if (fullKey.includes('#')) {
+            // '#' is a comment delimiter in .env — use only the part before it
+            wasmKey = fullKey.split('#')[0].trim();
+          } else {
+            wasmKey = fullKey;
+          }
+
+          await (this.wallet as WasmSignerClient).createClient({
+            url: this.apiUrl,
+            privateKey: wasmKey.startsWith('0x') ? wasmKey : `0x${wasmKey}`,
+            chainId: chainIdNum,
+            apiKeyIndex: Number(apiKeyIndex),
+            accountIndex: this.config.accountIndex,
+          } as any);
+        }
 
         this.clientCreated = true;
       } finally {
@@ -719,15 +750,35 @@ export class SignerClient {
         'SignerClient requires an API URL: set `url`, `network`, or the LIGHTER_NETWORK env var (mainnet | testnet | robinhood).'
       );
     }
-    
-    if (!config.privateKey || typeof config.privateKey !== 'string') {
-      throw new Error('Private key is required and must be a string');
+
+    if (config.apiPrivateKeys !== undefined) {
+      const keys = Object.keys(config.apiPrivateKeys);
+      if (keys.length === 0) {
+        throw new Error('apiPrivateKeys must contain at least one entry (apiKeyIndex → privateKey)');
+      }
+      for (const k of keys) {
+        const idx = Number(k);
+        if (!Number.isInteger(idx) || idx < 0) {
+          throw new Error(`apiPrivateKeys keys must be non-negative integers, got "${k}"`);
+        }
+        const pk = config.apiPrivateKeys[Number(k)];
+        if (!pk || typeof pk !== 'string') {
+          throw new Error(`apiPrivateKeys[${k}] must be a non-empty private key string`);
+        }
+      }
+      if (config.apiPrivateKeys[config.apiKeyIndex] === undefined) {
+        throw new Error(`apiPrivateKeys has no entry for the default apiKeyIndex ${config.apiKeyIndex}`);
+      }
+    } else {
+      if (!config.privateKey || typeof config.privateKey !== 'string') {
+        throw new Error('Private key is required and must be a string');
+      }
     }
-    
+
     if (typeof config.accountIndex !== 'number' || config.accountIndex < 0) {
       throw new Error('Account index must be a non-negative number');
     }
-    
+
     if (typeof config.apiKeyIndex !== 'number' || config.apiKeyIndex < 0) {
       throw new Error('API key index must be a non-negative number');
     }
@@ -1027,6 +1078,31 @@ export class SignerClient {
 
     const nonces = await this.nonceCache.getNextNonces(this.config.apiKeyIndex, count);
     return nonces;
+  }
+
+  /**
+   * Optimistic nonce manager (lighter-python parity): lazy per-key fetch,
+   * local increment, decrement on failure, hard-refresh on invalid nonce,
+   * per-key send locks, and round-robin rotation across apiPrivateKeys.
+   *
+   * Created lazily on first access. Built on the new NonceManager class; the
+   * legacy NonceCache continues to serve the built-in HTTP paths.
+   */
+  getOptimisticNonceManager(): OptimisticNonceManager {
+    if (!this.optimisticNonceManager) {
+      const keys =
+        this.config.apiPrivateKeys !== undefined
+          ? Object.keys(this.config.apiPrivateKeys).map(Number)
+          : [this.config.apiKeyIndex];
+      this.optimisticNonceManager = new OptimisticNonceManager({
+        apiKeys: keys,
+        fetchNonce: async (apiKeyIndex: number) => {
+          const resp = await this.transactionApi.getNextNonce(this.config.accountIndex, apiKeyIndex);
+          return resp.nonce;
+        },
+      });
+    }
+    return this.optimisticNonceManager;
   }
 
   /**
@@ -1918,6 +1994,7 @@ export class SignerClient {
       skipNonce?: boolean;
       selfTradeBehaviorMode?: number;
       selfTradeEqualityMode?: number;
+      orderVersion?: number;
     }
   ): Promise<[any, string, string | null]> {
     return await this.processTransactionWithRetry(async () => {
@@ -1945,6 +2022,7 @@ export class SignerClient {
           accountIndex: this.config.accountIndex,
           selfTradeBehaviorMode: options?.selfTradeBehaviorMode ?? 0,
           selfTradeEqualityMode: options?.selfTradeEqualityMode ?? 0,
+          ...(options?.orderVersion !== undefined ? { orderVersion: options.orderVersion } : {}),
         });
 
         if (wasmResponse.error) {
@@ -2603,36 +2681,71 @@ export class SignerClient {
   }
 
   /**
-   * Approve an integrator with fee caps and expiry
-   * @param integratorIndex - Integrator account index
-   * @param maxPerpsTakerFee - Max perps taker fee
-   * @param maxPerpsMakerFee - Max perps maker fee
-   * @param maxSpotTakerFee - Max spot taker fee
-   * @param maxSpotMakerFee - Max spot maker fee
-   * @param approvalExpiry - Approval expiry timestamp
-   * @param nonce - Optional nonce (will be fetched automatically if not provided)
+   * Approve an integrator with fee caps and expiry (partner attribution).
+   *
+   * Fee units are MILLIONTHS (1e6): 500 = 5 bps, 1000 = 10 bps.
+   * System-wide caps come from systemConfig (perps max is typically 1000 on
+   * Core mainnet, 10000 on Robinhood) — requests above the cap are rejected
+   * on-chain, so they are validated client-side first.
+   *
+   * L1 signature handling (per the partner-attribution spec):
+   * - Same L1 address (e.g. a sub-account of the same master), or all fees
+   *   zero: L2 signature only — ethPrivateKey not required.
+   * - Different L1 address: the WASM signer returns `messageToSign`; if
+   *   ethPrivateKey is provided it is signed and attached as L1Sig, otherwise
+   *   the tx is submitted L2-only and the sequencer decides.
+   *
+   * @param params - Approval parameters
    * @returns Promise resolving to [approveInfo, transactionHash, error]
    */
-  async approveIntegrator(
-    integratorIndex: number,
-    maxPerpsTakerFee: number,
-    maxPerpsMakerFee: number,
-    maxSpotTakerFee: number,
-    maxSpotMakerFee: number,
-    approvalExpiry: number,
-    nonce: number = -1
-  ): Promise<[any, string, string | null]> {
+  async approveIntegrator(params: {
+    integratorIndex: number;
+    maxPerpsTakerFee: number;
+    maxPerpsMakerFee: number;
+    maxSpotTakerFee: number;
+    maxSpotMakerFee: number;
+    /** Unix ms expiry. Max 2^48-1. */
+    approvalExpiry: number;
+    /** Optional Ethereum private key for the L1 signature (cross-L1 approvals). */
+    ethPrivateKey?: string;
+    /** Validate against systemConfig caps before signing (default true). */
+    validateCaps?: boolean;
+    nonce?: number;
+  }): Promise<[any, string, string | null]> {
     return await this.processTransactionWithRetry(async () => {
       try {
-        const nextNonce = (nonce === -1) ? await this.getNextNonce() : { nonce };
+        const nextNonce = (params.nonce === undefined || params.nonce === -1)
+          ? await this.getNextNonce()
+          : { nonce: params.nonce };
+
+        // Client-side cap validation (systemConfig)
+        if (params.validateCaps !== false) {
+          try {
+            const auth = await this.createAuthTokenWithExpiry().catch(() => undefined);
+            const sysCfg = await new (await import('../api/info-api')).InfoApi(this.apiClient).getSystemConfig(auth);
+            const caps = [
+              ['maxPerpsTakerFee', params.maxPerpsTakerFee, sysCfg?.max_integrator_perps_taker_fee],
+              ['maxPerpsMakerFee', params.maxPerpsMakerFee, sysCfg?.max_integrator_perps_maker_fee],
+              ['maxSpotTakerFee', params.maxSpotTakerFee, sysCfg?.max_integrator_spot_taker_fee],
+              ['maxSpotMakerFee', params.maxSpotMakerFee, sysCfg?.max_integrator_spot_maker_fee],
+            ] as const;
+            for (const [name, value, cap] of caps) {
+              if (typeof cap === 'number' && cap > 0 && value > cap) {
+                return [null, '', `${name} ${value} exceeds system max ${cap} (units are 1e-6 of trade size)`];
+              }
+            }
+          } catch {
+            // systemConfig unavailable (e.g. offline) — let the chain decide
+          }
+        }
 
         const wasmResponse = await (this.wallet as WasmSignerClient).signApproveIntegrator({
-          integratorIndex,
-          maxPerpsTakerFee,
-          maxPerpsMakerFee,
-          maxSpotTakerFee,
-          maxSpotMakerFee,
-          approvalExpiry,
+          integratorIndex: params.integratorIndex,
+          maxPerpsTakerFee: params.maxPerpsTakerFee,
+          maxPerpsMakerFee: params.maxPerpsMakerFee,
+          maxSpotTakerFee: params.maxSpotTakerFee,
+          maxSpotMakerFee: params.maxSpotMakerFee,
+          approvalExpiry: params.approvalExpiry,
           nonce: nextNonce.nonce,
           apiKeyIndex: this.config.apiKeyIndex,
           accountIndex: this.config.accountIndex
@@ -2642,9 +2755,25 @@ export class SignerClient {
           return [null, '', wasmResponse.error];
         }
 
+        // Attach the L1 signature when the signer asks for one and we have the key
+        let txInfo = wasmResponse.txInfo;
+        if (wasmResponse.messageToSign && params.ethPrivateKey) {
+          try {
+            const ethers = await import('ethers');
+            const wallet = new ethers.Wallet(params.ethPrivateKey);
+            const l1Sig = await wallet.signMessage(wasmResponse.messageToSign);
+            const txInfoObj = JSON.parse(txInfo);
+            txInfoObj.L1Sig = l1Sig;
+            txInfo = JSON.stringify(txInfoObj);
+          } catch (sigError) {
+            const errorMsg = sigError instanceof Error ? sigError.message : String(sigError);
+            return [null, '', `Failed to sign L1 message: ${errorMsg}`];
+          }
+        }
+
         const txHash = await this.transactionApi.sendTxWithIndices(
           wasmResponse.txType || SignerClient.TX_TYPE_APPROVE_INTEGRATOR,
-          wasmResponse.txInfo,
+          txInfo,
           this.config.accountIndex,
           this.config.apiKeyIndex
         );
@@ -2698,7 +2827,9 @@ export class SignerClient {
         ...(params.skipNonce !== undefined && { skipNonce: params.skipNonce }),
         ...(params.integratorAccountIndex !== undefined && { integratorAccountIndex: params.integratorAccountIndex }),
         ...(params.integratorTakerFee !== undefined && { integratorTakerFee: params.integratorTakerFee }),
-        ...(params.integratorMakerFee !== undefined && { integratorMakerFee: params.integratorMakerFee })
+        ...(params.integratorMakerFee !== undefined && { integratorMakerFee: params.integratorMakerFee }),
+        ...(params.selfTradeBehaviorMode !== undefined && { selfTradeBehaviorMode: params.selfTradeBehaviorMode }),
+        ...(params.selfTradeEqualityMode !== undefined && { selfTradeEqualityMode: params.selfTradeEqualityMode })
       }
     );
 
@@ -2812,7 +2943,9 @@ export class SignerClient {
         ...(params.skipNonce !== undefined && { skipNonce: params.skipNonce }),
         ...(params.integratorAccountIndex !== undefined && { integratorAccountIndex: params.integratorAccountIndex }),
         ...(params.integratorTakerFee !== undefined && { integratorTakerFee: params.integratorTakerFee }),
-        ...(params.integratorMakerFee !== undefined && { integratorMakerFee: params.integratorMakerFee })
+        ...(params.integratorMakerFee !== undefined && { integratorMakerFee: params.integratorMakerFee }),
+        ...(params.selfTradeBehaviorMode !== undefined && { selfTradeBehaviorMode: params.selfTradeBehaviorMode }),
+        ...(params.selfTradeEqualityMode !== undefined && { selfTradeEqualityMode: params.selfTradeEqualityMode })
       }
     );
 

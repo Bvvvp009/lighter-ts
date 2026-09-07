@@ -4,7 +4,7 @@
  * This example demonstrates how to burn shares (withdraw USDC) from a public pool.
  */
 
-import { SignerClient } from '../src';
+import { SignerClient, resolveNetworkFromEnv } from '../src';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -13,7 +13,7 @@ async function main() {
   try {
     console.log('🏦 Withdrawing from Public Pool...\n');
 
-    const baseUrl = process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai';
+    const baseUrl = resolveNetworkFromEnv().apiUrl;
     const privateKey = process.env.API_PRIVATE_KEY;
     const accountIndex = parseInt(process.env.ACCOUNT_INDEX || '0');
     const apiKeyIndex = parseInt(process.env.API_KEY_INDEX || '0');

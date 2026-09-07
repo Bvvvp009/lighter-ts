@@ -43,6 +43,43 @@ const { SignerClient, ApiClient, OrderType } = require('lighter-ts-sdk');
 </script>
 ```
 
+### The WASM signer asset
+
+Signing happens in a Go WASM binary shipped inside the package. In Node this is
+found automatically and needs no configuration. Bundlers do not copy `.wasm`
+files on their own, so a browser build has to serve the binary itself and point
+the SDK at the served URL:
+
+```javascript
+import { WasmManager } from 'lighter-ts-sdk';
+
+// Vite: the ?url suffix returns the served URL of the asset.
+import wasmUrl from 'lighter-ts-sdk/wasm/lighter-signer.wasm?url';
+import execUrl from 'lighter-ts-sdk/wasm/wasm_exec.js?url';
+
+const manager = WasmManager.getInstance();
+await manager.initialize({ wasmPath: wasmUrl, wasmExecPath: execUrl }, 'browser');
+```
+
+Webpack 5 and other bundlers reach the same files through their own asset
+syntax; what matters is that `lighter-ts-sdk/wasm/*` is an exported subpath, so
+any resolver can find it:
+
+```javascript
+const wasmUrl = new URL('lighter-ts-sdk/wasm/lighter-signer.wasm', import.meta.url);
+```
+
+In Node, resolve the same subpath rather than hardcoding a `node_modules` path:
+
+```javascript
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const wasmPath = require.resolve('lighter-ts-sdk/wasm/lighter-signer.wasm');
+```
+
+The binary is ~14 MB, so serve it with caching and load it lazily if your app
+does not sign on first paint.
+
 ## 🚀 What Does This SDK Do?
 
 The Lighter TypeScript SDK provides everything you need to:
@@ -93,6 +130,16 @@ The SDK runs on four chains that share the same Lighter core. Pick one with a si
 > **L1 `chainId` ≠ L2 signing `chain_id` — don't confuse them.** The L1 chainId is the EVM settlement chain (what a wallet or the `/api/v1/layer1BasicInfo` endpoint reports). The **L2 signing chain_id** is the first element of every L2 transaction hash and the value the WASM signer signs with. Only the L2 signing chain_id matters when submitting orders — a tx signed with the wrong value is rejected with `invalid signature`. Setting `LIGHTER_NETWORK` makes the SDK pick the correct L2 signing chain_id automatically. Robinhood's `466324` cannot be auto-detected from the URL (the legacy heuristic would wrongly sign with `304`), which is why the explicit `Network` registry exists.
 
 **Lighter-on-Robinhood** (`robinhood`) shares the Lighter core; only the API/WS hosts, contract address (`0x94bAB9693Ba2f6358507eFfcbd372b0660AFfF9d`), signing chain_id (`466324`), and supported assets differ — it lists RWA stocks and `USDG` spot markets alongside crypto perps (the USDC you top up appears as USDG, Robinhood's native stable). Set `LIGHTER_NETWORK=robinhood` and the SDK connects with the correct host and chain_id. For read-only exploration without a key, run `npx tsx examples/robinhood_quickstart.ts`. For restricted regions, set `WS_READONLY=true` to use the read-only stream.
+
+**Custom hosts, and which setting wins.** `BASE_URL` and `WS_URL` point the SDK
+at a proxy or a local deployment, and they apply **only when `LIGHTER_NETWORK` is
+unset**. When `LIGHTER_NETWORK` is set it is authoritative for both hosts, and a
+`BASE_URL` left over from another instance is ignored — otherwise the host and
+the signing chain_id could be decoupled, which produces orders signed for one
+venue and sent to another. `CHAIN_ID` is the one exception: it overrides the
+signing chain_id in either case, for the rare occasion when you need a known
+profile's host with a different signing id. Every example in `examples/` resolves
+its host through `resolveNetworkFromEnv()`, so all of them follow this rule.
 
 **Lighter-on-Robinhood Testnet** (`robinhood-testnet`) is the test instance at `https://api.rh-testnet.lighter.xyz`. It shares the L2 signing chain_id `300` (and L1 chainId `123456`) with the original Lighter testnet, so the chain_id alone does not tell them apart — the **host** does. It has its own contract (`0x047dF90f783E98745f9b53F1a974c8e9Ac1fE56b`) and a faucet contract for topping up test funds. Set `LIGHTER_NETWORK=robinhood-testnet` to target it.
 
@@ -643,6 +690,110 @@ npx tsx examples/close_position.ts         # Close positions
 npx tsx examples/deposit_to_subaccount.ts  # Fund transfers
 ```
 
+### 🤖 Market-Making Strategies
+
+Five live-tested MM strategies ship in the SDK, driven by one unified runner.
+Full config reference and copy-paste launch commands:
+[`docs/STRATEGIES.md`](./docs/STRATEGIES.md).
+
+| `MM_STRATEGY` | Model | Reference price | Spread control |
+|---|---|---|---|
+| `as_mm` | Avellaneda-Stoikov (default) | inventory-shifted reservation price | closed-form, volatility-driven |
+| `perp_mm` | Fixed quote width | order-book mid | `MM_SPREAD_BPS` |
+| `grid` | N levels per side | order-book mid | `MM_GRID_SPACING` (in $) |
+| `arb_mm` | Fair-price maker | mark price | `MM_HALF_SPREAD` (in $) |
+| `cross_mm` | Two-venue MM + hedging | maker-venue mid | `MM_SPREAD_BPS` |
+
+```bash
+npm run mm:as       # Avellaneda-Stoikov (default)
+npm run mm:perp     # fixed width around the mid
+npm run mm:grid     # N levels per side
+npm run mm:arb      # fair-price maker around the mark
+npm run mm:cross    # cross-venue (Core + Robinhood), hedged
+npm run mm:help     # every flag, with defaults
+npm run mm:config   # resolved config, no connection, no orders
+```
+
+Every knob has both a CLI flag and an `MM_*` env var; the flag wins. Flags exist
+so the commands work identically on Windows, where `cmd.exe` has no inline
+env-var prefix:
+
+```bash
+npx tsx examples/run_mm.ts as_mm --venue=mainnet --minutes=5 --market=1 --size=50
+npx tsx examples/run_mm.ts grid  --venue=robinhood --grid-levels=4 --grid-spacing=25
+npx tsx examples/run_mm.ts as_mm --gamma=0.3 --kappa=2.0 --infinite-horizon
+```
+
+Precedence is flag > env var > default, which is only observable after the
+runner has resolved everything. `--print-config` (alias `--dry-run`) prints the
+resolved config and the attribution that will be applied, then exits **before
+connecting or placing a single order** -- so "what will this command actually
+do" is answerable without money on the line:
+
+```bash
+npx tsx examples/run_mm.ts as_mm --venue=mainnet --size=50 --print-config
+npx tsx examples/run_mm.ts cross_mm --print-config      # both venues
+```
+
+- Single-venue strategies pick the venue with `--venue=mainnet|robinhood`
+  (`LIGHTER_MAINNET_*` env vars carry the Core mainnet credentials).
+- `cross_mm` quotes both venues simultaneously and hedges fills across them.
+- **Live CLI dashboard** (TTY only): positions, orders, per-venue PnL, event
+  log. Press **Space** for the on-the-go config menu — scroll with arrows,
+  Enter to edit any knob inline, Enter to commit; it applies on the next
+  cycle and forces a requote, no restart (works on Windows too). `P` pause,
+  `E` emergency stop, `R` reset stats, `Q` quit. Disable with
+  `MM_NO_DASHBOARD=1`.
+- **Leverage as config**: `MM_LEVERAGE=3` sets it on the venue at every
+  startup (validated against the venue's cap — BTC: core max 50x, Robinhood
+  max 5x); `cross_mm` also has per-venue `MM_LEVERAGE_A`/`MM_LEVERAGE_B`.
+- **Hot config file**: `--hot-config` writes an auto-filled `mm-config.json`
+  re-read every cycle — edit + save to change config mid-run headless.
+- **File logs, default OFF**: `--log-file` mirrors the run into
+  `logs/mm-<strategy>-<time>.log`.
+- **Every run ends flat**: the runner's shutdown safety net cancels all orders
+  and closes any residual position on each venue with reduce-only market orders.
+  Ctrl-C takes the same path. Cross-venue runs print a per-venue PnL breakdown
+  at shutdown.
+- `npx tsx examples/probe_both_venues.ts` gives a read-only balance/position/
+  market-config view of both venues for sizing.
+
+> Live money. Start on testnet, then a short small-size mainnet run, and read
+> [`docs/STRATEGIES.md`](./docs/STRATEGIES.md) before changing `MM_AS_GAMMA` or
+> `MM_MAX_POSITION` on a funded account.
+
+### 🏗️ Integrator (Builder) & Referral Integration
+
+```bash
+# One-time integrator approval (tx type 45, fee caps + expiry), then attribute fees
+INTEGRATOR_OP=approve npx tsx examples/integrator_integration.ts
+INTEGRATOR_OP=quote    npx tsx examples/integrator_integration.ts   # no-risk attributed order test
+
+# Referral lifecycle: status | create | update-code | use-code | kickback | points | referrals
+REFERRAL_OP=status npx tsx examples/referral_integration.ts
+```
+
+#### Partner attribution on the bundled strategies
+
+The MM strategies are free and open source, and are funded by **optional
+partner (builder) fee attribution**: orders they place reference an integrator
+account that earns a small share of the exchange fees you already pay.
+Defaults are **maker 0.5 bps / taker 2 bps** — a few percent of a typical MM's
+gross edge.
+
+Nothing is hidden: the integrator index and fee rates are printed to your
+terminal before the first order of every run, and opting out is one env var.
+
+```bash
+BUILDER_ATTRIBUTION=off npx tsx examples/run_mm.ts          # off entirely
+INTEGRATOR_ACCOUNT_INDEX=123456 npx tsx examples/run_mm.ts  # attribute to your own account
+INTEGRATOR_MAKER_FEE_BPS=0.25 npx tsx examples/run_mm.ts    # keep it on, pay less
+```
+
+Full details — what gets stamped, the fee caps, the one-time
+`APPROVE_INTEGRATOR` transaction, every opt-out variable, and how attribution
+is enforced — are in [`docs/ATTRIBUTION.md`](./docs/ATTRIBUTION.md).
+
 ## 🎓 Learning Path
 
 1. **Start Here**: `examples/quickstart.ts` - Smallest possible end-to-end flow
@@ -684,6 +835,34 @@ All example files in `examples/` directory will generate valid transaction hashe
 - ✅ Test with small amounts first
 - ✅ Monitor all transactions
 - ✅ Use proper error handling
+
+### Key-Handling Audit (v1.0.13)
+
+A key-theft-focused audit of the SDK's credential paths found **no
+exfiltration vectors** and hardened one:
+
+- **No key logging.** No code path prints or buffers the API private key,
+  Ethereum key, or auth tokens. The `Logger` now *structurally* redacts any
+  context value whose key looks secret-like (`privateKey`, `apiKey`,
+  `token`, `secret`, `auth`, `salt`, `signature`, ...) before it reaches
+  console output or the in-memory buffer (see
+  `tests/logger-security.test.ts`), and the buffer is capped at 1000 entries.
+- **No `process.env` secret reads inside `src/`.** Credentials enter only
+  via explicit constructor config; the SDK never scrapes the environment
+  itself (examples read `.env` and pass values in).
+- **Auth tokens are short-lived signed HMACs** (default 10-min expiry),
+  generated by the WASM signer — not raw keys; WS auth sends the token in
+  the subscribe message only.
+- **`.env` excluded from both git and the npm package** (`.gitignore` +
+  `.npmignore`); the package additionally ships no source, tests, or
+  example files.
+- **Keys stay client-side.** The API key signs transactions locally (WASM);
+  only signed tx blobs reach the sequencer. No endpoint accepts a raw key.
+- **No dynamic code execution** beyond the standard wasm_exec bootstrap; no
+  `eval`, no `child_process`, no network fetches of code in `src/`.
+- **Integrator approvals are fee-capped** (`approveIntegrator` takes explicit
+  taker/maker caps + expiry) — a builder can never exceed the negotiated
+  fee share.
 
 ## 🔧 Building from Source
 

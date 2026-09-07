@@ -110,7 +110,9 @@ function saveConfig(
     ...(intentAddresses && { intent_addresses: intentAddresses }),
     created_at: new Date().toISOString()
   };
-  fs.writeFileSync(OUTPUT_FILE, JSON.stringify(config, null, 2));
+  // This file holds every generated private key in plaintext, so it is created
+  // owner-only rather than with the default world-readable mode.
+  fs.writeFileSync(OUTPUT_FILE, JSON.stringify(config, null, 2), { encoding: 'utf8', mode: 0o600 });
 }
 
 async function getAccount(l1Address: string): Promise<{ accountIndex: number; l2Address: string; availableBalance: string } | null> {

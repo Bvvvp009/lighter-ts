@@ -11,6 +11,7 @@ export * from './price-utils';
 // Nonce Management
 export * from './nonce-manager';
 export * from './nonce-cache';
+export * from './nonce-manager-v2';
 
 // Exception Handling
 export * from './exceptions';
@@ -29,6 +30,9 @@ export * from './logger';
 
 // Request Batching
 export * from './request-batcher';
+
+// Rate Limiting
+export * from './rate-limiter';
 
 // Client Factory removed - use direct client creation instead
 

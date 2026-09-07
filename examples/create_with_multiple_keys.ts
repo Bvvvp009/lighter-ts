@@ -2,7 +2,7 @@
  * Example: Create Orders with Multiple API Keys
  */
 
-import { SignerClient, ApiClient, OrderType, OrderApi, MarketHelper } from '../src';
+import { SignerClient, ApiClient, OrderType, OrderApi, MarketHelper, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -13,7 +13,7 @@ async function createWithMultipleKeys() {
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
   const DEFAULT_API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
   const SECONDARY_API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX_2'] || String(DEFAULT_API_KEY_INDEX));
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
 
   const configurations = [
     { name: 'Account 1', privateKey: API_KEY_1, accountIndex: ACCOUNT_INDEX, apiKeyIndex: DEFAULT_API_KEY_INDEX },

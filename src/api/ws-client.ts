@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { EventEmitter } from 'events';
 // @ts-ignore - ws module declaration
 import { WebSocketConfig, WebSocketSubscription } from '../types';
 
@@ -20,14 +21,14 @@ export interface WsAccountAllPosition {
   [key: string]: any;
 }
 
-export interface WsAccountAllMessage {
+export interface LegacyWsAccountAllMessage {
   channel?: 'account_all' | string;
   account_index?: number;
   positions?: WsAccountAllPosition[];
   [key: string]: any;
 }
 
-export class WsClient {
+export class WsClient extends EventEmitter {
   private ws: WebSocket | null = null;
   private config: WebSocketConfig;
   private reconnectAttempts = 0;
@@ -38,6 +39,7 @@ export class WsClient {
   private isConnected = false;
 
   constructor(config: WebSocketConfig) {
+    super();
     this.config = {
       reconnectInterval: 5000,
       maxReconnectAttempts: 5,
@@ -72,6 +74,16 @@ export class WsClient {
         this.ws!.on('message', (data: WebSocket.Data) => {
           try {
             const message = JSON.parse(data.toString());
+            // Server keepalive: reply to {"type":"ping"} with {"type":"pong"}.
+            // The server disconnects sessions that don't respond (verified on
+            // the Robinhood /stream endpoint).
+            if (message?.type === 'ping') {
+              try {
+                this.ws?.send(JSON.stringify({ type: 'pong' }));
+              } catch {
+                // socket may have closed between message and reply
+              }
+            }
             this.config.onMessage?.(message);
           } catch (error) {
             // Silently ignore parse errors
@@ -194,7 +206,7 @@ export class WsClient {
     }, this.config.reconnectInterval || 5000);
   }
 
-  private resubscribeAll(): void {
+  protected resubscribeAll(): void {
     const subscriptions = Array.from(this.subscriptions.values());
     for (const subscription of subscriptions) {
       this.subscribe(subscription);

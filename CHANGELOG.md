@@ -5,7 +5,27 @@ All notable changes to the Lighter TypeScript SDK will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-09-07
+
+### Added
+- **MM strategy suite**: five live-tested market-making strategies (`as_mm`, `perp_mm`, `grid`, `arb_mm`, `cross_mm`) driven by one unified runner (`examples/run_mm.ts`) with CLI flags for every knob and a flatten-all safety net at shutdown.
+- **Live CLI dashboard** for all strategies: positions, orders, per-venue PnL/volume, event log, and a **Space-key config menu** for on-the-go editing — scroll with arrows, Enter to edit inline (pre-filled), Enter to commit; applies next cycle and forces a requote, no restart. Handles the Windows Enter keycode (`'return'`) identically.
+- **Leverage as config**: `leverage`/`marginMode` on every strategy config, pushed to the venue at every `start()` and pre-validated against the venue's reported minimum initial margin fraction (BTC: core max 50x, Robinhood max 5x) so an over-cap value fails loudly at startup. `cross_mm` supports per-venue `leverageA`/`leverageB` (`MM_LEVERAGE_A`/`MM_LEVERAGE_B`).
+- **Hot config** (default OFF): `MM_HOT_CONFIG=1` writes an auto-filled, commented `mm-config.json` re-read every cycle — edit + save to change config mid-run, headless or TTY. Unset knobs appear as placeholders and can be introduced mid-run.
+- **File logs** (default OFF): `MM_LOG_FILE=1` mirrors a run into `logs/mm-<strategy>-<timestamp>.log` (SDK Logger entries, dashboard events, runner lines).
+- `EditableConfigField`, `MarketScales`, and the extended `render` helpers (`stripAnsi`, `padLeft`/`padCenter`, `sparkline`, `sideTag`, `kv`, …) exported from the package root.
+
+### Fixed
+- **Fill price / PnL unit mismatch**: WS order updates carry human-unit amounts while locally placed orders are signed in scaled units; the tracker now converts registrations via injected `setMarketScales()` and computes fill prices as quote-delta/base-delta — the true execution price. This was the root cause of PnL disagreeing between venues.
+- **Per-venue PnL collapse in cross_mm**: both venues' trackers were attached to the stats aggregator under the default tag, so the dashboard's per-venue PnL rows showed nothing and the totals merged. Each tracker is now tagged (`core`/`rh`), and shutdown prints a per-venue PnL breakdown.
+- **Dropped realized-PnL deltas**: `positionOpen` and `positionChanged` deltas (partial closes, funding) were not accrued into the running totals; the aggregator now credits every delta so totals reconcile with the venue's own `realized_pnl`.
+- **Hot-config edits never reached the orders**: every strategy's drift-based skip (`drift < requoteThreshold → keep resting orders`) also skipped config-driven changes smaller than the threshold, so edits applied to the config object while the resting orders kept quoting the old values. A hot-config apply now marks the strategy dirty and forces a requote on the next cycle.
+- **Config menu hid unset knobs** (`leverage` filtered out when undefined, making it un-introducible live) — now always listed.
+- **Windows Enter dead in the config menu**: Node's keypress parser names the Windows Enter key `'return'`, which the menu did not match.
+- **Cross-venue market config was shared**: the second venue used the first venue's decimals/margin caps; configs are now fetched and cached per venue.
+
+### Tested
+- 336 unit tests (23 suites), all offline and mock-based: hot-config machinery, dashboard key flow (including the Windows Enter regression), per-venue PnL accounting reconciliation, leverage cap validation, runner FLAG_ENV/USAGE sync, and packaging invariants.
 
 ## [1.0.13] - 2026-07-11
 

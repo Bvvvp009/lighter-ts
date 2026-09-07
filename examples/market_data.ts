@@ -3,7 +3,7 @@
  * Demonstrates fetching market data using proper API functions
  */
 
-import { ApiClient, OrderApi, WsClient } from '../src';
+import { ApiClient, OrderApi, WsClient, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -13,7 +13,7 @@ async function fetchMarketData() {
 
   // Initialize clients explicitly
   const apiClient = new ApiClient({
-    host: process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai'
+    host: resolveNetworkFromEnv().apiUrl
   });
 
   const orderApi = new OrderApi(apiClient);
@@ -92,7 +92,7 @@ async function fetchMarketData() {
 
     // 5. WebSocket Real-time Data
     console.log('\n🔌 Connecting to WebSocket for real-time data...');
-    const baseUrl = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+    const baseUrl = resolveNetworkFromEnv().apiUrl;
     const wsUrl = process.env['WS_URL'] || baseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/stream';
     const wsClient = new WsClient({
       url: wsUrl,
@@ -158,8 +158,6 @@ async function getMarketData(marketId: number, orderApi: OrderApi): Promise<any>
   } catch (error) {
     return null;
   }
-  
-  return null;
 }
 
 // Run the example if this file is executed directly

@@ -4,7 +4,7 @@
  * Available on mainnet
  */
 
-import { SignerClient, OrderType, ApiClient } from '../../src';
+import { SignerClient, OrderType, ApiClient, resolveNetworkFromEnv } from '../../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -29,7 +29,7 @@ async function createMarketSpotOrders() {
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '0', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '0', 10);
   // Use BASE_URL from env or default to mainnet
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
 
   console.log(`📋 Creating Market Spot Orders`);
   console.log(`   Account Index: ${ACCOUNT_INDEX}`);

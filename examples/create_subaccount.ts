@@ -5,13 +5,13 @@
  * Sub accounts allow you to separate trading activities and manage risk.
  */
 
-import { SignerClient } from '../src';
+import { SignerClient, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
 async function createSubAccountExample() {
-  const BASE_URL = process.env['BASE_URL'] ?? 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'];
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '1000', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '0', 10);

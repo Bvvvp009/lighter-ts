@@ -11,7 +11,7 @@
  * 7. Checking position changes after modification (if order was filled)
  */
 
-import { SignerClient, ApiClient, OrderApi, AccountApi, OrderType, MarketHelper } from '../src';
+import { SignerClient, ApiClient, OrderApi, AccountApi, OrderType, MarketHelper, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -33,7 +33,7 @@ async function modifyOrderExample() {
   }
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '0', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '0', 10);
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
   const MARKET_ID = 0; // ETH/USDC perps
 
   const signerClient = new SignerClient({

@@ -4,7 +4,13 @@
  * Automatically fetches position info and uses correct direction
  */
 
-import { OrderType, SignerClient, ApiClient, AccountApi } from '../src';
+import {
+  OrderType,
+  SignerClient,
+  ApiClient,
+  AccountApi,
+  resolveNetworkFromEnv,
+} from '../src';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -15,11 +21,16 @@ async function closePosition() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "0");
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "0");
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  // Venue comes from the network registry so a stale BASE_URL cannot point
+  // this at a different instance than the one holding the position.
+  const network = resolveNetworkFromEnv();
+  const BASE_URL = network.apiUrl;
+  console.log(`Venue: ${network.name} | host=${BASE_URL} | account=${ACCOUNT_INDEX}`);
   const MARKET_INDEX = parseInt(process.env['MARKET_INDEX'] || '0'); // Default to market 0 (ETH/USDC)
   
   const signerClient = new SignerClient({
     url: BASE_URL,
+    chainId: network.chainId,
     privateKey: API_PRIVATE_KEY,
     accountIndex: ACCOUNT_INDEX,
     apiKeyIndex: API_KEY_INDEX
@@ -56,8 +67,8 @@ async function closePosition() {
       console.log(`ℹ️ No open position found for market ${MARKET_INDEX}.`);
       if (positions.length > 0) {
         console.log(`   Available positions: ${positions.map((p: any) => {
-          const posSize = (p as any).position || p.size || '0';
-          const sign = (p as any).sign || 0;
+          const posSize = p.position || '0';
+          const sign = p.sign || 0;
           const side = sign > 0 ? 'long' : (sign < 0 ? 'short' : 'none');
           return `Market ${p.market_id} (${side}, size: ${posSize})`;
         }).join(', ')}`);
@@ -68,9 +79,9 @@ async function closePosition() {
     }
 
     // Use 'position' field (actual position size in ETH) and 'sign' field (1 = long, -1 = short)
-    const positionSizeStr = (position as any).position || position.size || '0';
-    const positionSize = parseFloat(positionSizeStr);
-    const sign = (position as any).sign || 0;
+    const positionSizeStr = position.position || '0';
+    const positionSize = Math.abs(parseFloat(positionSizeStr) || 0);
+    const sign = position.sign || 0;
     const positionSide = sign > 0 ? 'long' : 'short';
     
     // Check if position is actually active
@@ -96,10 +107,17 @@ async function closePosition() {
     console.log(`   Market: ${MARKET_INDEX}`);
     console.log(`   Side: ${positionSide.toUpperCase()}`);
     console.log(`   Size: ${positionSizeStr}`);
-    console.log(`   Entry Price: ${(position as any).avg_entry_price || position.entry_price || 'N/A'}`);
-    console.log(`   Mark Price: ${(position as any).mark_price || position.mark_price || 'N/A'}`);
-    console.log(`   Position Value: ${(position as any).position_value || 'N/A'}`);
-    console.log(`   Unrealized PnL: ${(position as any).unrealized_pnl || position.unrealized_pnl || 'N/A'}\n`);
+    // The API does not return a mark price on the position object, so derive it
+    // from position_value / |position| and fall back to the live book price.
+    const positionValue = Math.abs(parseFloat(position.position_value || '0') || 0);
+    const markPrice =
+      positionSize > 0 && positionValue > 0
+        ? (positionValue / positionSize).toFixed(4)
+        : (bestPrice / 100).toFixed(4);
+    console.log(`   Entry Price: ${position.avg_entry_price || 'N/A'}`);
+    console.log(`   Mark Price: ~${markPrice} (derived)`);
+    console.log(`   Position Value: ${position.position_value || 'N/A'}`);
+    console.log(`   Unrealized PnL: ${position.unrealized_pnl || 'N/A'}\n`);
 
     console.log('📋 Close Order Parameters:');
     console.log(`   Direction: ${isAsk ? 'SELL' : 'BUY'} (opposite of ${positionSide})`);

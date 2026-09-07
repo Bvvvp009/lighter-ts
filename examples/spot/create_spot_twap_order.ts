@@ -5,7 +5,7 @@
  * NOTE: Market indices: 2048 (ETH SPOT), 2049 (Prove SPOT), 2050 (Zk SPOT)
  */
 
-import { SignerClient, OrderType, ApiClient, OrderApi, MarketHelper } from '../../src';
+import { SignerClient, OrderType, ApiClient, OrderApi, MarketHelper, resolveNetworkFromEnv } from '../../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -19,7 +19,7 @@ async function createEthSpotTWAPOrder() {
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "1");
   // Use BASE_URL from env or default to mainnet
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
 
   const signerClient = new SignerClient({
     url: BASE_URL,

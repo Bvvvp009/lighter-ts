@@ -15,18 +15,40 @@ export interface MarketConfig {
   minOrderSize: number; // Minimum order size in base units
   tickSize: number;     // Minimum price increment
   lastTradePrice?: number; // Last trade price
+  /**
+   * Minimum initial margin fraction the venue allows, in bps (e.g. 200 =
+   * 2% = max 50x; Robinhood BTC is 5000 = 50% = max 2x on old listings,
+   * 200 = max 5x on BTC now). Undefined when the venue does not report it.
+   * Max leverage = 10000 / minIMF.
+   */
+  minInitialMarginFractionBps?: number;
 }
 
-// Cache for market configurations
-const marketConfigCache: Map<number, MarketConfig> = new Map();
+// Cache for market configurations, scoped per OrderApi instance. A single
+// cache keyed only by marketId would hand one venue's decimals/symbol to a
+// different venue's client whenever a process talks to more than one network
+// for the same numeric market id (e.g. market 1 is BTC on both Lighter Core
+// and Robinhood, but most other ids name unrelated instruments on each) --
+// exactly the situation cross-venue strategies create routinely.
+const marketConfigCache: WeakMap<OrderApi, Map<number, MarketConfig>> = new WeakMap();
+
+function cacheFor(orderApi: OrderApi): Map<number, MarketConfig> {
+  let cache = marketConfigCache.get(orderApi);
+  if (!cache) {
+    cache = new Map();
+    marketConfigCache.set(orderApi, cache);
+  }
+  return cache;
+}
 
 /**
  * Fetch market configuration from API
  */
 export async function fetchMarketConfig(marketId: number, orderApi: OrderApi): Promise<MarketConfig> {
   // Check cache first
-  if (marketConfigCache.has(marketId)) {
-    return marketConfigCache.get(marketId)!;
+  const cache = cacheFor(orderApi);
+  if (cache.has(marketId)) {
+    return cache.get(marketId)!;
   }
 
   try {
@@ -48,11 +70,18 @@ export async function fetchMarketConfig(marketId: number, orderApi: OrderApi): P
         quoteScale,
         minOrderSize: parseFloat(details.min_base_amount) * baseScale,
         tickSize: Math.pow(10, -(details.price_decimals - details.supported_price_decimals)),
-        lastTradePrice: details.last_trade_price
+        lastTradePrice: details.last_trade_price,
+        // min IMF (bps) caps the leverage a venue accepts on this market:
+        // 10000/leverage must be >= min IMF. RH BTC reports 200 (max 5x),
+        // Core BTC 200 (max 50x) — without this a too-high leverage push is
+        // only discovered as a sequencer rejection mid-start.
+        ...(details.min_initial_margin_fraction !== undefined ? {
+          minInitialMarginFractionBps: details.min_initial_margin_fraction,
+        } : {}),
       };
       
       // Cache the configuration
-      marketConfigCache.set(marketId, config);
+      cache.set(marketId, config);
       return config;
     }
     
@@ -66,10 +95,13 @@ export async function fetchMarketConfig(marketId: number, orderApi: OrderApi): P
  * Get cached market configuration or fetch if not available
  */
 export async function getMarketConfig(marketId: number, orderApi?: OrderApi): Promise<MarketConfig> {
-  if (marketConfigCache.has(marketId)) {
-    return marketConfigCache.get(marketId)!;
+  if (orderApi) {
+    const cache = cacheFor(orderApi);
+    if (cache.has(marketId)) {
+      return cache.get(marketId)!;
+    }
   }
-  
+
   if (!orderApi) {
     throw new Error(`Market ${marketId} not configured and no OrderApi provided`);
   }

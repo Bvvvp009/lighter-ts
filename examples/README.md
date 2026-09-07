@@ -115,6 +115,37 @@ A trading account can approve another account index ("the integrator" — a fron
 ### RFQ & Referrals
 - **rfq_create_and_list.ts** — Create and list RFQs (requires `can_rfq` enabled on your account)
 - **referral_create.ts** — Create a referral code and check referral points
+- **referral_integration.ts** — Full referral lifecycle via `REFERRAL_OP=status|create|update-code|use-code|kickback|points|referrals` (custom codes, binding — including the RHC salted-signature variant — kickback rates, and points/referral reads)
+
+### Integrator (Fee Attribution, unified flow)
+In addition to the granular examples below, use the single-file flow:
+- **integrator_integration.ts** — `INTEGRATOR_OP=info|approve|quote`: explains the flow, signs the one-time APPROVE_INTEGRATOR (tx type 45) with fee caps + expiry, and places+cancels an attributed order as a no-risk attribution test. The same `INTEGRATOR_ACCOUNT_INDEX` / `INTEGRATOR_TAKER_FEE_BPS` / `INTEGRATOR_MAKER_FEE_BPS` env vars also drive fee attribution in all MM strategies (see `run_mm.ts`).
+
+### Market-Making Strategies
+The SDK ships five live-tested MM strategies plus a unified runner:
+
+```bash
+npm run mm:as     # Avellaneda-Stoikov (default)   npm run mm:arb    # fair-price maker
+npm run mm:perp   # fixed width around the mid     npm run mm:cross  # cross-venue, hedged
+npm run mm:grid   # N levels per side              npm run mm:help   # every flag
+npm run mm:config # resolved config, no orders placed
+```
+
+- **run_mm.ts** — unified runner. `MM_STRATEGY=as_mm|perp_mm|grid|arb_mm|cross_mm` selects the strategy; `RUN_MINUTES`, `MARKET_ID`, `MM_ORDER_SIZE`, `MM_MAX_POSITION`, `MM_SPREAD_BPS`, `MM_HALF_SPREAD`, `MM_GRID_LEVELS`, `MM_GRID_SPACING`, `MM_CYCLE_MS` tune it, and `as_mm` adds the `MM_AS_*` knobs. **Every knob also has a CLI flag** (`--strategy`, `--minutes`, `--gamma`, ...) which wins over the env var — the flags exist so the commands work on Windows too, where `cmd.exe` has no inline env-var prefix. `--help` lists them all, and `--print-config` (alias `--dry-run`) prints the fully resolved config plus the attribution that would apply, then exits before connecting or placing anything. `MM_VENUE=mainnet|robinhood` (or `--venue=`) picks the venue for single-venue strategies; `cross_mm` needs both venues' credentials (`LIGHTER_MAINNET_*` for Core + the default vars for Robinhood). **Always ends flat**: after `stop()` the runner queries each venue's REST positions and closes any residue with reduce-only market orders (the flatten safety net), on Ctrl-C too.
+- **mm_arb_dashboard.ts / mm_grid_dashboard.ts / mm_cross_venue_dashboard.ts** — live terminal dashboards. They redraw in place on a TTY and fall back to plain line output when piped to a file. Press **Space** for the config menu: every changeable config listed with its current value auto-filled and the matching config key; arrow keys select, Enter edits inline, and changes apply on the next strategy cycle without a restart. A dashboard does **not** flatten on exit: it cancels resting orders, reports any position it is still holding, and exits `1` so a script can tell "finished flat" (exit `0`) from "finished holding inventory".
+- **run_arb_live.ts / run_perp_mm_live.ts** — single-strategy runners with plain line logging instead of a dashboard, for a headless host or a log file. `RUN_MINUTES` bounds the run. Like the dashboards they cancel resting orders but do not flatten: they report any remaining position and exit `1`, so `0` still means finished flat.
+- All MM runners support **`MM_LEVERAGE`** (leverage pushed to the venue at every startup, pre-validated against the venue's cap; `cross_mm` also takes **`MM_LEVERAGE_A`/`MM_LEVERAGE_B`** per venue), **`MM_LOG_FILE`** (file logs in `logs/`, default OFF), and **`MM_HOT_CONFIG`** (auto-filled `mm-config.json` re-read every cycle — edit + save to change config mid-run, default OFF). Every config edit — menu or file — forces a requote on the next cycle, so the resting orders always pick it up.
+- **probe_both_venues.ts** — read-only probe of BOTH venues (Core + Robinhood): balances, positions, active orders, and market config (min sizes / decimals). Use it to size orders before running a strategy.
+- **live_order_roundtrip.ts** — place/verify/cancel one real order on Robinhood (price at 50% of last, never fills).
+- **live_ws_smoke.ts** — WS smoke test: public channels on both venues, then the private channels on whichever venue your credentials are for.
+
+Sizing gotchas (live-verified):
+- Orders must clear **both** `min_base_amount` and `min_quote_amount` (BTC market: ≥$10 notional) or the sequencer rejects with `[21706] invalid order base or quote amount`.
+- Robinhood BTC uses a 50% initial margin fraction (vs 5% on Core mainnet) — size positions to your RH balance accordingly.
+
+See [`docs/STRATEGIES.md`](../docs/STRATEGIES.md) for the runner's full config reference and copy-paste launch commands, and [`docs/MM_CONFIG_GUIDE.md`](../docs/MM_CONFIG_GUIDE.md) for the class-level config fields when constructing strategies in TypeScript yourself.
+
+Orders placed by these strategies carry partner (builder) fee attribution by default — maker 0.5 bps / taker 2 bps, disclosed in the terminal before the first order, and disabled with `BUILDER_ATTRIBUTION=off`. See [`docs/ATTRIBUTION.md`](../docs/ATTRIBUTION.md).
 
 ### Bridge
 - **bridge_create_intent_address.ts** — Create an L1 bridge intent deposit address

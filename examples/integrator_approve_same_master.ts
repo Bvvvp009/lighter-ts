@@ -1,5 +1,5 @@
 import * as dotenv from 'dotenv';
-import { SignerClient } from '../src';
+import { SignerClient, resolveNetworkFromEnv } from '../src';
 
 dotenv.config();
 
@@ -9,7 +9,7 @@ async function main() {
     throw new Error('API_PRIVATE_KEY environment variable is required');
   }
   const client = new SignerClient({
-    url: process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai',
+    url: resolveNetworkFromEnv().apiUrl,
     privateKey: API_PRIVATE_KEY,
     accountIndex: Number(process.env.ACCOUNT_INDEX) || 0,
     apiKeyIndex: Number(process.env.API_KEY_INDEX) || 0,
@@ -22,14 +22,15 @@ async function main() {
   const expiry = Date.now() + 86400 * 1000; // ApprovalExpiry is a millisecond timestamp
 
   console.log('Approving integrator (same master account)...');
-  const [result, txHash, err] = await client.approveIntegrator(
+  const [result, txHash, err] = await client.approveIntegrator({
     integratorIndex,
-    1000,
-    500,
-    1000,
-    500,
-    expiry
-  );
+    maxPerpsTakerFee: 1000, // 10 bps (fee units are 1e-6 of trade size)
+    maxPerpsMakerFee: 500,
+    maxSpotTakerFee: 1000,
+    maxSpotMakerFee: 500,
+    approvalExpiry: expiry,
+    // Same L1 address -> L2 signature only, no ethPrivateKey needed
+  });
   if (err) {
     console.error('Error approving integrator:', err);
   } else {

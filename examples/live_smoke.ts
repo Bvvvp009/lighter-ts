@@ -7,6 +7,7 @@ import {
   NotificationApi,
   SignerClient,
   TransactionApi,
+  resolveNetworkFromEnv,
 } from '../src';
 import dotenv from 'dotenv';
 
@@ -75,7 +76,7 @@ async function sleep(ms: number): Promise<void> {
 }
 
 async function run(): Promise<void> {
-  const host = process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai';
+  const host = resolveNetworkFromEnv().apiUrl;
   const auth = process.env.API_PRIVATE_KEY || '';
   const accountIndex = parseEnvInt('ACCOUNT_INDEX', 0);
   const apiKeyIndex = parseEnvInt('API_KEY_INDEX', 0);

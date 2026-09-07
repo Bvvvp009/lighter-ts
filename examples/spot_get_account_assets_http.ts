@@ -5,7 +5,7 @@
  * showing both perp and spot asset balances with locked amounts.
  */
 
-import { ApiClient, AccountApi } from '../src';
+import { ApiClient, AccountApi, resolveNetworkFromEnv } from '../src';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -14,7 +14,7 @@ async function main() {
   try {
     console.log('📊 Getting Spot Account Assets...\n');
 
-    const baseUrl = process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai';
+    const baseUrl = resolveNetworkFromEnv().apiUrl;
     const accountIndex = parseInt(process.env.ACCOUNT_INDEX || '0');
 
     const apiClient = new ApiClient({ host: baseUrl });
@@ -63,10 +63,17 @@ async function main() {
       
       for (const position of account.positions) {
         const pnlColor = parseFloat(position.unrealized_pnl) >= 0 ? '✅' : '❌';
-        console.log(`\nMarket ${position.market_id} (${position.side.toUpperCase()}):`);
-        console.log(`  Size: ${position.size}`);
-        console.log(`  Entry Price: ${position.entry_price}`);
-        console.log(`  Mark Price: ${position.mark_price}`);
+        // `sign` carries the direction (1 long / -1 short) and `position` the
+        // size; the API model has no `side`/`size`/`mark_price` field.
+        const side = position.sign > 0 ? 'LONG' : position.sign < 0 ? 'SHORT' : 'FLAT';
+        const size = Math.abs(parseFloat(position.position) || 0);
+        const value = Math.abs(parseFloat(position.position_value) || 0);
+        const mark = size > 0 && value > 0 ? `~${(value / size).toFixed(4)} (derived)` : 'n/a';
+        console.log(`\nMarket ${position.market_id} ${position.symbol} (${side}):`);
+        console.log(`  Size: ${position.position}`);
+        console.log(`  Entry Price: ${position.avg_entry_price}`);
+        console.log(`  Position Value: ${position.position_value}`);
+        console.log(`  Mark Price: ${mark}`);
         console.log(`  Unrealized PnL: ${pnlColor} ${position.unrealized_pnl}`);
         console.log(`  Realized PnL: ${position.realized_pnl}`);
       }

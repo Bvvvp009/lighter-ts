@@ -1,10 +1,10 @@
 import * as dotenv from 'dotenv';
-import { InfoApi, BridgeApi, ApiClient } from '../src';
+import { InfoApi, BridgeApi, ApiClient, resolveNetworkFromEnv } from '../src';
 
 dotenv.config();
 
 async function main() {
-  const apiClient = new ApiClient({ host: process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai' });
+  const apiClient = new ApiClient({ host: resolveNetworkFromEnv().apiUrl });
   const infoApi = new InfoApi(apiClient);
   const bridgeApi = new BridgeApi(apiClient);
 

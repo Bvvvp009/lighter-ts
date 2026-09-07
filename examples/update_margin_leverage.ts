@@ -1,5 +1,5 @@
 import * as dotenv from 'dotenv';
-import { SignerClient } from '../src';
+import { SignerClient, resolveNetworkFromEnv } from '../src';
 
 dotenv.config();
 
@@ -9,7 +9,7 @@ dotenv.config();
   }
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '0', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '0', 10);
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
 
 // Market ID for ETH/USDC (example)
 const MARKET_INDEX = 0;

@@ -2,7 +2,7 @@
  * Example: Create Market Order with Error Handling and Status Checking
  */
 
-import { SignerClient, ApiClient, OrderType } from '../src';
+import { SignerClient, ApiClient, OrderType, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -18,7 +18,7 @@ async function createMarketOrderExample() {
   }
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '0', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '0', 10);
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
   const TX_CONFIRM_TIMEOUT_MS = Number.parseInt(process.env['TX_CONFIRM_TIMEOUT_MS'] ?? '120000', 10);
   const TX_POLL_INTERVAL_MS = Number.parseInt(process.env['TX_POLL_INTERVAL_MS'] ?? '2000', 10);
   const MARKET_ID = 0; // ETH/USDC perps

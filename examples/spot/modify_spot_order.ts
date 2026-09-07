@@ -4,7 +4,7 @@
  * MarketIndex: 2048 (ETH SPOT) - Available on mainnet
  */
 
-import { SignerClient, ApiClient, OrderApi, AccountApi } from '../../src';
+import { SignerClient, ApiClient, OrderApi, AccountApi, resolveNetworkFromEnv } from '../../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -18,7 +18,7 @@ async function modifySpotOrder() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || '';
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0', 10);
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
   const MARKET_INDEX = 2048; // ETH SPOT
 
   if (!API_PRIVATE_KEY) {

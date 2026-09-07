@@ -5,7 +5,7 @@
  * the new transaction methods (createSubAccount, modifyOrder, public pools, etc.)
  */
 
-import { SignerClient, ApiClient, OrderType, TimeInForce } from '../src';
+import { SignerClient, ApiClient, OrderType, TimeInForce, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -22,7 +22,7 @@ async function multiClientAdvancedExample() {
   const API_KEY_INDEX_1 = parseInt(process.env['API_KEY_INDEX'] || '4', 10);
   const API_KEY_INDEX_2 = parseInt(process.env['API_KEY_INDEX_2'] || '5', 10);
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
   // Client 1: Master account with API key index 1
   const client1 = new SignerClient({
     url: BASE_URL,

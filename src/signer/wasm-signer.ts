@@ -140,6 +140,7 @@ export interface ModifyOrderParams {
   integratorMakerFee?: number;
   selfTradeBehaviorMode?: number;
   selfTradeEqualityMode?: number;
+  orderVersion?: number;
   skipNonce?: number;
   nonce: number;
   apiKeyIndex: number;
@@ -1105,22 +1106,55 @@ export class WasmSignerClient {
   async signModifyOrder(params: ModifyOrderParams): Promise<WasmTxResponse> {
     await this.ensureInitialized();
 
-    let result = this.wasmModule.signModifyOrder(
-      params.marketIndex,
-      params.index,
-      params.baseAmount,
-      params.price,
-      params.triggerPrice,
-      params.integratorAccountIndex ?? 0,
-      params.integratorTakerFee ?? 0,
-      params.integratorMakerFee ?? 0,
-      params.selfTradeBehaviorMode ?? 0,
-      params.selfTradeEqualityMode ?? 0,
-      params.skipNonce ?? 0,
-      params.nonce,
-      params.apiKeyIndex,
-      params.accountIndex
-    );
+    // Try the new 16-arg variant first (with orderVersion — added 2026-08-25).
+    // If the WASM build doesn't support it yet, fall back to the 14-arg variant.
+    let result: any;
+
+    if (params.orderVersion !== undefined) {
+      try {
+        result = this.wasmModule.signModifyOrder(
+          params.marketIndex,
+          params.index,
+          params.baseAmount,
+          params.price,
+          params.triggerPrice,
+          params.integratorAccountIndex ?? 0,
+          params.integratorTakerFee ?? 0,
+          params.integratorMakerFee ?? 0,
+          params.selfTradeBehaviorMode ?? 0,
+          params.selfTradeEqualityMode ?? 0,
+          params.orderVersion,
+          params.skipNonce ?? 0,
+          params.nonce,
+          params.apiKeyIndex,
+          params.accountIndex,
+        );
+      } catch {
+        result = { error: 'expects 14 args' }; // force fallback
+      }
+    } else {
+      result = { error: 'expects 14 args' }; // no orderVersion, use 14-arg path
+    }
+
+    // 14-arg variant (no orderVersion — the pre-2026-08-25 build)
+    if (result?.error && String(result.error).includes('expects 14 args')) {
+      result = this.wasmModule.signModifyOrder(
+        params.marketIndex,
+        params.index,
+        params.baseAmount,
+        params.price,
+        params.triggerPrice,
+        params.integratorAccountIndex ?? 0,
+        params.integratorTakerFee ?? 0,
+        params.integratorMakerFee ?? 0,
+        params.selfTradeBehaviorMode ?? 0,
+        params.selfTradeEqualityMode ?? 0,
+        params.skipNonce ?? 0,
+        params.nonce,
+        params.apiKeyIndex,
+        params.accountIndex
+      );
+    }
 
     // Backward compatibility: 12 args (no self-trade)
     if (result?.error && String(result.error).includes('expects 12 args')) {

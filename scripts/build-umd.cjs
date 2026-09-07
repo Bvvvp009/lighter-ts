@@ -68,10 +68,16 @@ try {
       'process',
       'crypto',
       'module',
+      'readline',
+      'stream',
+      'tty',
       'node:fs',
       'node:os',
       'node:path',
-      'node:module'
+      'node:module',
+      'node:readline',
+      'node:stream',
+      'node:tty'
     ],
     sourcemap: true,
     minify: false,

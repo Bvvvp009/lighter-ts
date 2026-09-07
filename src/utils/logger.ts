@@ -1,4 +1,12 @@
-// Logger utility with comprehensive logging patterns
+// Logger utility with comprehensive logging patterns.
+//
+// SECURITY: all context objects are passed through `redact()` before being
+// stringified or buffered. `redact()` masks values whose keys look like
+// secrets (private keys, API keys, tokens, secrets, passwords, salts) so a
+// stray context object can never leak credentials into console output or
+// the in-memory log buffer. The buffer is also capped (`MAX_LOG_ENTRIES`)
+// so long-running processes cannot accumulate unbounded memory.
+
 export enum LogLevel {
   DEBUG = 0,
   INFO = 1,
@@ -13,6 +21,60 @@ export interface LogEntry {
   context?: Record<string, any> | undefined;
   error?: Error | undefined;
 }
+
+/** Keys (case-insensitive, substring match) treated as secrets. */
+const SENSITIVE_KEY_PATTERNS = [
+  'privatekey',
+  'private_key',
+  'apikey',
+  'api_key',
+  'secret',
+  'token',
+  'password',
+  'passphrase',
+  'salt',
+  'signature',
+  'auth',
+];
+
+/** Mask applied to redacted values (keeps length hint without content). */
+function maskValue(value: unknown): string {
+  const str = typeof value === 'string' ? value : JSON.stringify(value);
+  if (!str) return '[REDACTED]';
+  return `[REDACTED len:${str.length}]`;
+}
+
+/** True when a context key looks secret-like. */
+function isSensitiveKey(key: string): boolean {
+  const lowered = key.toLowerCase();
+  return SENSITIVE_KEY_PATTERNS.some((p) => lowered.includes(p));
+}
+
+/**
+ * Recursively redact secret-looking values from an arbitrary object.
+ * Cycles are guarded with a seen-WeakSet; depth is capped defensively.
+ */
+export function redact(value: unknown, depth: number = 0, seen: Set<object> = new Set()): unknown {
+  if (depth > 6) return '[TRUNCATED]';
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') return value;
+  if (typeof value !== 'object') return value;
+  if (seen.has(value as object)) return '[CIRCULAR]';
+  seen.add(value as object);
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 100).map((v) => redact(v, depth + 1, seen));
+  }
+
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    out[k] = isSensitiveKey(k) ? maskValue(v) : redact(v, depth + 1, seen);
+  }
+  return out;
+}
+
+/** Max entries kept in the in-memory log buffer (oldest dropped). */
+const MAX_LOG_ENTRIES = 1000;
 
 export class Logger {
   private static instance: Logger;
@@ -45,27 +107,35 @@ export class Logger {
   }
 
   public error(message: string, error?: Error, context?: Record<string, any>): void {
-    this.log(LogLevel.ERROR, message, { ...context, error });
+    this.log(LogLevel.ERROR, message, context, error);
   }
 
-  private log(level: LogLevel, message: string, context?: Record<string, any>): void {
+  private log(level: LogLevel, message: string, context?: Record<string, any>, error?: Error): void {
     if (level < this.logLevel) {
       return;
     }
+
+    // SECURITY: redact before buffering or printing.
+    const safeContext = context
+      ? (redact(context) as Record<string, any>)
+      : undefined;
 
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
       message,
-      context,
-      error: context?.['error']
+      context: safeContext,
+      error,
     };
 
     this.logs.push(entry);
+    if (this.logs.length > MAX_LOG_ENTRIES) {
+      this.logs.splice(0, this.logs.length - MAX_LOG_ENTRIES);
+    }
 
-    // Console output with structured logging
-    const contextStr = context ? ` ${JSON.stringify(context, null, 2)}` : '';
-    
+    // Console output with structured logging (redacted)
+    const contextStr = safeContext ? ` ${JSON.stringify(safeContext, null, 2)}` : '';
+
     switch (level) {
       case LogLevel.DEBUG:
         console.debug(`[DEBUG] ${message}${contextStr}`);
@@ -78,8 +148,8 @@ export class Logger {
         break;
       case LogLevel.ERROR:
         console.error(`[ERROR] ${message}${contextStr}`);
-        if (context?.['error']) {
-          console.error('Stack trace:', context['error'].stack);
+        if (error) {
+          console.error('Stack trace:', error.stack);
         }
         break;
     }
@@ -94,7 +164,7 @@ export class Logger {
     this.logs = [];
   }
 
-  // Standard logging methods
+  // Standard logging methods (all redact automatically via log())
   public logApiCall(method: string, url: string, params?: any): void {
     this.debug(`API Call: ${method} ${url}`, { params });
   }

@@ -267,4 +267,59 @@ export class BridgeApi {
     });
     return response.data;
   }
+
+  // --------------------------------------------------------------------------
+  // fun.xyz deposit integration (added 2026-08-19)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Deposit via fun.xyz. Builders can use https://fun.xyz/ routes to deposit
+   * to Lighter Core programmatically. USDC and ETH (swapped to USDC) are
+   * supported as deposit assets, from multiple chains.
+   *
+   * Each builder is issued an API key to be used in the `X-Builder-Key` header.
+   * Contact support to receive one.
+   *
+   * Full docs: https://apidocs.lighter.xyz/docs/deposits-transfers-and-withdrawals#deposit-via-funxyz
+   *
+   * @param params - Deposit parameters
+   * @param builderApiKey - Builder API key (sent as `X-Builder-Key` header)
+   */
+  public async funXyzDeposit(
+    params: {
+      chain_id: number;
+      from_addr: string;
+      amount: string;
+      asset?: string; // 'USDC' | 'ETH' — defaults to USDC
+      account_index?: number;
+      credit_asset?: 'USDC' | 'ETH'; // whether USDC or ETH gets credited
+    },
+    builderApiKey: string,
+  ): Promise<{ [key: string]: any }> {
+    const body: Record<string, any> = {
+      chain_id: params.chain_id,
+      from_addr: params.from_addr,
+      amount: params.amount,
+      ...(params.asset !== undefined ? { asset: params.asset } : {}),
+      ...(params.account_index !== undefined ? { account_index: params.account_index } : {}),
+      ...(params.credit_asset !== undefined ? { credit_asset: params.credit_asset } : {}),
+    };
+    const response = await this.client.post<{ [key: string]: any }>(
+      '/api/v1/funxyz/deposit',
+      body,
+      { headers: { 'X-Builder-Key': builderApiKey } },
+    );
+    return response.data;
+  }
+
+  /**
+   * Get the list of supported chains and assets for fun.xyz deposits.
+   * As of 2026-08-28: 22 assets across 12 blockchains, including native Bitcoin.
+   */
+  public async funXyzSupportedAssets(builderApiKey: string): Promise<{ [key: string]: any }> {
+    const response = await this.client.get<{ [key: string]: any }>('/api/v1/funxyz/assets', {
+      headers: { 'X-Builder-Key': builderApiKey },
+    });
+    return response.data;
+  }
 }

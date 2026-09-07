@@ -17,14 +17,14 @@
  * - EXISTING_API_KEY_INDEX: Index of existing API key (optional, defaults to 0 if API_PRIVATE_KEY provided)
  */
 
-import { SignerClient, ApiClient, AccountApi, createWasmSignerClient } from '../src';
+import { SignerClient, ApiClient, AccountApi, createWasmSignerClient, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 
 dotenv.config();
 
-const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+const BASE_URL = resolveNetworkFromEnv().apiUrl;
 const ETH_PRIVATE_KEY = process.env['ETH_PRIVATE_KEY'] || process.env['ACCOUNT_PRIVATE_KEY'] || '';
 const ACCOUNT_INDEX_ENV = process.env['ACCOUNT_INDEX'];
 const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '3', 10);
@@ -98,15 +98,13 @@ async function systemSetup() {
           }
 
           // Find the account with minimum index (master account)
-          const masterAccount = accounts.reduce((min, acc) => {
-            const minIdx = parseInt(min.index, 10);
-            const accIdx = parseInt(acc.index, 10);
-            return accIdx < minIdx ? acc : min;
-          });
-          
-          accountIndex = parseInt(masterAccount.index, 10);
+          const masterAccount = accounts.reduce((min, acc) =>
+            acc.index < min.index ? acc : min,
+          );
+
+          accountIndex = masterAccount.index;
         } else {
-          accountIndex = parseInt(accounts[0].index, 10);
+          accountIndex = accounts[0].index;
         }
         console.log(`📋 Using account index: ${accountIndex}\n`);
       } catch (error: any) {
@@ -165,7 +163,11 @@ async function systemSetup() {
     // unless explicitly confirmed. Overwriting rotates the on-chain pubkey for that index,
     // immediately invalidating whatever private key was previously paired with it.
     const existingKeys = await accountApi.getApiKeys(accountIndex, 255);
-    const registeredIndices = new Set((existingKeys || []).map((k: any) => k.api_key_index));
+    // Listing with index 255 returns only the slots that are actually
+    // registered, so this set is exactly "the indices already in use".
+    const registeredIndices = new Set(
+      (existingKeys?.api_keys ?? []).map((key) => key.api_key_index),
+    );
     const allowOverwrite = (process.env['CONFIRM_OVERWRITE'] || '').toLowerCase() === '1';
 
     console.log(`📝 Registering ${NUM_API_KEYS} API Key(s) on server...`);

@@ -87,11 +87,11 @@ export class NonceManager {
   }
 
   /**
-   * Acknowledge transaction failure and rollback nonce
+   * Acknowledge transaction failure and rollback a consumed nonce
    * This prevents nonce gaps when transactions fail
    */
-  acknowledgeFailure(apiKeyIndex: number): void {
-    this.nonceCache.acknowledgeFailure(apiKeyIndex);
+  acknowledgeFailure(apiKeyIndex: number, consumedNonce?: number): void {
+    this.nonceCache.acknowledgeFailure(apiKeyIndex, consumedNonce);
   }
 
   /**

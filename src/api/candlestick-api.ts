@@ -37,4 +37,13 @@ export class CandlestickApi {
     const response = await this.client.get('/api/v1/fundings', { params: query });
     return response.data;
   }
+
+  /**
+   * Get historical mark price candlesticks.
+   * Added 2026-05-27: https://apidocs.lighter.xyz/reference/markpricecandles
+   */
+  async getMarkPriceCandles(query: CandlestickQuery): Promise<{ candlesticks: Candlestick[] }> {
+    const response = await this.client.get('/api/v1/markPriceCandles', { params: query });
+    return response.data;
+  }
 } 

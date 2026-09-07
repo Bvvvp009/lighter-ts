@@ -133,22 +133,29 @@ export class NonceCache {
   }
 
   /**
-   * Acknowledge failure and rollback nonce
+   * Acknowledge failure and rollback a consumed nonce.
+   *
+   * `consumedNonce` is the nonce that was assigned to a transaction which
+   * then failed before reaching the server (e.g. WS timeout before send).
+   * Rolling it back re-inserts it at the front of the cache so the next
+   * request reuses it, avoiding a sequence gap.
    */
-  acknowledgeFailure(apiKeyIndex: number): void {
+  acknowledgeFailure(apiKeyIndex: number, consumedNonce?: number): void {
     const nonces = this.cache.get(apiKeyIndex);
-    if (nonces && nonces.length > 0) {
-      // Rollback the last used nonce by adding it back to the front
-      const lastNonce = nonces[0];
-      if (lastNonce) {
-        nonces.unshift({
-          nonce: lastNonce.nonce - 1,
-          timestamp: Date.now(),
-          apiKeyIndex
-        });
-        this.cache.set(apiKeyIndex, nonces);
-      }
+    if (consumedNonce === undefined) {
+      // Legacy no-arg behavior: cannot roll back safely, drop the cache so
+      // the next request fetches a fresh sequence from the server.
+      this.cache.delete(apiKeyIndex);
+      return;
     }
+    if (!nonces) return;
+    // Re-insert the consumed nonce at the front (it was never accepted).
+    nonces.unshift({
+      nonce: consumedNonce,
+      timestamp: Date.now(),
+      apiKeyIndex,
+    });
+    this.cache.set(apiKeyIndex, nonces);
   }
 
   /**

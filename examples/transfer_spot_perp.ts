@@ -3,7 +3,7 @@
  * Demonstrates transferring USDC between spot and perp accounts on the same account index
  */
 
-import { SignerClient, ApiClient } from '../src';
+import { SignerClient, ApiClient, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -14,7 +14,7 @@ async function transferSpotPerp() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || '';
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0');
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0');
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
   const TRANSFER_AMOUNT = parseFloat(process.env['TRANSFER_AMOUNT'] || '1.234567');
 
   if (!API_PRIVATE_KEY) {
@@ -66,7 +66,7 @@ async function transferSpotPerp() {
       from_is_spot_account: false, // source: perp
       fee: 0,
       memo,
-      ethPrivateKey: process.env['ETH_PRIVATE_KEY']
+      ...(process.env['ETH_PRIVATE_KEY'] ? { ethPrivateKey: process.env['ETH_PRIVATE_KEY'] } : {}),
     });
 
     if (transferError) {

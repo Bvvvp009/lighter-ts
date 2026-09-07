@@ -3,7 +3,14 @@
  * Fetches positions and closes them with the correct direction
  */
 
-import { SignerClient, ApiClient, AccountApi, TransactionApi } from '../src';
+import {
+  SignerClient,
+  ApiClient,
+  AccountApi,
+  TransactionApi,
+  OrderApi,
+  resolveNetworkFromEnv,
+} from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -126,10 +133,22 @@ async function closeAllPositions() {
   }
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '0', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '0', 10);
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
-  
+  // Resolve the venue from the network registry, not from BASE_URL alone.
+  // A leftover BASE_URL pointing at a different instance used to send this
+  // script to the wrong venue entirely, where it reported "no active
+  // positions" while the real position stayed open on the other one.
+  // resolveNetworkFromEnv() still honours BASE_URL/WS_URL/CHAIN_ID when
+  // LIGHTER_NETWORK is unset, so custom deployments are unaffected.
+  const network = resolveNetworkFromEnv();
+  const BASE_URL = network.apiUrl;
+
+  console.log(
+    `Venue: ${network.name} | host=${BASE_URL} | account=${ACCOUNT_INDEX} | keyIdx=${API_KEY_INDEX}`,
+  );
+
   const signerClient = new SignerClient({
     url: BASE_URL,
+    chainId: network.chainId,
     privateKey: API_PRIVATE_KEY,
     accountIndex: ACCOUNT_INDEX,
     apiKeyIndex: API_KEY_INDEX
@@ -138,6 +157,7 @@ async function closeAllPositions() {
   const apiClient = new ApiClient({ host: BASE_URL });
   const accountApi = new AccountApi(apiClient);
   const transactionApi = new TransactionApi(apiClient);
+  const orderApi = new OrderApi(apiClient);
 
   await signerClient.initialize();
   await signerClient.ensureWasmClient();
@@ -251,8 +271,21 @@ async function closeAllPositions() {
       const sign = (position as any).sign || 0;
       const positionSide = sign > 0 ? 'long' : 'short';
       
-      // Convert position size to baseAmount units (1 ETH = 1,000,000 units)
-      const baseAmount = Math.floor(positionSize * 1_000_000);
+      // Sizes go on the wire as scaled integers and the scale is PER MARKET:
+      // BTC is size_decimals=5, ETH is 4 or 6 depending on the venue. This used
+      // to assume 1e6 everywhere, which over-counted a BTC close 10x (harmless
+      // only because reduceOnly makes the venue cap it) and would UNDER-count on
+      // a market with more than 6 decimals — closing part of the position while
+      // reporting it closed.
+      const details = await orderApi.getOrderBookDetailsRaw(marketIndex);
+      const sizeDecimals = details.order_book_details?.[0]?.size_decimals;
+      if (sizeDecimals === undefined) {
+        console.log(`   ⚠️  Could not read size_decimals for market ${marketIndex} — skipping.`);
+        console.log('      Closing it with a guessed scale could leave the position partly open.');
+        continue;
+      }
+      const baseScale = Math.pow(10, Number(sizeDecimals));
+      const baseAmount = Math.round(positionSize * baseScale);
       
       // Determine direction: opposite of position side
       // LONG position (sign > 0) -> need to SELL (isAsk: true) to close
@@ -262,7 +295,7 @@ async function closeAllPositions() {
       console.log(`\n📋 Closing Market ${marketIndex}...`);
       console.log(`   Position: ${positionSide.toUpperCase()} ${positionSizeStr}`);
       console.log(`   Direction: ${isAsk ? 'SELL' : 'BUY'} (opposite of ${positionSide})`);
-      console.log(`   Base Amount: ${baseAmount} units`);
+      console.log(`   Base Amount: ${baseAmount} units (1e${sizeDecimals} base scale)`);
       
       // Use the live order book price (not the stale entry price) so the reduce-only
       // market order actually crosses the book, with a small slippage buffer for the cap.

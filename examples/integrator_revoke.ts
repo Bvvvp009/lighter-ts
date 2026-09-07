@@ -1,5 +1,5 @@
 import * as dotenv from 'dotenv';
-import { SignerClient } from '../src';
+import { SignerClient, resolveNetworkFromEnv } from '../src';
 
 dotenv.config();
 
@@ -9,7 +9,7 @@ async function main() {
     throw new Error('API_PRIVATE_KEY environment variable is required');
   }
   const client = new SignerClient({
-    url: process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai',
+    url: resolveNetworkFromEnv().apiUrl,
     privateKey: API_PRIVATE_KEY,
     accountIndex: Number(process.env.ACCOUNT_INDEX) || 0,
     apiKeyIndex: Number(process.env.API_KEY_INDEX) || 0,
@@ -22,14 +22,14 @@ async function main() {
 
   console.log(`Revoking integrator ${integratorIndex} by setting fees to 0 and expiry to 0...`);
   console.log('Note: You must have previously approved this integrator index. Use INTEGRATOR_INDEX env var.');
-  const [result, txHash, err] = await client.approveIntegrator(
+  const [result, txHash, err] = await client.approveIntegrator({
     integratorIndex,
-    0,
-    0,
-    0,
-    0,
-    0
-  );
+    maxPerpsTakerFee: 0,
+    maxPerpsMakerFee: 0,
+    maxSpotTakerFee: 0,
+    maxSpotMakerFee: 0,
+    approvalExpiry: 0,
+  });
 
   if (err) {
     console.error('Error revoking integrator:', err);

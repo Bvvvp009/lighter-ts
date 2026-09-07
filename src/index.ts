@@ -20,6 +20,9 @@ export { TransactionApi } from './api/transaction-api';
 export { RootApi } from './api/root-api';
 export { CandlestickApi } from './api/candlestick-api';
 export { TokenlistApi } from './api/tokenlist-api';
+export { RhcApi } from './api/rhc-api';
+export type { LeaderboardEntry, LeaderboardResponse, LivePointsTotalResponse, WsLivePointsMessage } from './api/rhc-api';
+export { livePointsChannel } from './api/rhc-api';
 
 // Explorer API Classes
 export { ExplorerApiClient } from './api/explorer-api-client';
@@ -28,7 +31,7 @@ export { SearchApi } from './api/search-api';
 export { LogsApi } from './api/logs-api';
 
 // Bridge Classes
-export { L1BridgeClient } from './bridge/l1-bridge-client';
+export { L1BridgeClient, BridgeConfigError } from './bridge/l1-bridge-client';
 
 // Network registry + env-driven network selection (mainnet | testnet | robinhood)
 export { getNetwork, resolveNetworkFromEnv, resolveWsUrl, deriveWsUrl, NETWORKS } from './network';
@@ -101,7 +104,7 @@ export { WsClient } from './api/ws-client';
 export type {
   AccountAllSubscriptionParams,
   WsAccountAllPosition,
-  WsAccountAllMessage
+  LegacyWsAccountAllMessage
 } from './api/ws-client';
 export { WebSocketOrderClient } from './api/ws-order-client';
 export type {
@@ -112,6 +115,80 @@ export type {
   WsOrderResponse,
   WsConnectionConfig
 } from './api/ws-order-client';
+
+// Typed WebSocket events + private channel client
+export {
+  WsPrivateClient,
+  WsSubscription,
+  StaticAuthTokenProvider,
+  SignerAuthTokenProvider,
+  SignerAuthTokenProvider as AuthTokenProviderAdapter,
+  createWsPrivateClient
+} from './ws/ws-private-client';
+  export type {
+    AuthTokenProvider,
+    WsPrivateClientConfig,
+    WsTxResponse,
+    SignerAuthTokenOptions,
+    SignerClientLike
+} from './ws/ws-private-client';
+export {
+  orderBookChannel,
+  tickerChannel,
+  marketStatsChannel,
+  tradeChannel,
+  candleChannel,
+  markPriceCandleChannel,
+  accountAllChannel,
+  accountMarketChannel,
+  accountOrdersChannel,
+  accountAllOrdersChannel,
+  accountAllTradesChannel,
+  accountAllPositionsChannel,
+  accountAllAssetsChannel,
+  accountTxChannel,
+  userStatsChannel,
+  notificationChannel,
+  heightChannel
+} from './ws/ws-events';
+export type {
+  WsMessage,
+  WsPriceLevel,
+  WsOrder,
+  WsTrade,
+  WsPosition,
+  WsAsset,
+  WsPoolShares,
+  WsPositionFunding,
+  WsCandle,
+  WsMarkPriceCandle,
+  WsOrderBookMessage,
+  WsTickerMessage,
+  WsMarketStatsMessage,
+  WsTradeMessage,
+  WsCandleMessage,
+  WsMarkPriceCandleMessage,
+  WsSpotMarketStatsMessage,
+  WsHeightMessage,
+  WsAccountAllMessage,
+  WsAccountMarketMessage,
+  WsAccountOrdersMessage,
+  WsAccountAllOrdersMessage,
+  WsAccountAllTradesMessage,
+  WsAccountAllPositionsMessage,
+  WsAccountAllAssetsMessage,
+  WsAccountTx,
+  WsAccountTxMessage,
+  WsUserStatsMessage,
+  WsNotification,
+  WsNotificationContent,
+  WsNotificationMessage,
+  WsAccountSpotAvgEntryPricesMessage,
+  WsRfq,
+  WsRfqMessage,
+  WsPoolDataMessage,
+  WsPoolInfoMessage
+} from './ws/ws-events';
 
 // Exception Classes
 export {
@@ -307,7 +384,77 @@ export {
 // New Utility Exports
 export * from './utils/price-utils';
 export * from './utils/nonce-manager';
+export * from './utils/rate-limiter';
 // Client Factory removed - use direct client creation instead
+
+// MM Strategy Engine (Node-only)
+export { OrderTracker } from './strategies/order-tracker';
+export type {
+  TrackedOrder,
+  TrackedPosition,
+  OrderPlacedEvent,
+  OrderCanceledEvent,
+  OrderFillEvent,
+  OrderPartialFillEvent,
+  PositionOpenEvent,
+  PositionCloseEvent,
+  PositionChangedEvent,
+  TradeEvent as TrackerTradeEvent,
+  MarketScales,
+} from './strategies/order-tracker';
+export { WsExecutor } from './strategies/ws-executor';
+export type {
+  WsExecutorConfig,
+  PlaceOrderResult,
+  CancelResult,
+  RequoteParams,
+  RequoteResult,
+  EmergencyStopResult
+} from './strategies/ws-executor';
+export { StrategyBase, StrategyState } from './strategies/strategy-base';
+export type { StrategyConfig, StrategyStats, MarketData, EditableConfigField } from './strategies/strategy-base';
+export { GridStrategy } from './strategies/grid-strategy';
+export type { GridStrategyConfig } from './strategies/grid-strategy';
+export { ArbitrageStrategy } from './strategies/arbitrage-strategy';
+export type { ArbitrageStrategyConfig, FairPriceSource } from './strategies/arbitrage-strategy';
+export { CrossVenueMM } from './strategies/cross-venue-mm';
+export type { CrossVenueMMConfig, VenueConfig } from './strategies/cross-venue-mm';
+export { PerpetualMMStrategy } from './strategies/perp-mm-strategy';
+export type { PerpetualMMConfig } from './strategies/perp-mm-strategy';
+export { AvellanedaStoikovMM, DEFAULT_AS_CONFIG } from './strategies/avellaneda-stoikov-mm';
+export type {
+  AvellanedaStoikovConfig,
+  AvellanedaStoikovQuote,
+} from './strategies/avellaneda-stoikov-mm';
+
+// CLI Dashboard (Node-only — uses process.stdout, readline)
+export { Dashboard } from './cli/dashboard';
+export type { DashboardConfig } from './cli/dashboard';
+export { StatsAggregator } from './cli/stats-aggregator';
+export type { DashboardEvent, VenueStats, MarketStats } from './cli/stats-aggregator';
+export { RingBuffer } from './cli/ring-buffer';
+export {
+  ANSI,
+  BOX,
+  formatUsd,
+  formatPnl,
+  formatPct,
+  formatTime,
+  formatTimeHMS,
+  cursorTo,
+  padRight,
+  padLeft,
+  padCenter,
+  truncate,
+  visibleLength,
+  stripAnsi,
+  statusDot,
+  statusWord,
+  sideColored,
+  sideTag,
+  kv,
+  sparkline,
+} from './cli/render';
 
 // Constants
 export const LIGHTER_CONSTANTS = {
@@ -400,4 +547,47 @@ export const DEFAULT_CONFIG = {
 } as const;
 
 // Version
-export const VERSION = '1.0.13';
+export const VERSION = '1.1.0';
+// ============================================================================
+// Partner attribution (builder codes)
+// ============================================================================
+// Fee attribution for the bundled MM strategies. Default-on, disclosed at
+// startup, and opt-out via BUILDER_ATTRIBUTION=off. See docs/ATTRIBUTION.md.
+export {
+  BUILDER_ACCOUNTS,
+  DEFAULT_MAKER_FEE_MILLIONTHS,
+  DEFAULT_TAKER_FEE_MILLIONTHS,
+  MAX_MAKER_FEE_MILLIONTHS,
+  MAX_TAKER_FEE_MILLIONTHS,
+  REGISTRY_CHECKSUM,
+  BuilderRegistryIntegrityError,
+  bpsToMillionths,
+  millionthsToBps,
+  builderAccountFor,
+  computeRegistryChecksum,
+  normalizeNetwork,
+  verifyRegistryIntegrity,
+} from './attribution/builder-registry';
+export type { BuilderAccount, BuilderNetwork } from './attribution/builder-registry';
+export {
+  AttributionFeeCapError,
+  assertFeeWithinCap,
+  formatAttributionDisclosure,
+  formatSupportNotice,
+  integratorFields,
+  resolveAttribution,
+  resolveAttributionFromEnv,
+} from './attribution/policy';
+export type {
+  AttributionDecision,
+  AttributionOptions,
+  AttributionSource,
+  IntegratorFields,
+} from './attribution/policy';
+export {
+  MissingCredentialError,
+  assertAccountIndex,
+  assertApiPrivateKey,
+  assertEthPrivateKey,
+} from './attribution/credentials';
+export type { CredentialGuardOptions } from './attribution/credentials';

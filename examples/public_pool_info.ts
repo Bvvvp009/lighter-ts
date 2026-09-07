@@ -5,7 +5,7 @@
  * including share price, total value locked, and user share details.
  */
 
-import { ApiClient, AccountApi } from '../src';
+import { ApiClient, AccountApi, resolveNetworkFromEnv } from '../src';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -14,7 +14,7 @@ async function main() {
   try {
     console.log('🏦 Querying Public Pool Information...\n');
 
-    const baseUrl = process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai';
+    const baseUrl = resolveNetworkFromEnv().apiUrl;
     const accountIndex = parseInt(process.env.ACCOUNT_INDEX || '0');
 
     const apiClient = new ApiClient({ host: baseUrl });

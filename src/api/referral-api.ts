@@ -189,4 +189,45 @@ export class ReferralApi {
     });
     return response.data;
   }
+
+  /**
+   * Bind a referral code programmatically during sign-up on the RHC instance.
+   *
+   * The signature query parameter must be base64 standard encoding of
+   * `<L1_address> + <referralCode> + 'wP81zDNpES'` (the RHC referral salt).
+   *
+   * Added 2026-08-14: RHC incentives campaign.
+   *
+   * @param l1Address - The user's L1 Ethereum address
+   * @param referralCode - The referral code to bind
+   * @param accountIndex - Account index
+   * @param auth - Optional auth token
+   */
+  public async referralUseWithSignature(params: {
+    l1Address: string;
+    referralCode: string;
+    accountIndex: number;
+    auth?: string;
+    authorization?: string;
+  }): Promise<{ [key: string]: any }> {
+    // Build the signature: base64(l1Address + referralCode + salt)
+    const salt = 'wP81zDNpES';
+    const sigPayload = params.l1Address + params.referralCode + salt;
+    const signature = Buffer.from(sigPayload, 'utf8').toString('base64');
+
+    const formData = new URLSearchParams();
+    formData.append('account_index', params.accountIndex.toString());
+    formData.append('code', params.referralCode);
+    formData.append('signature', signature);
+    if (params.auth) {
+      formData.append('auth', params.auth);
+    }
+    const response = await this.client.post<{ [key: string]: any }>('/api/v1/referral/use', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(params.authorization ? { authorization: params.authorization } : {}),
+      },
+    });
+    return response.data;
+  }
 }

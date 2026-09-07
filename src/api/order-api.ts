@@ -81,6 +81,8 @@ export interface OrderBookDetailItem {
   daily_price_high: number;
   daily_price_change: number;
   open_interest?: number;
+  mark_price?: number;
+  index_price?: number;
   daily_chart: Record<string, any>;
   market_config?: {
     market_margin_mode: number;
@@ -135,6 +137,10 @@ export interface Order {
   block_height?: number;
   is_ask?: boolean;
   base_size?: number;
+  order_version?: number;
+  integrator_fee_collector_index?: string;
+  integrator_taker_fee?: string;
+  integrator_maker_fee?: string;
 }
 
 export interface Trade {
@@ -148,6 +154,8 @@ export interface Trade {
   order_id: string;
   taker_order_id: string;
   maker_order_id: string;
+  ask_order_version?: number;
+  bid_order_version?: number;
 }
 
 // API-specific order interfaces
@@ -377,10 +385,25 @@ export class OrderApi {
     return response.data.orders || [];
   }
 
-  public async getAccountOrders(accountIndex: number, params?: PaginationParams): Promise<Order[]> {
+  /**
+   * Get account orders. Supports querying up to 20 client_order_index values
+   * by passing them as a comma-separated string (added 2026-07-15).
+   * @param accountIndex - Account index
+   * @param params - Pagination params, plus optional `client_order_indexes`
+   * @param params.client_order_indexes - Array of client_order_index values
+   *   (up to 20). They are joined with `,` and sent as `client_order_index`.
+   */
+  public async getAccountOrders(
+    accountIndex: number,
+    params?: PaginationParams & { client_order_indexes?: number[] },
+  ): Promise<Order[]> {
+    const { client_order_indexes, ...pagination } = params ?? {};
     const response = await this.client.get<Order[]>('/api/v1/accountOrders', {
       account_index: accountIndex,
-      ...params,
+      ...pagination,
+      ...(client_order_indexes && client_order_indexes.length > 0
+        ? { client_order_index: client_order_indexes.join(',') }
+        : {}),
     });
     return response.data;
   }
@@ -452,10 +475,18 @@ export class OrderApi {
     return response.data;
   }
 
+  /**
+   * Export trades, orders, or positions.
+   * @param exportType - 'trades' | 'orders' | 'positions'
+   * @param accountIndex - Account index
+   * @param params - Optional market_id filter + `aggregate` flag (added 2026-07-10:
+   *   when true, the export endpoint aggregates trades).
+   * @param auth - Auth token
+   */
   public async export(
     exportType: 'trades' | 'orders' | 'positions',
     accountIndex: number,
-    params?: { market_id?: number },
+    params?: { market_id?: number; aggregate?: boolean },
     auth?: string
   ): Promise<{ export_url: string; status: string }> {
     const response = await this.client.post<{ export_url: string; status: string }>('/api/v1/export', {

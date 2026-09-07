@@ -1,6 +1,6 @@
 {
   "name": "lighter-ts-sdk",
-  "version": "1.0.13",
+  "version": "1.1.0",
   "description": "TypeScript SDK for Lighter Protocol - Trade perpetuals with unmatched efficiency and fairness on Lighter",
   "type": "module",
   "main": "./dist/cjs/index.js",
@@ -9,11 +9,18 @@
   "browser": "./dist/browser/lighter-ts-sdk.browser.js",
   "exports": {
     ".": {
-      "types": "./dist/esm/index.d.ts",
       "browser": "./dist/browser/lighter-ts-sdk.browser.js",
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
-    }
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./wasm/*": "./wasm/*",
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -27,18 +34,29 @@
   "scripts": {
     "build": "npm run build:cjs && npm run build:esm && npm run fix:esm && npm run build:browser:esm && npm run build:umd",
     "build:browser:esm": "node scripts/build-browser-esm.cjs",
-    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && node scripts/write-cjs-package.cjs",
     "build:esm": "tsc -p tsconfig.esm.json",
     "fix:esm": "node scripts/fix-esm-imports.cjs",
     "build:umd": "node scripts/build-umd.cjs",
     "build:wasm": "node scripts/build-wasm.cjs",
     "build:wasm:nodejs": "node scripts/build-wasm.cjs",
     "verify:wasm": "node scripts/verify-wasm.cjs",
-    "prepublishOnly": "npm run build && npm run verify:wasm",
+    "prepublishOnly": "npm run verify && npm run build && npm run verify:wasm",
     "dev": "tsc --watch",
     "test": "jest",
+    "typecheck": "tsc -p tsconfig.esm.json --noEmit",
+    "typecheck:examples": "tsc -p tsconfig.examples.json --noEmit",
+    "verify": "npm run typecheck && npm run typecheck:examples && npm test",
     "docs": "typedoc src --out docs/api",
     "examples": "tsx examples/create_market_order.ts",
+    "mm": "tsx examples/run_mm.ts",
+    "mm:as": "tsx examples/run_mm.ts as_mm",
+    "mm:perp": "tsx examples/run_mm.ts perp_mm",
+    "mm:grid": "tsx examples/run_mm.ts grid",
+    "mm:arb": "tsx examples/run_mm.ts arb_mm",
+    "mm:cross": "tsx examples/run_mm.ts cross_mm",
+    "mm:help": "tsx examples/run_mm.ts --help",
+    "mm:config": "tsx examples/run_mm.ts --print-config",
     "smoke:live": "tsx examples/live_smoke.ts"
   },
   "keywords": [
@@ -72,11 +90,11 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.5.0",
-    "esbuild": "^0.27.3",
+    "esbuild": "^0.28.2",
     "jest": "^29.0.0",
     "ts-jest": "^29.0.0",
     "ts-node": "^10.9.0",
-    "tsx": "^4.21.0",
+    "tsx": "^4.23.13",
     "typedoc": "^0.25.0",
     "typescript": "^5.0.0"
   },

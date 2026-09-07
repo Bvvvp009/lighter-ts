@@ -1,10 +1,10 @@
 import * as dotenv from 'dotenv';
-import { AccountApi, ApiClient, SignerClient } from '../src';
+import { AccountApi, ApiClient, SignerClient, resolveNetworkFromEnv } from '../src';
 
 dotenv.config();
 
 async function main() {
-  const baseUrl = process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai';
+  const baseUrl = resolveNetworkFromEnv().apiUrl;
   const apiClient = new ApiClient({ host: baseUrl });
   const accountApi = new AccountApi(apiClient);
 

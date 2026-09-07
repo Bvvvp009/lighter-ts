@@ -80,15 +80,27 @@ export interface Trade {
 }
 
 export interface AccountApiKeys {
+  code: number;
+  message?: string;
   api_keys: ApiKey[];
 }
 
+/**
+ * A registered API key slot, as returned by `GET /api/v1/apikeys`.
+ *
+ * Field names mirror the wire format (see `components.schemas.ApiKey` in the
+ * generated OpenAPI types). `api_key_index` is the slot number you pass as
+ * API_KEY_INDEX when signing, and `public_key` is the on-chain pubkey it is
+ * paired with. Only registered slots are returned, so listing with index 255
+ * gives you exactly the set of indices that are already in use.
+ */
 export interface ApiKey {
-  index: number;
-  name: string;
-  permissions: string[];
-  created_at: string;
-  last_used_at?: string;
+  account_index: number;
+  api_key_index: number;
+  nonce: number;
+  public_key: string;
+  /** Present on live responses though absent from the published schema. */
+  transaction_time?: number;
 }
 
 export interface PublicPool {
@@ -342,14 +354,22 @@ export class AccountApi {
     return response.data;
   }
 
+  /**
+   * Get position fundings. Supports `market_ids` (comma-separated list)
+   * added 2026-07-22, and the legacy single `market_id` filter.
+   */
   public async getPositionFundings(
     accountIndex: number,
-    params?: { limit?: number; cursor?: string; market_id?: number; side?: 'long' | 'short' },
+    params?: { limit?: number; cursor?: string; market_id?: number; market_ids?: number[]; side?: 'long' | 'short' },
     auth?: string
   ): Promise<PositionFundingResponse> {
+    const { market_ids, ...rest } = params ?? {};
     const response = await this.client.get<PositionFundingResponse>('/api/v1/positionFundings', {
       account_index: accountIndex,
-      ...params,
+      ...rest,
+      ...(market_ids && market_ids.length > 0
+        ? { market_ids: market_ids.join(',') }
+        : {}),
       ...(auth ? { authorization: auth, auth } : {}),
     });
     return response.data;

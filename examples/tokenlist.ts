@@ -1,10 +1,10 @@
 import * as dotenv from 'dotenv';
-import { TokenlistApi, ApiClient } from '../src';
+import { TokenlistApi, ApiClient, resolveNetworkFromEnv } from '../src';
 
 dotenv.config();
 
 async function main() {
-  const apiClient = new ApiClient({ host: process.env.BASE_URL || 'https://mainnet.zklighter.elliot.ai' });
+  const apiClient = new ApiClient({ host: resolveNetworkFromEnv().apiUrl });
   const tokenlistApi = new TokenlistApi(apiClient);
 
   console.log('Getting token list...');

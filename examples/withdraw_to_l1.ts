@@ -3,7 +3,7 @@
  * Demonstrates withdrawing funds from L2 to L1 (Ethereum mainnet)
  */
 
-import { SignerClient, WithdrawParams } from '../src';
+import { SignerClient, WithdrawParams, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -12,7 +12,7 @@ async function withdrawToL1() {
 
   // Initialize clients explicitly
   const signerClient = new SignerClient({
-    url: process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai',
+    url: resolveNetworkFromEnv().apiUrl,
     privateKey: process.env['API_PRIVATE_KEY'] || '',
     accountIndex: parseInt(process.env['ACCOUNT_INDEX'] || '0'),
     apiKeyIndex: parseInt(process.env['API_KEY_INDEX'] || '0')

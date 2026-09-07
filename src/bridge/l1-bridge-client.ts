@@ -1,6 +1,24 @@
 import { ethers } from 'ethers';
 import { L1DepositParams, L1DepositResult, L1BridgeConfig } from '../types/api';
 
+/** Raised when a bridge config names an address that cannot be the intended contract. */
+export class BridgeConfigError extends Error {
+  constructor(field: 'l1BridgeContract' | 'usdcContract', value: string, reason: string) {
+    super(
+      `L1 bridge config field '${field}' is unusable: ${reason} (got '${value}').\n` +
+        `\n` +
+        `This client moves real USDC on Ethereum. Refusing to build a client\n` +
+        `around an address that cannot hold the intended contract, rather than\n` +
+        `letting an approval or a deposit go somewhere it can never be\n` +
+        `recovered from.\n` +
+        `\n` +
+        `Pass the real bridge and USDC addresses for your network in the\n` +
+        `L1BridgeConfig you hand to the constructor.`,
+    );
+    this.name = 'BridgeConfigError';
+  }
+}
+
 /**
  * L1 Bridge Client for handling Ethereum to Lighter L2 deposits
  * Uses ethers.js to interact with L1 contracts
@@ -26,23 +44,75 @@ export class L1BridgeClient {
     'function depositTo(uint256 amount, uint256 l2AccountIndex, address to) external'
   ] as const;
 
+  /**
+   * Reject an address that cannot possibly be the contract it claims to be.
+   *
+   * The zero address is the dangerous case, not an obviously malformed one:
+   * ethers accepts it, USDC will happily `approve` it, and an EVM call to an
+   * address with no code SUCCEEDS as a no-op instead of reverting. A deposit
+   * routed there returns a green receipt while the funds never move.
+   */
+  private static assertUsableAddress(
+    field: 'l1BridgeContract' | 'usdcContract',
+    value: string
+  ): string {
+    let normalized: string;
+    try {
+      normalized = ethers.getAddress(value);
+    } catch {
+      throw new BridgeConfigError(field, value, 'not a valid Ethereum address');
+    }
+    if (normalized === ethers.ZeroAddress) {
+      throw new BridgeConfigError(
+        field,
+        value,
+        'the zero address is a placeholder, not a contract'
+      );
+    }
+    return normalized;
+  }
+
   constructor(config: L1BridgeConfig) {
-    this.config = config;
+    const l1BridgeContract = L1BridgeClient.assertUsableAddress(
+      'l1BridgeContract',
+      config.l1BridgeContract
+    );
+    const usdcContract = L1BridgeClient.assertUsableAddress('usdcContract', config.usdcContract);
+
+    this.config = { ...config, l1BridgeContract, usdcContract };
     this.provider = new ethers.JsonRpcProvider(config.rpcUrl);
     
     // Initialize USDC contract
     this.usdcContract = new ethers.Contract(
-      config.usdcContract,
+      usdcContract,
       L1BridgeClient.USDC_ABI,
       this.provider
     );
 
     // Initialize bridge contract
     this.bridgeContract = new ethers.Contract(
-      config.l1BridgeContract,
+      l1BridgeContract,
       L1BridgeClient.BRIDGE_ABI,
       this.provider
     );
+  }
+
+  /**
+   * Confirm the configured bridge address actually hosts a contract.
+   *
+   * Guards the silent-failure case a valid-but-wrong address creates: `approve`
+   * and `deposit` both succeed on-chain, so `depositToL2` reports success while
+   * the USDC never leaves the wallet. Checked before any gas is spent.
+   */
+  private async assertBridgeHasCode(): Promise<void> {
+    const code = await this.provider.getCode(this.config.l1BridgeContract);
+    if (code === '0x' || code === '0x0') {
+      throw new BridgeConfigError(
+        'l1BridgeContract',
+        this.config.l1BridgeContract,
+        'no contract code at this address on the configured RPC network'
+      );
+    }
   }
 
   /**
@@ -58,6 +128,9 @@ export class L1BridgeClient {
       // Connect contracts to wallet
       const usdcContractWithSigner = this.usdcContract.connect(wallet);
       const bridgeContractWithSigner = this.bridgeContract.connect(wallet);
+
+      // Before spending any gas, prove there is a contract to deposit into.
+      await this.assertBridgeHasCode();
 
       // Get USDC decimals
       const decimals = await (usdcContractWithSigner as any).decimals();
@@ -190,28 +263,34 @@ export class L1BridgeClient {
   }
 
   /**
-   * Get default bridge configuration for mainnet
-   * @returns L1BridgeConfig
+   * @throws BridgeConfigError always.
+   *
+   * This used to return placeholder addresses marked "Replace with actual" -- a
+   * zero-address bridge and a hand-typed, malformed USDC address -- behind a
+   * name that promises a working mainnet config. No real bridge address ships
+   * with this SDK, and guessing one on a deposit path is how funds get burned,
+   * so this fails loudly instead of handing back something that looks usable.
+   *
+   * @deprecated Construct `L1BridgeClient` with an explicit `L1BridgeConfig`.
    */
   static getMainnetConfig(): L1BridgeConfig {
-    return {
-      l1BridgeContract: '0x0000000000000000000000000000000000000000', // Replace with actual bridge contract
-      usdcContract: '0xA0b86a33E6441b8c4C8C0E4A8c4c4c4c4c4c4c4c4', // Replace with actual USDC contract
-      rpcUrl: 'https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY', // Replace with actual RPC URL
-      chainId: 1
-    };
+    throw new BridgeConfigError(
+      'l1BridgeContract',
+      '<unset>',
+      'no built-in mainnet bridge address ships with this SDK'
+    );
   }
 
   /**
-   * Get default bridge configuration for testnet
-   * @returns L1BridgeConfig
+   * @throws BridgeConfigError always. See {@link getMainnetConfig}.
+   *
+   * @deprecated Construct `L1BridgeClient` with an explicit `L1BridgeConfig`.
    */
   static getTestnetConfig(): L1BridgeConfig {
-    return {
-      l1BridgeContract: '0x0000000000000000000000000000000000000000', // Replace with actual testnet bridge contract
-      usdcContract: '0x0000000000000000000000000000000000000000', // Replace with actual testnet USDC contract
-      rpcUrl: 'https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY', // Replace with actual testnet RPC URL
-      chainId: 11155111 // Sepolia testnet
-    };
+    throw new BridgeConfigError(
+      'l1BridgeContract',
+      '<unset>',
+      'no built-in testnet bridge address ships with this SDK'
+    );
   }
 }

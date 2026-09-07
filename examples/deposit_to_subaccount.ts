@@ -8,14 +8,14 @@
  * No need to create subaccounts if they already exist!
  */
 
-import { SignerClient, ApiClient } from '../src';
+import { SignerClient, ApiClient, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
 async function main() {
 
-const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+const BASE_URL = resolveNetworkFromEnv().apiUrl;
 const API_KEY_PRIVATE_KEY = process.env['API_PRIVATE_KEY'];
 const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || '0', 10);
 const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || '0', 10);
@@ -120,7 +120,7 @@ export async function checkIfSubAccount() {
     throw new Error('API_PRIVATE_KEY environment variable is required');
   }
   const config = {
-    url: process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai',
+    url: resolveNetworkFromEnv().apiUrl,
     privateKey: API_PRIVATE_KEY,
     accountIndex: parseInt(process.env['ACCOUNT_INDEX'] || '0'),
     apiKeyIndex: parseInt(process.env['API_KEY_INDEX'] || '0')

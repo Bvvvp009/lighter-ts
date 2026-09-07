@@ -2,7 +2,7 @@
  * Example: Cancel All Orders
  */
 
-import { SignerClient, ApiClient, OrderApi } from '../src';
+import { SignerClient, ApiClient, OrderApi, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -25,10 +25,15 @@ async function cancelAllOrders() {
   const API_PRIVATE_KEY = process.env['API_PRIVATE_KEY'] || "";
   const ACCOUNT_INDEX = parseInt(process.env['ACCOUNT_INDEX'] || "1000");
   const API_KEY_INDEX = parseInt(process.env['API_KEY_INDEX'] || "4");
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  // Venue comes from the network registry so a stale BASE_URL cannot send
+  // the cancels to a different instance than the one holding the orders.
+  const network = resolveNetworkFromEnv();
+  const BASE_URL = network.apiUrl;
+  console.log(`Venue: ${network.name} | host=${BASE_URL} | account=${ACCOUNT_INDEX}`);
 
   const signerClient = new SignerClient({
     url: BASE_URL,
+    chainId: network.chainId,
     privateKey: API_PRIVATE_KEY,
     accountIndex: ACCOUNT_INDEX,
     apiKeyIndex: API_KEY_INDEX

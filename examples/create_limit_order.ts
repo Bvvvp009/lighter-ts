@@ -2,7 +2,7 @@
  * Example: Create Limit Order with SL/TP
  */
 
-import { SignerClient, OrderType, ApiClient, OrderApi, MarketHelper } from '../src';
+import { SignerClient, OrderType, ApiClient, OrderApi, MarketHelper, resolveNetworkFromEnv } from '../src';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -18,7 +18,7 @@ async function createLimitOrderWithSLTP() {
   }
   const ACCOUNT_INDEX = Number.parseInt(process.env['ACCOUNT_INDEX'] ?? '0', 10);
   const API_KEY_INDEX = Number.parseInt(process.env['API_KEY_INDEX'] ?? '0', 10);
-  const BASE_URL = process.env['BASE_URL'] || 'https://mainnet.zklighter.elliot.ai';
+  const BASE_URL = resolveNetworkFromEnv().apiUrl;
 
   const signerClient = new SignerClient({
     url: BASE_URL,
